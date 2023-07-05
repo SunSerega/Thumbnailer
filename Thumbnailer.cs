@@ -100,8 +100,8 @@ namespace Thumbnailer
                 File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.log", lns, new UTF8Encoding(true));
                 if (curr_file_name!=null)
                 {
-                    Directory.CreateDirectory(@"C:\Users\SunMachine\Desktop\Thumbnailer.files");
-                    File.Copy(curr_file_name, @"C:\Users\SunMachine\Desktop\Thumbnailer.files\"+Path.GetFileName(curr_file_name), true);
+                    Directory.CreateDirectory(@"C:\Users\SunMachine\Desktop\Thumbnailer broken files");
+                    File.Copy(curr_file_name, @"C:\Users\SunMachine\Desktop\Thumbnailer broken files\"+Path.GetFileName(curr_file_name), true);
                 }
                 //MessageBox.Show(e.ToString(), $"Error making thumb for: {curr_file_name??"<null>"}");
             }
@@ -154,10 +154,14 @@ namespace Thumbnailer
 
         public void GetThumbnail(int cx, out IntPtr hBitmap, out WTS_ALPHATYPE bitmapType)
         {
+            hBitmap = IntPtr.Zero;
+            bitmapType = WTS_ALPHATYPE.WTSAT_UNKNOWN;
             try
             {
                 if (curr_file_name == null)
                     throw new ArgumentNullException(nameof(curr_file_name));
+                if (curr_file_name.StartsWith(@"C:\Users\SunMachine\Desktop\Thumbnailer broken files\"))
+                    return;
 
                 var sw = Stopwatch.StartNew();
 
@@ -185,7 +189,7 @@ namespace Thumbnailer
                 {
                     dur = t.Result.Duration;
                     frame_at = dur * 0.3;
-                    ffmpeg.ExecuteAsync($"-i \"{curr_file_name}\" -ss {frame_at.TotalSeconds} -vframes 1 \"{frame_fname}\"", default).Wait();
+                    ffmpeg.ExecuteAsync($"-i \"{curr_file_name}\" -ss {Math.Truncate(frame_at.TotalSeconds)} -vframes 1 \"{frame_fname}\"", default).Wait();
                 }).Wait();
 
                 for (int try_i = 0; try_i < 100; try_i++)
@@ -205,6 +209,7 @@ namespace Thumbnailer
                 var outBitmap = new Bitmap(frame_im.Width, frame_im.Height, PixelFormat.Format24bppRgb);
 
                 Graphics gr = Graphics.FromImage(outBitmap);
+                gr.FillRectangle(new SolidBrush(Color.White), new Rectangle(default, outBitmap.Size));
                 gr.DrawImageUnscaled(frame_im, point: default);
 
                 var dur_sb = new StringBuilder();
@@ -219,11 +224,15 @@ namespace Thumbnailer
                         dur_sb.Insert(0, Math.Truncate(dur.TotalHours));
                     }
                 }
-
+                
                 var text_bmp = new Bitmap(outBitmap.Width, outBitmap.Height, PixelFormat.Format32bppArgb);
-                DrawString(Graphics.FromImage(text_bmp), dur_sb.ToString(), Color.FromArgb(255,0,0,0), Color.White,
+                //DrawString(Graphics.FromImage(text_bmp), dur_sb.ToString(), Color.FromArgb(255, 0, 0, 0), Color.White,
+                //    sz => MathF.Min(outBitmap.Width/sz.Width, outBitmap.Height*0.3f/sz.Height),
+                //    sz => new PointF((outBitmap.Width-sz.Width)/2f, outBitmap.Height-sz.Height)
+                //);
+                DrawString(Graphics.FromImage(text_bmp), dur_sb.ToString(), Color.FromArgb(255, 0, 0, 0), Color.White,
                     sz => MathF.Min(outBitmap.Width/sz.Width, outBitmap.Height*0.3f/sz.Height),
-                    sz => new PointF((outBitmap.Width-sz.Width)/2f, outBitmap.Height-sz.Height)
+                    sz => new PointF(outBitmap.Width-sz.Width, (outBitmap.Height-sz.Height)/2f)
                 );
                 var text_attr = new ImageAttributes();
                 var text_c_mtr = new ColorMatrix();
@@ -245,8 +254,6 @@ namespace Thumbnailer
             }
             catch (Exception e)
             {
-                hBitmap = IntPtr.Zero;
-                bitmapType = WTS_ALPHATYPE.WTSAT_UNKNOWN;
                 HandleError(e);
             }
         }

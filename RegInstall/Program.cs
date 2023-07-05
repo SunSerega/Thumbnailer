@@ -7,7 +7,7 @@ using static System.Net.Mime.MediaTypeNames;
 static class RegInstall
 {
 
-    static Dictionary<string, bool> all_ext = new();
+    static Dictionary<string, bool> all_ext = new(StringComparer.OrdinalIgnoreCase);
     static void on_ext(string ext, bool need)
     {
         if (all_ext.TryGetValue(ext, out var old_need))
@@ -42,7 +42,8 @@ static class RegInstall
         var log = File.CreateText("reg install.log");
 
         on_ext("thumb_test", true);
-
+        on_ext("gif", true);
+        
         var psi = new System.Diagnostics.ProcessStartInfo("ffmpeg", "-formats");
         psi.UseShellExecute = false;
         psi.RedirectStandardOutput = true;
