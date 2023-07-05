@@ -40,7 +40,12 @@ namespace Thumbnailer
         public void Initialize(IStream stream, int grfMode)
         {
             // instantly dispose the COM stream, as I don't need it for the test
-            Marshal.ReleaseComObject(stream);
+            //Marshal.ReleaseComObject(stream);
+        }
+
+        private static void HandleError(Exception e)
+        {
+            MessageBox.Show(e.ToString(), "Error making ");
         }
 
         private static void DrawString(Graphics gr, string str, Color c, Func<SizeF, float> make_scale, Func<SizeF, PointF> make_pos, string family = "Arial")
@@ -53,23 +58,32 @@ namespace Thumbnailer
 
         public void GetThumbnail(int cx, out IntPtr hBitmap, out WTS_ALPHATYPE bitmapType)
         {
-            var sw = Stopwatch.StartNew();
+            try
+            {
+                var sw = Stopwatch.StartNew();
 
-            var ffmpeg = new FFmpeg.NET.Engine(@"C:\Program Files\ffmpeg\bin\ffmpeg.exe");
+                var ffmpeg = new FFmpeg.NET.Engine(@"C:\Program Files\ffmpeg\bin\ffmpeg.exe");
 
-            bitmapType = WTS_ALPHATYPE.WTSAT_RGB;
-            var outBitmap = new Bitmap(cx, cx, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+                bitmapType = WTS_ALPHATYPE.WTSAT_RGB;
+                var outBitmap = new Bitmap(cx, cx, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
 
-            Graphics gr = Graphics.FromImage(outBitmap);
-            gr.FillRectangle(new SolidBrush(Color.Black), new Rectangle(Point.Empty, outBitmap.Size));
+                Graphics gr = Graphics.FromImage(outBitmap);
+                gr.FillRectangle(new SolidBrush(Color.Black), new Rectangle(Point.Empty, outBitmap.Size));
 
-            DrawString(gr, $"cx={cx}", Color.Red, sz => cx/MathF.Max(sz.Width, sz.Height), sz=>new PointF(cx,cx) - sz);
+                DrawString(gr, $"cx={cx}", Color.Red, sz => cx/MathF.Max(sz.Width, sz.Height), sz => new PointF(cx, cx) - sz);
 
-            hBitmap = outBitmap.GetHbitmap();
+                hBitmap = outBitmap.GetHbitmap();
 
-            outBitmap.Save(@"C:\Users\SunMachine\Desktop\temp.bmp");
+                outBitmap.Save(@"C:\Users\SunMachine\Desktop\temp.bmp");
 
-            MessageBox.Show($"regenerated in {sw.Elapsed}");
+                MessageBox.Show($"regenerated in {sw.Elapsed}");
+            }
+            catch (Exception e)
+            {
+                hBitmap = IntPtr.Zero;
+                bitmapType = WTS_ALPHATYPE.WTSAT_UNKNOWN;
+                HandleError(e);
+            }
         }
     }
 }

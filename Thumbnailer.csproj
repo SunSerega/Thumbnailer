@@ -15,7 +15,11 @@
 	</ItemGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="regsvr32 /s &quot;$(OutDir)\Thumbnailer.comhost.dll&quot;&#xD;&#xA;reg add HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\{E7CBDB01-06C9-4C8F-A061-2EDCE8598F99} /v DisableProcessIsolation /t REG_DWORD /d 1&#xD;&#xA;" />
+		<Exec Command="&#xD;&#xA;DEL /S /Q &quot;C:\Users\SunMachine\AppData\Local\Microsoft\Windows\Explorer\*.db&quot;&#xD;&#xA;regsvr32 /s &quot;$(OutDir)\Thumbnailer.comhost.dll&quot;&#xD;&#xA;reg add HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\{E7CBDB01-06C9-4C8F-A061-2EDCE8598F99} /v DisableProcessIsolation /t REG_DWORD /d 1&#xD;&#xA;start explorer&#xD;&#xA;" />
+	</Target>
+	
+	<Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+	  <Exec Command="taskkill /F /IM explorer.exe" />
 	</Target>
 	
 </Project>
