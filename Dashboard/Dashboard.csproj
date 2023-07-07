@@ -1,16 +1,12 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 	
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>net7.0-windows</TargetFramework>
-		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+		<UseWPF>true</UseWPF>
 		<BaseOutputPath>..\0bin\</BaseOutputPath>
 		<BaseIntermediateOutputPath>..\0obj\</BaseIntermediateOutputPath>
 	</PropertyGroup>
-	
-	<ItemGroup>
-		<ProjectReference Include="..\COM\COM.csproj" />
-	</ItemGroup>
 	
 </Project>
