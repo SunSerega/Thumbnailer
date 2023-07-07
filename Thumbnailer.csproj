@@ -14,11 +14,14 @@
 	<ItemGroup>
 		<PackageReference Include="System.Drawing.Common" Version="7.0.0" />
 		<PackageReference Include="System.Runtime.InteropServices" Version="4.3.0" />
-		<PackageReference Include="xFFmpeg.NET" Version="7.1.3" />
+	</ItemGroup>
+	
+	<ItemGroup>
+	  <ProjectReference Include="C:\Users\SunMachine\Desktop\0\FFmpeg.NET\src\FFmpeg.NET\FFmpeg.NET.csproj" />
 	</ItemGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="DEL /S /Q &quot;C:\Users\SunMachine\AppData\Local\Microsoft\Windows\Explorer\*.db&quot;&#xD;&#xA;regsvr32 /s &quot;$(OutDir)\Thumbnailer.comhost.dll&quot;&#xD;&#xA;reg add HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\{E7CBDB01-06C9-4C8F-A061-2EDCE8598F99} /v DisableProcessIsolation /t REG_DWORD /d 1&#xD;&#xA;start explorer" />
+		<Exec Command="DEL /S /Q &quot;C:\Users\SunMachine\AppData\Local\Microsoft\Windows\Explorer\*.db&quot;&#xD;&#xA;DEL /Q &quot;C:\Users\SunMachine\Desktop\Thumbnailer.info.log&quot;&#xD;&#xA;DEL /S /Q &quot;C:\Users\SunMachine\Desktop\Thumbnailer broken files&quot;&#xD;&#xA;DEL /Q &quot;C:\Users\SunMachine\Desktop\Thumbnailer.log&quot;&#xD;&#xA;echo &#xD;&#xA;regsvr32 /s &quot;$(OutDir)\Thumbnailer.comhost.dll&quot;&#xD;&#xA;reg add HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\{E7CBDB01-06C9-4C8F-A061-2EDCE8598F99} /v DisableProcessIsolation /t REG_DWORD /d 1&#xD;&#xA;start explorer" />
 	</Target>
 	
 	<Target Name="PreBuild" BeforeTargets="PreBuildEvent">

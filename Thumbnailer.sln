@@ -5,9 +5,11 @@ VisualStudioVersion = 17.6.33626.354
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Thumbnailer", "Thumbnailer.csproj", "{725772BA-E4FD-45AB-8F89-9ED2B0EF542E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "Test\Test.csproj", "{6EB65B99-D3C3-4488-A29E-C086C7069361}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Test", "Test\Test.csproj", "{6EB65B99-D3C3-4488-A29E-C086C7069361}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RegInstall", "RegInstall\RegInstall.csproj", "{7EED7A89-4776-45D2-89EA-7AF67D9EE445}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RegInstall", "RegInstall\RegInstall.csproj", "{7EED7A89-4776-45D2-89EA-7AF67D9EE445}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FFmpeg.NET", "C:\Users\SunMachine\Desktop\0\FFmpeg.NET\src\FFmpeg.NET\FFmpeg.NET.csproj", "{E79430B6-9781-4AA1-A20C-A13068137B15}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -27,6 +29,10 @@ Global
 		{7EED7A89-4776-45D2-89EA-7AF67D9EE445}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7EED7A89-4776-45D2-89EA-7AF67D9EE445}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7EED7A89-4776-45D2-89EA-7AF67D9EE445}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E79430B6-9781-4AA1-A20C-A13068137B15}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E79430B6-9781-4AA1-A20C-A13068137B15}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E79430B6-9781-4AA1-A20C-A13068137B15}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E79430B6-9781-4AA1-A20C-A13068137B15}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -133,6 +133,14 @@ namespace Thumbnailer
             }
         }
 
+        private static Image? LoadImage(string? filename)
+        {
+            if (filename == null)
+                return null;
+            using (var str = File.OpenRead(filename))
+                return Image.FromStream(str);
+        }
+
         private static void DrawString(Graphics gr, string str, Color c, Color glow_c, Func<SizeF, float> make_scale, Func<SizeF, PointF> make_pos, string ff_name = "Arial")
         {
             var ff = new FontFamily(ff_name);
@@ -152,23 +160,51 @@ namespace Thumbnailer
             //gr.DrawString(str, new Font(family, font_scale), new SolidBrush(c), pos);
         }
 
+        public class TempDir : IDisposable
+        {
+            private string dir_path;
+
+            public TempDir()
+            {
+                dir_path = Path.GetTempFileName();
+                File.Delete(dir_path);
+                Directory.CreateDirectory(dir_path);
+            }
+
+            public string DirPath { get { return dir_path; } }
+
+            public void Dispose()
+            {
+                Directory.Delete(dir_path, true);
+            }
+
+        }
+
         public void GetThumbnail(int cx, out IntPtr hBitmap, out WTS_ALPHATYPE bitmapType)
         {
+            var sw = Stopwatch.StartNew();
+
+            File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.info.log", new[] { $"{DateTime.Now} | Starter: {curr_file_name}" }, new UTF8Encoding(true));
             hBitmap = IntPtr.Zero;
             bitmapType = WTS_ALPHATYPE.WTSAT_UNKNOWN;
+            var temp_dir = new TempDir();
             try
             {
                 if (curr_file_name == null)
                     throw new ArgumentNullException(nameof(curr_file_name));
                 if (curr_file_name.StartsWith(@"C:\Users\SunMachine\Desktop\Thumbnailer broken files\"))
                     return;
+                if (!File.Exists(curr_file_name))
+                {
+                    var fname = curr_file_name;
+                    curr_file_name = null;
+                    throw new ArgumentException($"Asked thumbnail for non-existant file: {fname}", nameof(curr_file_name));
+                }
 
-                var sw = Stopwatch.StartNew();
-
-                var ffmpeg = new FFmpeg.NET.Engine(@"C:\Program Files\ffmpeg\bin\ffmpeg.exe");
+                var ffmpeg = new Engine(@"C:\Program Files\ffmpeg\bin\ffmpeg.exe");
                 ffmpeg.Error += (s,e)=>
                 {
-                    HandleError(e.Exception);
+                    HandleError(new Exception($"inp=[{e.Input?.Name}] otp=[{e.Output?.Name}]", e.Exception));
                 };
 
                 var sb = new StringBuilder("\n===");
@@ -180,37 +216,73 @@ namespace Thumbnailer
 
                 TimeSpan dur = default, frame_at = default;
 
-                var temp_dir = Path.GetTempFileName();
-                File.Delete(temp_dir);
-                Directory.CreateDirectory(temp_dir);
-                var frame_fname = temp_dir + @"\frame.png";
+                var temp_dir_path = temp_dir.DirPath;
 
-                ffmpeg.GetMetaDataAsync(new InputFile(curr_file_name), default).ContinueWith(t =>
-                {
-                    dur = t.Result.Duration;
-                    frame_at = dur * 0.3;
-                    ffmpeg.ExecuteAsync($"-i \"{curr_file_name}\" -ss {Math.Truncate(frame_at.TotalSeconds)} -vframes 1 \"{frame_fname}\"", default).Wait();
-                }).Wait();
+                var frame_fname = Path.Combine(temp_dir_path, "frame.png");
 
-                for (int try_i = 0; try_i < 100; try_i++)
-                {
-                    if (File.Exists(frame_fname))
-                        break;
-                    Thread.Sleep(10);
-                }
+                var attachments_dir = Path.Combine(temp_dir_path, "attachments");
+                Directory.CreateDirectory(attachments_dir);
+
+                var no_err_ffmpeg = new Engine(@"C:\Program Files\ffmpeg\bin\ffmpeg.exe");
+                Task.WaitAll(
+                    ffmpeg.GetMetaDataAsync(new InputFile(curr_file_name), default).ContinueWith(t =>
+                    {
+                        dur = t.Result.Duration;
+                        frame_at = dur * 0.3;
+                        ffmpeg.ExecuteAsync($"-skip_frame nokey -ss {Math.Truncate(frame_at.TotalSeconds)} -i \"{curr_file_name}\" -vframes 1 \"{frame_fname}\"", default).Wait();
+                    }, TaskContinuationOptions.OnlyOnRanToCompletion),
+                    no_err_ffmpeg.ExecuteAsync($"-dump_attachment:t \"\" -i \"{curr_file_name}\"", default, attachments_dir).ContinueWith(t =>
+                    {;
+                        Parallel.ForEach(Directory.EnumerateFiles(attachments_dir), inp_fname =>
+                        {
+                            var otp_fname = Path.ChangeExtension(inp_fname, ".bmp");
+                            if (inp_fname == otp_fname)
+                                return;
+                            try
+                            {
+                                no_err_ffmpeg.ConvertAsync(new InputFile(inp_fname), new OutputFile(otp_fname), default).Wait();
+                            }
+                            catch {}
+                            File.Delete(inp_fname);
+                        });
+                    }, TaskContinuationOptions.OnlyOnRanToCompletion)
+                );
+
+                //for (int try_i = 0; try_i < 0; try_i++)
+                //{
+                //    if (File.Exists(frame_fname))
+                //        break;
+                //    File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.info.log", new[] { $"file does not exist?!?!?!" }, new UTF8Encoding(true));
+                //    Thread.Sleep(10);
+                //}
                 if (!File.Exists(frame_fname))
-                    throw new Exception($"Frame file was not created at {frame_at.TotalSeconds} / {dur}");
+                {
+                    frame_fname = null;
+                    //throw new Exception($"Frame file was not created at {frame_at.TotalSeconds} / {dur}");
+                }
+
+                var bg_im = default(Image);
+
+                foreach (var fname in Directory.EnumerateFiles(attachments_dir))
+                    try
+                    {
+                        bg_im = LoadImage(fname);
+                        break;
+                    }
+                    catch (ArgumentException) { }
+
+                if (bg_im == null)
+                    bg_im = LoadImage(frame_fname);
+
+                if (bg_im == null)
+                    throw new Exception($"No useable image at {frame_at.TotalSeconds} / {dur}");
 
                 bitmapType = WTS_ALPHATYPE.WTSAT_RGB;
-                var frame_stream = File.OpenRead(frame_fname);
-                var frame_im = Image.FromStream(frame_stream);
-                frame_stream.Close();
-                Directory.Delete(temp_dir, true);
-                var outBitmap = new Bitmap(frame_im.Width, frame_im.Height, PixelFormat.Format24bppRgb);
+                var outBitmap = new Bitmap(bg_im.Width, bg_im.Height, PixelFormat.Format24bppRgb);
 
                 Graphics gr = Graphics.FromImage(outBitmap);
                 gr.FillRectangle(new SolidBrush(Color.White), new Rectangle(default, outBitmap.Size));
-                gr.DrawImageUnscaled(frame_im, point: default);
+                gr.DrawImageUnscaled(bg_im, point: default);
 
                 var dur_sb = new StringBuilder();
                 dur_sb.Append(dur.Seconds.ToString("00"));
@@ -255,6 +327,11 @@ namespace Thumbnailer
             catch (Exception e)
             {
                 HandleError(e);
+            }
+            finally
+            {
+                File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.info.log", new[] { $"{DateTime.Now} | Finished: {curr_file_name} ({sw.Elapsed})" }, new UTF8Encoding(true));
+                temp_dir.Dispose();
             }
         }
 
