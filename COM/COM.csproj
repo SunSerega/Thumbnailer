@@ -16,7 +16,7 @@
 	</ItemGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="powershell -File &quot;$(ProjectDir)Deploy COM.ps1&quot; &quot;$(OutDir)&quot;&#xD;&#xA;start explorer&#xD;&#xA;powershell -File &quot;$(ProjectDir)re-startup.ps1&quot;" />
+		<Exec Command="powershell -File &quot;$(ProjectDir)Deploy COM.ps1&quot; &quot;$(OutDir)&quot;" />
 	</Target>
 	
 </Project>

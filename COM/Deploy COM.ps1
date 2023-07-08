@@ -26,34 +26,8 @@
 		$counter++
 	}
 	
-	foreach ($process in (Get-Process -name explorer)) {
-		#if ($process.mainwindowtitle -eq "" ) {
-			Write-Host "Killed " + ($process.Name)
-			Stop-Process -Id $process.Id -Force
-		#}
-	}
-	
-	#foreach ($process in (Get-Process -Name "rundll32")) {
-	#	Write-Host "Killed " + ($process.Name)
-	#	Stop-Process -Id $process.Id -Force
-	#}
-	
-	foreach ($process in (Get-Process -Name "7+ Taskbar Tweaker")) {
-		Write-Host "Killed " + ($process.Name)
-		Stop-Process -Id $process.Id -Force
-	}
-	
 	$com_dll = "$com_dir\COM.comhost.dll"
 	Write-Host "COM .dll: $com_dll"
-	
-	# foreach ($line in (& "g:\0prog\utils\handle\handle.exe")) {
-		# if ($line -match '\s+\spid:') {
-			# $exe = $line
-		# }
-		# elseif ($line -eq $com_dll)  {
-			# write-host "[lock] $exe - $line"
-		# }
-	# }
 	
 	New-Item -Path $com_dir -ItemType Directory
 	Copy-Item -Path $bin_dir\* -Destination $com_dir -Recurse -Force
@@ -66,11 +40,6 @@
 		Start-Sleep -Milliseconds 100
 	}
 	New-ItemProperty -Path $reg_key -Name "DisableProcessIsolation" -PropertyType DWORD -Value 1
-	
-	Remove-Item -Path "C:\Users\$env:USERNAME\AppData\Local\Microsoft\Windows\Explorer\*.db" -Recurse -Force
-	Remove-Item -Path "C:\Users\$env:USERNAME\Desktop\Thumbnailer.info.log" -Force -ErrorAction SilentlyContinue
-	Remove-Item -Path "C:\Users\$env:USERNAME\Desktop\Thumbnailer.log" -Force -ErrorAction SilentlyContinue
-	Remove-Item -Path "C:\Users\$env:USERNAME\Desktop\Thumbnailer broken files" -Recurse -Force -ErrorAction SilentlyContinue
 	
 	
 	
