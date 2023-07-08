@@ -10,7 +10,6 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -31,14 +30,6 @@ namespace Thumbnailer
     public interface IThumbnailProvider
     {
         void GetThumbnail(int cx, out IntPtr hBitmap, out WTS_ALPHATYPE bitmapType);
-    }
-
-    [ComVisible(true)]
-    [Guid("b824b49d-22ac-4161-ac8a-9916e8fa3f7f")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    public interface IInitializeWithStream
-    {
-        void Initialize(IStream stream, int grfMode);
     }
 
     public enum SIGDN : uint
@@ -92,23 +83,26 @@ namespace Thumbnailer
     [ComVisible(true), ClassInterface(ClassInterfaceType.None)]
     [ProgId("Thumbnailer.ThumbnailProvider")]
     [Guid("E7CBDB01-06C9-4C8F-A061-2EDCE8598F99")]
-    public class ThumbnailProvider : IThumbnailProvider
-        //, IInitializeWithStream
-        , IInitializeWithItem
+    public class ThumbnailProvider : IThumbnailProvider, IInitializeWithItem
     {
         private void HandleError(Exception e)
         {
             try
             {
-                var lns = new List<string>();
-                lns.Add($"Error making thumb for: {curr_file_name??"<null>"}");
-                lns.AddRange(e.ToString().Replace("\r", "").Split('\n'));
-                File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.log", lns, new UTF8Encoding(true));
-                if (curr_file_name!=null)
+				var lns = new List<string>
+				{
+					$"Error making thumb for: {curr_file_name??"<null>"}"
+				};
+				lns.AddRange(e.ToString().Replace("\r", "").Split('\n'));
+                if (File.Exists(curr_file_name))
                 {
                     Directory.CreateDirectory(@"C:\Users\SunMachine\Desktop\Thumbnailer broken files");
                     File.Copy(curr_file_name, @"C:\Users\SunMachine\Desktop\Thumbnailer broken files\"+Path.GetFileName(curr_file_name), true);
                 }
+                else
+                    lns.Add($"File does not exist");
+                lns.Add("");
+                File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.log", lns, new UTF8Encoding(true));
                 //MessageBox.Show(e.ToString(), $"Error making thumb for: {curr_file_name??"<null>"}");
             }
             catch (Exception e2)
@@ -131,7 +125,7 @@ namespace Thumbnailer
                 var displayName = Marshal.PtrToStringUni(displayNamePtr);
                 Marshal.FreeCoTaskMem(displayNamePtr);
                 if (displayName == null)
-                    throw new ArgumentNullException(nameof(displayName));
+                    throw new InvalidOperationException(nameof(displayName));
                 SetFile(displayName);
             } catch (Exception e)
             {
@@ -143,9 +137,9 @@ namespace Thumbnailer
         {
             if (filename == null)
                 return null;
-            using (var str = File.OpenRead(filename))
-                return Image.FromStream(str);
-        }
+			using var str = File.OpenRead(filename);
+			return Image.FromStream(str);
+		}
 
         private static void DrawString(Graphics gr, string str, Color c, Color glow_c, Func<SizeF, float> make_scale, Func<SizeF, PointF> make_pos, string ff_name = "Arial")
         {
@@ -166,9 +160,9 @@ namespace Thumbnailer
             //gr.DrawString(str, new Font(family, font_scale), new SolidBrush(c), pos);
         }
 
-        public class TempDir : IDisposable
+        public readonly struct TempDir
         {
-            private string dir_path;
+            private readonly string dir_path;
 
             public TempDir()
             {
@@ -179,10 +173,7 @@ namespace Thumbnailer
 
             public string DirPath { get { return dir_path; } }
 
-            public void Dispose()
-            {
-                Directory.Delete(dir_path, true);
-            }
+            public void Delete() => Directory.Delete(dir_path, true);
 
         }
 
@@ -197,15 +188,11 @@ namespace Thumbnailer
             try
             {
                 if (curr_file_name == null)
-                    throw new ArgumentNullException(nameof(curr_file_name));
+                    throw new InvalidOperationException(nameof(curr_file_name));
                 if (curr_file_name.StartsWith(@"C:\Users\SunMachine\Desktop\Thumbnailer broken files\"))
                     return;
                 if (!File.Exists(curr_file_name))
-                {
-                    var fname = curr_file_name;
-                    curr_file_name = null;
-                    throw new ArgumentException($"Asked thumbnail for non-existant file: {fname}", nameof(curr_file_name));
-                }
+                    throw new InvalidOperationException($"Asked thumbnail for non-existant file: {curr_file_name}");
 
                 var ffmpeg = new Engine(@"C:\Program Files\ffmpeg\bin\ffmpeg.exe");
                 ffmpeg.Error += (s,e)=>
@@ -277,8 +264,7 @@ namespace Thumbnailer
                     }
                     catch (ArgumentException) { }
 
-                if (bg_im == null)
-                    bg_im = LoadImage(frame_fname);
+                bg_im ??= LoadImage(frame_fname);
 
                 if (bg_im == null)
                     throw new Exception($"No useable image at {frame_at.TotalSeconds} / {dur}");
@@ -313,9 +299,11 @@ namespace Thumbnailer
                     sz => new PointF(outBitmap.Width-sz.Width, (outBitmap.Height-sz.Height)/2f)
                 );
                 var text_attr = new ImageAttributes();
-                var text_c_mtr = new ColorMatrix();
-                text_c_mtr.Matrix33 = 0.5f;
-                text_attr.SetColorMatrix(text_c_mtr, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);
+				var text_c_mtr = new ColorMatrix
+				{
+					Matrix33 = 0.5f
+				};
+				text_attr.SetColorMatrix(text_c_mtr, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);
                 gr.DrawImage(text_bmp, new Rectangle(default, text_bmp.Size), 0,0, text_bmp.Width,text_bmp.Height, GraphicsUnit.Pixel, text_attr);
 
                 //DrawString(gr, sw.Elapsed.ToString(), Color.FromArgb(255, 0, 0, 0), Color.White,
@@ -337,7 +325,7 @@ namespace Thumbnailer
             finally
             {
                 File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.info.log", new[] { $"{DateTime.Now} | Finished: {curr_file_name} ({sw.Elapsed})" }, new UTF8Encoding(true));
-                temp_dir.Dispose();
+                temp_dir.Delete();
             }
         }
 
