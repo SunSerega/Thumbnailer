@@ -16,7 +16,7 @@
 	</ItemGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="powershell -File &quot;$(ProjectDir)Deploy COM.ps1&quot; &quot;$(OutDir)&quot;" />
+		<Exec Command="powershell -File &quot;$(ProjectDir)Deploy COM.ps1&quot; &quot;$(OutDir)&quot;&#xD;&#xA;powershell -File &quot;$(ProjectDir)clear cache.ps1&quot;" />
 	</Target>
 	
 </Project>

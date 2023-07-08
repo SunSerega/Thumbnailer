@@ -9,10 +9,10 @@
 		#}
 	}
 	
-	#foreach ($process in (Get-Process -Name "rundll32")) {
-	#	Write-Host "Killed " + ($process.Name)
-	#	Stop-Process -Id $process.Id -Force
-	#}
+	foreach ($process in (Get-Process -Name "rundll32")) {
+		Write-Host "Killed " + ($process.Name)
+		Stop-Process -Id $process.Id -Force
+	}
 	
 	foreach ($process in (Get-Process -Name "7+ Taskbar Tweaker")) {
 		Write-Host "Killed " + ($process.Name)
