@@ -11,6 +11,7 @@
 		<RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
 		<BaseOutputPath>..\0bin\</BaseOutputPath>
 		<BaseIntermediateOutputPath>..\0obj\</BaseIntermediateOutputPath>
+		<NoWarn>1701;1702;CA1416</NoWarn>
 	</PropertyGroup>
 	
 	<ItemGroup>
