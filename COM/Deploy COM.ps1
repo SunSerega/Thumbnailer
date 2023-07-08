@@ -2,13 +2,29 @@
 	
 	
 	
+	$user_name = $env:COMPUTERNAME
 	$bin_dir = $args[0].Remove($args[0].Length-1)
 	$com_dir = Join-Path -Path $bin_dir -ChildPath "../Deployed"
-	$user_name = $env:COMPUTERNAME
 	
 	Write-Host "Binary dir: $bin_dir"
 	Write-Host "Deploy dir: $com_dir"
 	Write-Host "User name: $user_name"
+	
+	Remove-Item -Path $com_dir -Recurse -Force -ErrorAction SilentlyContinue
+	$counter = 1
+	while ($true)
+	{
+		$test_com_dir = Join-Path -Path $com_dir -ChildPath $counter
+		Write-Host "Trying folder: $test_com_dir"
+		if (Test-Path $test_com_dir) {
+			Write-Host "Already exists"
+		} else {
+			Write-Host "Using this folder"
+			$com_dir = $test_com_dir
+			break;
+		}
+		$counter++
+	}
 	
 	foreach ($process in (Get-Process -name explorer)) {
 		#if ($process.mainwindowtitle -eq "" ) {
@@ -64,7 +80,7 @@
 catch {
 	Write-Host "An error occurred:"
 	Write-Host $_
-	pause
+	#pause
 	exit 1
 }
 #pause
