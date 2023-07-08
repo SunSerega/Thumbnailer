@@ -55,19 +55,17 @@
 		# }
 	# }
 	
-	Start-Sleep -Milliseconds 100
-	Remove-Item -Path $com_dir -Recurse -Force
-	if (Test-Path -Path $com_dir) {
-		throw "cannot continue"
-	}
-
 	New-Item -Path $com_dir -ItemType Directory
 	Copy-Item -Path $bin_dir\* -Destination $com_dir -Recurse -Force
 	
-	if (Test-Path -Path $com_dll) {
-		regsvr32 /s "$com_dll"
-		Start-Sleep -Milliseconds 1000
+	$reg_key = "HKLM:\SOFTWARE\Classes\CLSID\{E7CBDB01-06C9-4C8F-A061-2EDCE8598F99}"
+	Remove-Item -Path $reg_key -Recurse
+	regsvr32 /s "$com_dll"
+	while (-not (Test-Path -Path $reg_key)) {
+		Write-Host "Waiting for regsvr32 to create key"
+		Start-Sleep -Milliseconds 100
 	}
+	New-ItemProperty -Path $reg_key -Name "DisableProcessIsolation" -PropertyType DWORD -Value 1
 	
 	Remove-Item -Path "C:\Users\$env:USERNAME\AppData\Local\Microsoft\Windows\Explorer\*.db" -Recurse -Force
 	Remove-Item -Path "C:\Users\$env:USERNAME\Desktop\Thumbnailer.info.log" -Force -ErrorAction SilentlyContinue
