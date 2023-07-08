@@ -1,4 +1,4 @@
-try {
+﻿try {
 	
 	
 	
@@ -22,6 +22,11 @@ try {
 	#	Stop-Process -Id $process.Id -Force
 	#}
 	
+	foreach ($process in (Get-Process -Name "7+ Taskbar Tweaker")) {
+		Write-Host "Killed " + ($process.Name)
+		Stop-Process -Id $process.Id -Force
+	}
+	
 	$com_dll = "$com_dir\COM.comhost.dll"
 	Write-Host "COM .dll: $com_dll"
 	
@@ -34,16 +39,24 @@ try {
 		# }
 	# }
 	
+	Start-Sleep -Milliseconds 100
 	Remove-Item -Path $com_dir -Recurse -Force
+	if (Test-Path -Path $com_dir) {
+		throw "cannot continue"
+	}
+
 	New-Item -Path $com_dir -ItemType Directory
 	Copy-Item -Path $bin_dir\* -Destination $com_dir -Recurse -Force
 	
-	regsvr32 /s "$com_dll"
+	if (Test-Path -Path $com_dll) {
+		regsvr32 /s "$com_dll"
+		Start-Sleep -Milliseconds 1000
+	}
 	
 	Remove-Item -Path "C:\Users\$env:USERNAME\AppData\Local\Microsoft\Windows\Explorer\*.db" -Recurse -Force
-	Remove-Item -Path "C:\Users\$env:USERNAME\Desktop\Thumbnailer.info.log" -Force
-	Remove-Item -Path "C:\Users\$env:USERNAME\Desktop\Thumbnailer.log" -Force
-	Remove-Item -Path "C:\Users\$env:USERNAME\Desktop\Thumbnailer broken files" -Recurse -Force
+	Remove-Item -Path "C:\Users\$env:USERNAME\Desktop\Thumbnailer.info.log" -Force -ErrorAction SilentlyContinue
+	Remove-Item -Path "C:\Users\$env:USERNAME\Desktop\Thumbnailer.log" -Force -ErrorAction SilentlyContinue
+	Remove-Item -Path "C:\Users\$env:USERNAME\Desktop\Thumbnailer broken files" -Recurse -Force -ErrorAction SilentlyContinue
 	
 	
 	
@@ -52,6 +65,6 @@ catch {
 	Write-Host "An error occurred:"
 	Write-Host $_
 	pause
-	exit
+	exit 1
 }
 #pause

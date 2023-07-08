@@ -2,12 +2,7 @@
 	
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
-		<TargetFramework>net7.0-windows</TargetFramework>
-		<Nullable>enable</Nullable>
 		<UseWPF>true</UseWPF>
-		<BaseOutputPath>..\0bin\</BaseOutputPath>
-		<BaseIntermediateOutputPath>..\0obj\</BaseIntermediateOutputPath>
-		<NoWarn>1701;1702;CA1416</NoWarn>
 	</PropertyGroup>
 	
 </Project>

@@ -1,13 +1,16 @@
 ﻿
 
 
+using System;
+using System.IO;
+using System.Linq;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using static System.Net.Mime.MediaTypeNames;
 
 static class RegInstall
 {
 
-    static Dictionary<string, bool> all_ext = new(StringComparer.OrdinalIgnoreCase);
+    static readonly Dictionary<string, bool> all_ext = new(StringComparer.OrdinalIgnoreCase);
     static void on_ext(string ext, bool need)
     {
         if (all_ext.TryGetValue(ext, out var old_need))
@@ -32,23 +35,25 @@ static class RegInstall
 
     static void on_all_ext(string otp, bool need)
     {
-        foreach (Match m in Regex.Matches(otp, @"Common extensions: ([\w,]+)\."))
+        foreach (var m in Regex.Matches(otp, @"Common extensions: ([\w,]+)\.").Cast<Match>())
             foreach (var ext in m.Groups[1].Value.Split(','))
                 on_ext(ext, need);
     }
 
-    static void Main(string[] args)
+    static void Main()
     {
         var log = File.CreateText("reg install.log");
 
         on_ext("thumb_test", true);
         on_ext("gif", true);
-        
-        var psi = new System.Diagnostics.ProcessStartInfo("ffmpeg", "-formats");
-        psi.UseShellExecute = false;
-        psi.RedirectStandardOutput = true;
-        psi.RedirectStandardError = true;
-        var p = System.Diagnostics.Process.Start(psi);
+
+        var psi = new System.Diagnostics.ProcessStartInfo("ffmpeg", "-formats")
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        var p = System.Diagnostics.Process.Start(psi)!;
         p.StandardError.ReadToEndAsync().ContinueWith(t => log.WriteLine(t.Result));
 
         var started = false;
@@ -78,11 +83,13 @@ static class RegInstall
             if (wds.Length < 2)
                 throw new FormatException(format_s);
 
-            var psi2 = new System.Diagnostics.ProcessStartInfo("ffmpeg", $"ffmpeg -h demuxer={wds[1]}");
-            psi2.UseShellExecute = false;
-            psi2.RedirectStandardOutput = true;
-            psi2.RedirectStandardError = true;
-            var p2 = System.Diagnostics.Process.Start(psi2);
+            var psi2 = new System.Diagnostics.ProcessStartInfo("ffmpeg", $"ffmpeg -h demuxer={wds[1]}")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+            var p2 = System.Diagnostics.Process.Start(psi2)!;
             p2.StandardError.ReadToEndAsync().ContinueWith(t => log.WriteLine(t.Result));
             var p2_otp = p2.StandardOutput.ReadToEnd();
             p2.WaitForExit();

@@ -14,7 +14,13 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FFmpeg.NET", "C:\Users\SunM
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "COM", "COM\COM.csproj", "{9FFB21D9-F687-46C4-B2BF-5BC7F3AB844A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dashboard", "Dashboard\Dashboard.csproj", "{4A155CEC-710C-4525-96FE-77E64AB14C85}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dashboard", "Dashboard\Dashboard.csproj", "{4A155CEC-710C-4525-96FE-77E64AB14C85}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{76D57F30-3128-415D-AFBA-6CA2B05832E7}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+		Directory.Build.props = Directory.Build.props
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
