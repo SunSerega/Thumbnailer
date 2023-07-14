@@ -1,4 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿
+
+
+<Project Sdk="Microsoft.NET.Sdk">
 	
 	<PropertyGroup>
 		<UseWindowsForms>true</UseWindowsForms>
@@ -16,7 +19,9 @@
 	</ItemGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="powershell -File &quot;$(ProjectDir)Deploy COM.ps1&quot; &quot;$(OutDir)&quot;&#xD;&#xA;powershell -File &quot;$(ProjectDir)clear cache.ps1&quot;" />
+		<Exec Command="powershell -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(OutDir)$(ProjectName)&quot; &quot;FFmpeg.NET&quot;&#xD;&#xA;powershell -File &quot;$(ProjectDir)register COM.ps1&quot; &quot;$(SolutionDir)0Deployed\$(ProjectName).comhost.dll&quot;&#xD;&#xA;powershell -File &quot;$(ProjectDir)clear cache.ps1&quot;" />
 	</Target>
 	
 </Project>
+
+

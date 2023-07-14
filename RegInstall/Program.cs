@@ -7,11 +7,19 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
+static partial class RegexUtils
+{
+
+    [GeneratedRegex(@"Common extensions: ([\w,]+)\.")]
+    public static partial Regex ExtractFFmpegCommonExt();
+
+}
+
 static class RegInstall
 {
 
     static readonly Dictionary<string, bool> all_ext = new(StringComparer.OrdinalIgnoreCase);
-    static void on_ext(string ext, bool need)
+    static void AddExt(string ext, bool need)
     {
         if (all_ext.TryGetValue(ext, out var old_need))
         {
@@ -33,19 +41,19 @@ static class RegInstall
 
     }
 
-    static void on_all_ext(string otp, bool need)
+    static void AddAllExt(string otp, bool need)
     {
-        foreach (var m in Regex.Matches(otp, @"Common extensions: ([\w,]+)\.").Cast<Match>())
+        foreach (var m in RegexUtils.ExtractFFmpegCommonExt().Matches(otp).Cast<Match>())
             foreach (var ext in m.Groups[1].Value.Split(','))
-                on_ext(ext, need);
+                AddExt(ext, need);
     }
 
     static void Main()
     {
         var log = File.CreateText("reg install.log");
 
-        on_ext("thumb_test", true);
-        on_ext("gif", true);
+        AddExt("thumb_test", true);
+        AddExt("gif", true);
 
         var psi = new System.Diagnostics.ProcessStartInfo("ffmpeg", "-formats")
         {
@@ -96,12 +104,12 @@ static class RegInstall
 
             if (new[] { "subtitle", "typewriter", "DAT", "Draw File", "Tracker formats", "ModPlug" }.Any(p2_otp.Contains))
             {
-                on_all_ext(p2_otp, false);
+                AddAllExt(p2_otp, false);
                 return;
             }
 
             Console.WriteLine($"{wds[1]}: [{p2_otp}]");
-            on_all_ext(p2_otp, true);
+            AddAllExt(p2_otp, true);
 
 
             //foreach (var ext in wds[1].Split('*'))

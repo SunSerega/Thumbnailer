@@ -3,8 +3,10 @@
 
 /.vs/
 
-/0bin/
-/0obj/
+*/bin/
+*/obj/
+
+/0Deployed/
 
 *.csproj.user
 

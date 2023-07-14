@@ -6,7 +6,7 @@ using Thumbnailer;
 
 class Test
 {
-    static void Main(string[] args)
+    static void Main()
     {
 
         /**
@@ -38,8 +38,7 @@ class Test
         var tp = new ThumbnailProvider();
 
         tp.SetFile(@"G:\0Music\2Special\0 Legendary\GHOST DATA\[20220207] 🍁 Blanke - The Fall [GHOST DATA Remix] 🍁.mp4");
-
-        tp.GetThumbnail(1, out var hBitmap, out var bitmapType);
+		tp.GetThumbnail(1, out _, out _);
     }
 }
 
