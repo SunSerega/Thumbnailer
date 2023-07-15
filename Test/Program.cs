@@ -56,7 +56,7 @@ class Test
 
 	}
 
-	public static void ReplaceThumbnail(string filePath, string newThumbnailPath)
+	public static unsafe void ReplaceThumbnail(string filePath, string newThumbnailPath)
 	{
 		var newThumbnail = new Bitmap(newThumbnailPath);
 
@@ -65,7 +65,7 @@ class Test
 		var CLSID_LocalThumbnailCache = new Guid("50EF4544-AC9F-4A8E-B21B-8A26180DB13F");
 		var thumbnailCache = (IThumbnailCache)Activator.CreateInstance(Type.GetTypeFromCLSID(CLSID_LocalThumbnailCache, true)!)!;
 
-		thumbnailCache.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out var sharedBitmap, out var cacheFlags, out _);
+		thumbnailCache.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out var sharedBitmap, out var cacheFlags, out var id);
 
 		var res1 = sharedBitmap.GetFormat(out var format);
 
@@ -77,19 +77,25 @@ class Test
 
 		//var bd = newThumbnail.LockBits(new Rectangle(default, newThumbnail.Size), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
 		//sharedBitmap.InitializeBitmap(bd.Scan0, WTS_ALPHATYPE.WTSAT_RGB);
-		var res4 = sharedBitmap.InitializeBitmap(newThumbnail.GetHbitmap(), WTS_ALPHATYPE.WTSAT_ARGB);
+		//var res4 = sharedBitmap.InitializeBitmap(newThumbnail.GetHbitmap(), WTS_ALPHATYPE.WTSAT_ARGB);
 
-		var res5 = sharedBitmap.GetSharedBitmap(out var hbmp2);
+		//var res5 = sharedBitmap.GetSharedBitmap(out var hbmp2);
 
-		Bitmap.FromHbitmap(hbmp2).Save(@"G:\0Prog\Thumbnailer\Test\2.bmp");
+		//Bitmap.FromHbitmap(hbmp2).Save(@"G:\0Prog\Thumbnailer\Test\2.bmp");
 
-		thumbnailCache.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out var sharedBitmap2, out var cacheFlags2, out _);
+		//thumbnailCache.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out var sharedBitmap2, out var cacheFlags2, out _);
 
-		var res6 = sharedBitmap2.GetSharedBitmap(out var hbmp3);
+		//var res6 = sharedBitmap2.GetSharedBitmap(out var hbmp3);
 
-		Bitmap.FromHbitmap(hbmp3).Save(@"G:\0Prog\Thumbnailer\Test\3.bmp");
+		//Bitmap.FromHbitmap(hbmp3).Save(@"G:\0Prog\Thumbnailer\Test\3.bmp");
 
-		SHChangeNotify(HChangeNotifyEventID.SHCNE_ALLEVENTS, HChangeNotifyFlags.SHCNF_PATHW, filePath, IntPtr.Zero);
+		//var CLSID_LocalThumbnailCache = new Guid("50EF4544-AC9F-4A8E-B21B-8A26180DB13F");
+		//var thumbnailCachePrivate = (IThumbnailCachePrivate)Activator.CreateInstance(Type.GetTypeFromCLSID(CLSID_LocalThumbnailCache, true)!)!;
+		var thumbnailCachePrivate = (IThumbnailCachePrivate)thumbnailCache;
+
+		var res7 = thumbnailCachePrivate.DeleteThumbnail(id);
+
+		//SHChangeNotify(HChangeNotifyEventID.SHCNE_UPDATEITEM, HChangeNotifyFlags.SHCNF_PATHW, filePath, IntPtr.Zero);
 
 	}
 
@@ -100,6 +106,22 @@ class Test
 		[MarshalAs(UnmanagedType.LPWStr)] string dwItem1,
 		IntPtr dwItem2
 	);
+
+	[ComImport]
+	[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+	[Guid("3413b9cd-0db3-4e97-8bf4-68fb100d1815")]
+	public interface IThumbnailCachePrivate
+	{
+		void MethodDummy0();
+		void MethodDummy1();
+		void MethodDummy2();
+		void MethodDummy3();
+		void MethodDummy4();
+		void MethodDummy5();
+
+		uint DeleteThumbnail(WTS_THUMBNAILID id);
+
+	}
 
 	#region enum HChangeNotifyEventID
 	/// <summary>
@@ -297,6 +319,12 @@ class Test
 		/// <see cref="HChangeNotifyFlags.SHCNF_DWORD"/> must be specified in <i>uFlags</i>.
 		/// </summary>
 		SHCNE_UPDATEIMAGE = 0x00008000,
+
+		/// <summary>
+		/// An existing item (a folder or a nonfolder) has changed, but the item still exists and has not been renamed. SHCNF_IDLIST or SHCNF_PATH must be specified in uFlags. dwItem1 contains the item that has changed. dwItem2 is not used and should be NULL. If a nonfolder item has been created, deleted, or renamed, use SHCNE_CREATE, SHCNE_DELETE, or SHCNE_RENAMEITEM, respectively, instead.
+		/// <see cref="HChangeNotifyFlags.SHCNF_DWORD"/> must be specified in <i>uFlags</i>.
+		/// </summary>
+		SHCNE_UPDATEITEM = 0x00002000,
 
 	}
 	#endregion // enum HChangeNotifyEventID

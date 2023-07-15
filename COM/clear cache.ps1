@@ -9,20 +9,18 @@
 	
 	
 	
-	foreach ($process in (Get-Process -name "explorer")) {
-		Write-Host "Killed "$process.Name
-		Stop-Process -Id $process.Id -Force
+	Function Kill-Procs ([string] $procName) {
+		
+		foreach ($process in (Get-Process -name $procName -ErrorAction SilentlyContinue)) {
+			Write-Host "Killed "$process.Name
+			Stop-Process -Id $process.Id -Force
+		}
+		
 	}
 	
-	foreach ($process in (Get-Process -Name "rundll32")) {
-		Write-Host "Killed "$process.Name
-		Stop-Process -Id $process.Id -Force
-	}
-	
-	foreach ($process in (Get-Process -Name "7+ Taskbar Tweaker")) {
-		Write-Host "Killed "$process.Name
-		Stop-Process -Id $process.Id -Force
-	}
+	Kill-Procs "explorer"
+	Kill-Procs "rundll32"
+	Kill-Procs "7+ Taskbar Tweaker"
 	
 	
 	
@@ -31,10 +29,15 @@
 		if ($cache_files.Count -eq 0) { break }
 		Write-Host "Trying to clear cache items: "$cache_files.Count
 		foreach ($cache_file in $cache_files) {
+			$fullName = $cache_file.FullName
+			#Start-Process "C:\Program Files (x86)\IObit\IObit Unlocker\IObitUnlocker.exe" -ArgumentList '/Delete "$fullName"'
 			Remove-Item -Path $cache_file.FullName -Force -ErrorAction SilentlyContinue
 		}
 		Start-Sleep -Milliseconds 100
+		Kill-Procs "explorer"
+		Kill-Procs "rundll32"
 	}
+	Write-Host "Done clearing cache"
 	
 	Remove-Item -Path "C:\Users\$env:USERNAME\Desktop\Thumbnailer.info.log" -Force -ErrorAction SilentlyContinue
 	Remove-Item -Path "C:\Users\$env:USERNAME\Desktop\Thumbnailer.log" -Force -ErrorAction SilentlyContinue
