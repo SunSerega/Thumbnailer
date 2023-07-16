@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Dashboard": {
+      "commandName": "Project",
+      "commandLineArgs": "DebugLaunchIn=\"$(SolutionDir)0Deployed\""
+    }
+  }
+}

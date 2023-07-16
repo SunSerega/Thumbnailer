@@ -7,7 +7,7 @@ try {
 	$wScriptShell = New-Object -ComObject WScript.Shell
 	$shortcut = $wScriptShell.CreateShortcut("C:\Users\$env:USERNAME\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\Thumbnailer.lnk")
 	$shortcut.TargetPath = $dashboard_exe_path
-	$shortcut.Arguments = "-NoWindow"
+	$shortcut.Arguments = "NoWindow"
 	$shortcut.Save()
 	
 	

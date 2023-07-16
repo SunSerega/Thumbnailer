@@ -1,16 +1,37 @@
 ﻿
-	
+
 
 <Project Sdk="Microsoft.NET.Sdk">
 	
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
 		<UseWPF>true</UseWPF>
+		<AssemblyName>Dashboard for Thumbnailer</AssemblyName>
+		<ApplicationIcon>Icon.ico</ApplicationIcon>
 	</PropertyGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="powershell -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(OutDir)$(ProjectName)&quot;&#xD;&#xA;powershell -File &quot;$(ProjectDir)Make startup lnk.ps1&quot; &quot;$(SolutionDir)0Deployed\$(ProjectName).exe&quot;" />
+		<Exec Command="powershell -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(OutDir)$(ProjectName)&quot; &quot;Hardcodet.NotifyIcon&quot;&#xD;&#xA;powershell -File &quot;$(ProjectDir)Make startup lnk.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;" />
 	</Target>
+	
+	<ItemGroup>
+	  <Resource Include="Icon.ico" />
+	</ItemGroup>
+	
+	<ItemGroup>
+	  <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
+	</ItemGroup>
+	
+	<ItemGroup>
+		<ContentWithTargetPath Include="Assets\Default.SoundOnly.bmp">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<TargetPath>$(ProjectName).Default.SoundOnly.bmp</TargetPath>
+		</ContentWithTargetPath>
+		<ContentWithTargetPath Include="Assets\Default.Ungenerated.bmp">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<TargetPath>$(ProjectName).Default.Ungenerated.bmp</TargetPath>
+		</ContentWithTargetPath>
+	</ItemGroup>
 	
 </Project>
 

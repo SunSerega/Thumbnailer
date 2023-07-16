@@ -1,12 +1,30 @@
 ﻿<Window x:Class="Dashboard.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:Dashboard"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
-
-    </Grid>
+		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+		xmlns:local="clr-namespace:Dashboard"
+		mc:Ignorable="d"
+		Title="Thumbnailer Config" WindowState="Maximized" d:DesignHeight="372.109" d:DesignWidth="620.162">
+	<DockPanel LastChildFill="False">
+		
+		<StackPanel Width="100" DockPanel.Dock="Left" Margin="7">
+			
+			<Grid>
+				<Slider x:Name="slider_active_job_count" Minimum="0" TickFrequency="1" IsSnapToTickEnabled="True" IsEnabled="False" />
+				<Slider x:Name="slider_want_job_count" Minimum="0" Maximum="{Binding ElementName=slider_active_job_count, Path=Maximum}" TickFrequency="1" IsSnapToTickEnabled="True" />
+			</Grid>
+			
+			<TextBlock HorizontalAlignment="Center">
+				<TextBlock.Text>
+					<MultiBinding StringFormat="{}{0} / {1}">
+						<Binding ElementName="slider_active_job_count" Path="Value" />
+						<Binding ElementName="slider_want_job_count" Path="Value" />
+					</MultiBinding>
+				</TextBlock.Text>
+			</TextBlock>
+			
+		</StackPanel>
+		
+	</DockPanel>
 </Window>
