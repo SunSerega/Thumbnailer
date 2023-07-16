@@ -21,6 +21,15 @@ namespace Dashboard
 					w.tray_icon.ShowIco();
 				}
 			},
+			{ "Shutdown",
+				(data, w) =>
+				{
+					if (data !=null)
+						throw new InvalidOperationException();
+					w.Hide();
+					w.shutdown_triggered = true;
+				}
+			},
 		};
 
 		public static void Load(MainWindow w)

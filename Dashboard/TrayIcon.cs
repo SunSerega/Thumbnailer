@@ -13,7 +13,9 @@ namespace Dashboard
 	{
 		readonly Window w;
 
-		public TrayIcon(Window w) {
+		public TrayIcon(Window w)
+		{
+			Visibility = Visibility.Hidden;
 			this.w = w;
 
 			ToolTipText = w.Title;
@@ -64,11 +66,11 @@ namespace Dashboard
 
 			public DummyCommand(Action body) => this.body=body;
 
-			public event EventHandler? CanExecuteChanged;
+			event EventHandler? ICommand.CanExecuteChanged { add { } remove { } }
 
-			public bool CanExecute(object? parameter) => true;
+			bool ICommand.CanExecute(object? parameter) => true;
 
-			public void Execute(object? parameter) => body();
+			void ICommand.Execute(object? parameter) => body();
 		}
 
 

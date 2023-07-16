@@ -11,6 +11,7 @@
 /0Deployed/*.pdb
 /0Deployed/*.deps.json
 /0Deployed/*.runtimeconfig.json
+/0Deployed/.lock
 
 *.csproj.user
 
