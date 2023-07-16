@@ -29,8 +29,8 @@ namespace Dashboard
 
 			{
 				var old_procs = System.Diagnostics.Process.GetProcessesByName(name).ToList();
-				if (1 != old_procs.RemoveAll(p=>p.Id==Environment.ProcessId))
-					throw new InvalidOperationException();
+				var curr_p = System.Diagnostics.Process.GetCurrentProcess();
+				old_procs.RemoveAll(p => p.StartTime >= curr_p.StartTime);
 				if (old_procs.Count != 0)
 				{
 					var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -87,7 +87,7 @@ namespace Dashboard
 
 						var br = new BinaryReader(server);
 						var command = br.ReadInt32();
-
+						
 						if (command == Commands.NewerKillsOlder)
 							Application.Current.Dispatcher.Invoke(Application.Current.Shutdown);
 						else

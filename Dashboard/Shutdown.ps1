@@ -1,7 +1,7 @@
 try {
 	$dashboard_exe_path = $args[0]
 	Write-Host "Shutdown: $dashboard_exe_path"
-	Start-Process "$dashboard_exe_path" -ArgumentList "Shutdown" -Wait
+	Start-Process "$dashboard_exe_path" -ArgumentList "Shutdown" -Wait -NoNewWindow
 }
 catch {
 	Write-Host "An error occurred:"

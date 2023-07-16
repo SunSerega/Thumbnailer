@@ -22,7 +22,6 @@ namespace Dashboard
 				CLArgs.Load(this);
 
 				var pipe = new CommandsPipe();
-
 				Application.Current.Exit += (o, e) => pipe.Shutdown();
 
 				if (shutdown_triggered)
@@ -38,6 +37,13 @@ namespace Dashboard
 					Dispatcher.BeginInvoke(() => Utils.HandleExtension(() =>
 						slider_active_job_count.Value = get_act_job_count()
 					));
+
+				SizeChanged += (o, e) =>
+				{
+					MinWidth = DesiredSize.Width;
+					MinHeight = DesiredSize.Height;
+				};
+
 			}
 			catch (Exception e)
 			{

@@ -5,26 +5,32 @@
 		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 		xmlns:local="clr-namespace:Dashboard"
 		mc:Ignorable="d"
-		Title="Thumbnailer Config" WindowState="Maximized" d:DesignHeight="372.109" d:DesignWidth="620.162">
+		Title="Thumbnailer Config" WindowState="Maximized" >
 	<DockPanel LastChildFill="False">
 		
-		<StackPanel Width="100" DockPanel.Dock="Left" Margin="7">
-			
-			<Grid>
-				<Slider x:Name="slider_active_job_count" Minimum="0" TickFrequency="1" IsSnapToTickEnabled="True" IsEnabled="False" />
-				<Slider x:Name="slider_want_job_count" Minimum="0" Maximum="{Binding ElementName=slider_active_job_count, Path=Maximum}" TickFrequency="1" IsSnapToTickEnabled="True" />
-			</Grid>
-			
-			<TextBlock HorizontalAlignment="Center">
-				<TextBlock.Text>
-					<MultiBinding StringFormat="{}{0} / {1}">
-						<Binding ElementName="slider_active_job_count" Path="Value" />
-						<Binding ElementName="slider_want_job_count" Path="Value" />
-					</MultiBinding>
-				</TextBlock.Text>
-			</TextBlock>
-			
-		</StackPanel>
+		<Border BorderBrush="Black" BorderThickness="0,0,1,0" Margin="0,0,7,0">
+			<StackPanel MinWidth="250" DockPanel.Dock="Left" Margin="7" >
+				
+				<TextBlock Text="Job slots" HorizontalAlignment="Center" />
+				
+				<Grid>
+					<Slider x:Name="slider_active_job_count" Minimum="0" TickFrequency="1" IsSnapToTickEnabled="True" IsEnabled="False" />
+					<Slider x:Name="slider_want_job_count" Minimum="0" Maximum="{Binding ElementName=slider_active_job_count, Path=Maximum}" TickFrequency="1" IsSnapToTickEnabled="True" />
+				</Grid>
+				
+				<TextBlock HorizontalAlignment="Center">
+					<TextBlock.Text>
+						<MultiBinding StringFormat="Used: {0} / {1}">
+							<Binding ElementName="slider_active_job_count" Path="Value" />
+							<Binding ElementName="slider_want_job_count" Path="Value" />
+						</MultiBinding>
+					</TextBlock.Text>
+				</TextBlock>
+				
+				<Border BorderBrush="Black" BorderThickness="0,0,0,1" Margin="0,5,0,5" />
+				
+			</StackPanel>
+		</Border>
 		
 	</DockPanel>
 </Window>
