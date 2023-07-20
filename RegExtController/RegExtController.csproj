@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<ApplicationManifest>app.manifest</ApplicationManifest>
+	</PropertyGroup>
+	
+	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
+		<Exec Command="powershell -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(OutDir)$(ProjectName)&quot;" />
+	</Target>
+	
+</Project>

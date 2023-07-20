@@ -2,17 +2,10 @@
 
 
 using System;
-using System.ComponentModel;
 using System.Drawing;
-using System.Drawing.Imaging;
-using System.IO;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Security.Policy;
-using System.Windows.Forms;
-using Thumbnailer;
 
-class Test
+partial class Test
 {
 	static void Main()
 	{
@@ -51,30 +44,62 @@ class Test
 		/**/
 
 
-		ReplaceThumbnail(@"G:\0Music\3Sort\!temp\Geoxor\[20230714] Geoxor - Apathy.mkv", @"G:\0Prog\Thumbnailer\Test\0.bmp");
+		//try
+		{
+			ReplaceThumbnail(@"G:\0Music\3Sort\!temp\Geoxor\!good\[20230714] Geoxor - Apathy.mkv", @"G:\0Prog\Thumbnailer\Test\0.bmp");
+		}
+		//catch (Exception e)
+		//{
+		//	Console.WriteLine(e);
+		//}
 		//ReplaceThumbnail(@"C:\Users\SunMachine\Desktop\Thumbnailer broken files\kevin macleod merry go.mp3", new Bitmap(@"G:\0Prog\Thumbnailer\Test\0.bmp"));
 
 	}
 
 	public static unsafe void ReplaceThumbnail(string filePath, string newThumbnailPath)
 	{
-		var newThumbnail = new Bitmap(newThumbnailPath);
+		//var newThumbnail = new Bitmap(newThumbnailPath);
 
 		SHCreateItemFromParsingName(filePath, IntPtr.Zero, typeof(IShellItem).GUID, out var item);
 
 		var CLSID_LocalThumbnailCache = new Guid("50EF4544-AC9F-4A8E-B21B-8A26180DB13F");
 		var thumbnailCache = (IThumbnailCache)Activator.CreateInstance(Type.GetTypeFromCLSID(CLSID_LocalThumbnailCache, true)!)!;
 
-		thumbnailCache.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out var sharedBitmap, out var cacheFlags, out var id);
+		{
 
-		var res1 = sharedBitmap.GetFormat(out var format);
+			var thumbnailCachePrivate = (IThumbnailCachePrivate)thumbnailCache;
 
-		var res2 = sharedBitmap.GetSize(out var size);
+			thumbnailCachePrivate.DeleteThumbnail(new WTS_THUMBNAILID());
+		}
 
-		var res3 = sharedBitmap.GetSharedBitmap(out var hbmp);
+		Console.WriteLine(filePath);
 
-		Bitmap.FromHbitmap(hbmp).Save(@"G:\0Prog\Thumbnailer\Test\1.bmp");
+		try
+		{
+			thumbnailCache.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out var sharedBitmap, out var cacheFlags, out var id);
 
+			var res1 = sharedBitmap.GetFormat(out var format);
+
+			var res2 = sharedBitmap.GetSize(out var size);
+
+			var res3 = sharedBitmap.GetSharedBitmap(out var hbmp);
+
+			Bitmap.FromHbitmap(hbmp).Save(@"G:\0Prog\Thumbnailer\Test\1.bmp");
+
+			//var CLSID_LocalThumbnailCache = new Guid("50EF4544-AC9F-4A8E-B21B-8A26180DB13F");
+			//var thumbnailCachePrivate = (IThumbnailCachePrivate)Activator.CreateInstance(Type.GetTypeFromCLSID(CLSID_LocalThumbnailCache, true)!)!;
+			var thumbnailCachePrivate = (IThumbnailCachePrivate)thumbnailCache;
+
+			var res7 = thumbnailCachePrivate.DeleteThumbnail(id);
+			Console.WriteLine("deleted");
+
+			SHChangeNotify(HChangeNotifyEventID.SHCNE_UPDATEITEM, HChangeNotifyFlags.SHCNF_PATHW, filePath, IntPtr.Zero);
+
+		}
+		catch (COMException e) when (e.HResult == unchecked((int)0x80030002))
+		{
+			Console.WriteLine("missing");
+		}
 		//var bd = newThumbnail.LockBits(new Rectangle(default, newThumbnail.Size), ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
 		//sharedBitmap.InitializeBitmap(bd.Scan0, WTS_ALPHATYPE.WTSAT_RGB);
 		//var res4 = sharedBitmap.InitializeBitmap(newThumbnail.GetHbitmap(), WTS_ALPHATYPE.WTSAT_ARGB);
@@ -89,18 +114,12 @@ class Test
 
 		//Bitmap.FromHbitmap(hbmp3).Save(@"G:\0Prog\Thumbnailer\Test\3.bmp");
 
-		//var CLSID_LocalThumbnailCache = new Guid("50EF4544-AC9F-4A8E-B21B-8A26180DB13F");
-		//var thumbnailCachePrivate = (IThumbnailCachePrivate)Activator.CreateInstance(Type.GetTypeFromCLSID(CLSID_LocalThumbnailCache, true)!)!;
-		var thumbnailCachePrivate = (IThumbnailCachePrivate)thumbnailCache;
-
-		var res7 = thumbnailCachePrivate.DeleteThumbnail(id);
-
-		//SHChangeNotify(HChangeNotifyEventID.SHCNE_UPDATEITEM, HChangeNotifyFlags.SHCNF_PATHW, filePath, IntPtr.Zero);
+		thumbnailCache.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_EXTRACT, out _, out _, out _);
 
 	}
 
-	[DllImport("shell32.dll")]
-	static extern void SHChangeNotify(
+	[LibraryImport("shell32.dll")]
+	static partial void SHChangeNotify(
 		HChangeNotifyEventID wEventId,
 		HChangeNotifyFlags uFlags,
 		[MarshalAs(UnmanagedType.LPWStr)] string dwItem1,
@@ -414,6 +433,45 @@ class Test
 		);
 	}
 
+	[ComImport]
+	[Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe")]
+	[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+	public interface IShellItem
+	{
+		void BindToHandler(IntPtr pbc,
+			[MarshalAs(UnmanagedType.LPStruct)] Guid bhid,
+			[MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+			out IntPtr ppv);
+
+		void GetParent(out IShellItem ppsi);
+
+		void GetDisplayName(SIGDN sigdnName, out IntPtr ppszName);
+
+		void GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
+
+		void Compare(IShellItem psi, uint hint, out int piOrder);
+	};
+
+	public enum SIGDN : uint
+	{
+		NORMALDISPLAY = 0,
+		PARENTRELATIVEPARSING = 0x80018001,
+		PARENTRELATIVEFORADDRESSBAR = 0x8001c001,
+		DESKTOPABSOLUTEPARSING = 0x80028000,
+		PARENTRELATIVEEDITING = 0x80031001,
+		DESKTOPABSOLUTEEDITING = 0x8004c000,
+		FILESYSPATH = 0x80058000,
+		URL = 0x80068000,
+		/// <summary>
+		/// Returns the path relative to the parent folder.
+		/// </summary>
+		PARENTRELATIVE = 0x80080001,
+		/// <summary>
+		/// Introduced in Windows 8.
+		/// </summary>
+		PARENTRELATIVEFORUI = 0x80094001
+	}
+
 	[Flags]
 	public enum WTS_FLAGS : uint
 	{
@@ -437,10 +495,10 @@ class Test
 	}
 
 	[StructLayout(LayoutKind.Sequential, Size = 16), Serializable]
-	public struct WTS_THUMBNAILID
+	public readonly struct WTS_THUMBNAILID
 	{
 		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
-		byte[] rgbKey;
+		readonly byte[] rgbKey;
 	}
 
 	[ComImport()]

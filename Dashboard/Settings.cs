@@ -20,13 +20,41 @@ namespace Dashboard
 			set => SetSetting(nameof(MaxJobCount), value);
 		}
 
+		public FileExtList AllowedExts
+		{
+			get => GetSetting(nameof(AllowedExts), new FileExtList());
+			set => SetSetting(nameof(AllowedExts), value);
+		}
+
+		public string? LastFileChoosePath
+		{
+			get => GetSetting(nameof(LastFileChoosePath), null as string);
+			set => SetSetting(nameof(LastFileChoosePath), value);
+		}
+
 	}
 
 	public sealed class FileSettings : Settings
 	{
-		public FileSettings(string hash) : base(Path.Combine(hash, @"Settings")) { }
+		public FileSettings(string hash) : base(Path.Combine("cache", hash, @"Settings")) { }
 
+		public string? FilePath
+		{
+			get => GetSetting(nameof(FilePath), null as string);
+			set => SetSetting(nameof(FilePath), value);
+		}
 
+		public DateTime LastUpdate
+		{
+			get => GetSetting(nameof(LastUpdate), default(DateTime));
+			set => SetSetting(nameof(LastUpdate), value);
+		}
+
+		public string? ThumbPath
+		{
+			get => GetSetting(nameof(ThumbPath), null as string);
+			set => SetSetting(nameof(ThumbPath), value);
+		}
 
 	}
 
@@ -34,15 +62,36 @@ namespace Dashboard
 	{
 		private static readonly System.Text.UTF8Encoding enc = new(true);
 
-		private readonly System.Threading.ManualResetEventSlim ev_need_resave = new(false);
-		private DateTime? save_time;
 		private readonly string main_save_fname, back_save_fname;
+		private readonly DelayedUpdater resaver;
+
+		private bool is_shut_down = false;
 		public Settings(string path)
 		{
 			if (path.Contains('\\'))
 				Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 			main_save_fname = Path.GetFullPath($"{path}.dat");
 			back_save_fname = Path.GetFullPath($"{path}-Backup.dat");
+
+			resaver = new(() =>
+			{
+				lock (settings)
+				{
+					if (is_shut_down) return;
+					File.Copy(main_save_fname, back_save_fname, false);
+					var sw = new StreamWriter(main_save_fname, false, enc);
+					foreach (var prop in this.GetType().GetProperties())
+					{
+						if (!settings.TryGetValue(prop.Name, out var val)) continue;
+						if (!setting_type_converter.TryGetValue(prop.PropertyType, out var conv))
+							throw new NotImplementedException(prop.PropertyType.ToString());
+						var s = conv.save(val);
+						sw.WriteLine($"{prop.Name}={s}");
+					}
+					sw.Close();
+					File.Delete(back_save_fname);
+				}
+			});
 
 			if (File.Exists(back_save_fname))
 			{
@@ -65,106 +114,104 @@ namespace Dashboard
 
 			foreach (var l in File.ReadLines(main_save_fname, enc).Select(l => l.Trim()))
 			{
-				if (string.IsNullOrWhiteSpace(l)) continue;
+				if (l == "") continue;
+
 				var ind = l.IndexOf('=');
 				if (ind == -1) throw new FormatException(l);
 
-				var full_key = l.Remove(ind);
+				var key = l.Remove(ind);
 				var s_val = l.Remove(0, ind+1);
 
-				var prop = this.GetType().GetProperty(full_key) ??
-					throw new InvalidOperationException($"Settings property [{full_key}] not found");
+				if (key.EndsWith('!'))
+				{
+					key = key.Remove(key.Length-1);
+					if (s_val != "")
+						throw new FormatException(l);
+					s_val = null;
+					continue;
+				}
 
-				if (setting_type_converter.TryGetValue(prop.PropertyType, out var conv))
-					settings[full_key] = conv.load(s_val);
+				var prop = this.GetType().GetProperty(key) ??
+					throw new InvalidOperationException($"Settings property [{key}] not found");
+
+				if (s_val is null)
+					settings.Remove(key);
+				else if (setting_type_converter.TryGetValue(prop.PropertyType, out var conv))
+					settings[key] = conv.load(s_val);
 				else
 					throw new NotImplementedException(prop.PropertyType.ToString());
 
 			}
 
-			new System.Threading.Thread(() =>
-			{
-				while (true)
-					try
-					{
-						ev_need_resave.Wait();
-
-						while (true)
-						{
-							var wait_left = save_time!.Value - DateTime.Now;
-							if (wait_left <= TimeSpan.Zero) break;
-							System.Threading.Thread.Sleep(wait_left);
-						}
-
-						ev_need_resave.Reset();
-						//Console.Beep();
-
-						File.Copy(main_save_fname, back_save_fname, false);
-						var sw = new StreamWriter(main_save_fname, false, enc);
-						foreach (var prop in this.GetType().GetProperties())
-						{
-							if (!settings.TryGetValue(prop.Name, out var val)) continue;
-							if (!setting_type_converter.TryGetValue(prop.PropertyType, out var conv))
-								throw new NotImplementedException(prop.PropertyType.ToString());
-							var s = conv.save(val);
-							sw.WriteLine($"{prop.Name}={s}");
-						}
-						sw.Close();
-						File.Delete(back_save_fname);
-
-					}
-					catch (Exception e) {
-						Utils.HandleExtension(e);
-					}
-			}) {
-				IsBackground=true
-			}.Start();
-
 		}
+
+		public string GetSettingsFileName() => main_save_fname;
 
 		private static KeyValuePair<Type, (Func<object, string> save, Func<string, object> load)> MakeSettingTypeConverter<T>(Func<T, string> save, Func<string, T> load) where T : notnull =>
 			new(typeof(T), new( o => save((T)o), s => load(s) ));
 		private static readonly Dictionary<Type, (Func<object, string> save, Func<string, object> load)> setting_type_converter = new[]
 		{
-			MakeSettingTypeConverter<string>	(x => x,            s => s),
-			MakeSettingTypeConverter<int>		(x => x.ToString(),	int.Parse),
+			MakeSettingTypeConverter<string>		(x => x,					s => s),
+			MakeSettingTypeConverter<int>			(x => x.ToString(),			Convert.ToInt32),
+			MakeSettingTypeConverter<DateTime>		(x => x.Ticks.ToString(),	s => new DateTime(Convert.ToInt64(s))),
+			MakeSettingTypeConverter<FileExtList>	(x => x.ToString(),			FileExtList.Parse),		
 		}.ToDictionary(kvp=>kvp.Key, kvp=>kvp.Value);
 
 		private readonly Dictionary<string, object> settings = new(StringComparer.OrdinalIgnoreCase);
-		protected T GetSetting<T>(string key, T? missing_value = default) where T : notnull
+		protected T? GetSetting<T>(string key, T? missing_value = default)
 		{
 			lock (settings)
 				if (settings.TryGetValue(key, out var value))
-					return (T)value; else
+					return (T)value;
+				else
 				{
-					if (missing_value == null)
-						throw new InvalidOperationException(key);
-					SetSetting(key, missing_value);
+					if (missing_value != null)
+						SetSetting(key, missing_value);
 					return missing_value;
 				}
 		}
-		protected void SetSetting<T>(string key, T value) where T: notnull
+		protected void SetSetting<T>(string key, T? value)
 		{
 			if (key.Contains('='))
 				throw new FormatException(key);
 			lock (settings)
 			{
-				settings[key] = value;
-				var s = setting_type_converter[typeof(T)].save(value);
-				var file_line = $"{key}={s}";
+#pragma warning disable CS8620 // settings value type is "object" instead of "object?"
+				var old_value = settings.GetValueOrDefault(key, null);
+#pragma warning restore CS8620
+				if (old_value is null ? value is null : EqualityComparer<T>.Default.Equals((T)old_value, value))
+					return;
+				string file_line;
+				if (value is null)
+				{
+					settings.Remove(key);
+					file_line = $"{key}!=";
+				}
+				else
+				{
+					settings[key] = value;
+					var s = setting_type_converter[typeof(T)].save(value);
+					file_line = $"{key}={s}";
+				}
 
 				if (!File.Exists(main_save_fname))
 					File.WriteAllText(main_save_fname, "", enc);
 				File.Copy(main_save_fname, back_save_fname, false);
-				File.AppendAllLines(main_save_fname, new[] { $"{key}={s}" });
+				File.AppendAllLines(main_save_fname, new[] { file_line });
 				File.Delete(back_save_fname);
 
-				save_time = DateTime.Now + TimeSpan.FromSeconds(10);
-				ev_need_resave.Set();
+				resaver.Trigger(TimeSpan.FromSeconds(10), true);
 			}
 		}
 
 		public static RootSettings Root { get; } = new();
+
+		public void Shutdown()
+		{
+			lock (settings) is_shut_down = true;
+			resaver.Shutdown();
+		}
+
 	}
 
 }

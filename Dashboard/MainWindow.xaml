@@ -5,32 +5,98 @@
 		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 		xmlns:local="clr-namespace:Dashboard"
 		mc:Ignorable="d"
-		Title="Thumbnailer Config" WindowState="Maximized" >
-	<DockPanel LastChildFill="False">
-		
-		<Border BorderBrush="Black" BorderThickness="0,0,1,0" Margin="0,0,7,0">
-			<StackPanel MinWidth="250" DockPanel.Dock="Left" Margin="7" >
-				
-				<TextBlock Text="Job slots" HorizontalAlignment="Center" />
-				
-				<Grid>
-					<Slider x:Name="slider_active_job_count" Minimum="0" TickFrequency="1" IsSnapToTickEnabled="True" IsEnabled="False" />
-					<Slider x:Name="slider_want_job_count" Minimum="0" Maximum="{Binding ElementName=slider_active_job_count, Path=Maximum}" TickFrequency="1" IsSnapToTickEnabled="True" />
-				</Grid>
-				
-				<TextBlock HorizontalAlignment="Center">
-					<TextBlock.Text>
-						<MultiBinding StringFormat="Used: {0} / {1}">
-							<Binding ElementName="slider_active_job_count" Path="Value" />
-							<Binding ElementName="slider_want_job_count" Path="Value" />
-						</MultiBinding>
-					</TextBlock.Text>
-				</TextBlock>
-				
-				<Border BorderBrush="Black" BorderThickness="0,0,0,1" Margin="0,5,0,5" />
-				
+		Title="Thumbnailer Config" WindowState="Maximized" d:DesignHeight="389.663" d:DesignWidth="557.597" >
+	<DockPanel>
+
+		<DockPanel MinWidth="225" DockPanel.Dock="Left" Margin="7" >
+
+			<TextBlock Text="Job slots" HorizontalAlignment="Center" DockPanel.Dock="Top" />
+
+			<Grid DockPanel.Dock="Top">
+				<Slider x:Name="slider_active_job_count" Minimum="0" TickFrequency="1" IsSnapToTickEnabled="True" IsEnabled="False" />
+				<Slider x:Name="slider_want_job_count" Minimum="0" Maximum="{Binding ElementName=slider_active_job_count, Path=Maximum}" TickFrequency="1" IsSnapToTickEnabled="True" />
+			</Grid>
+
+			<TextBlock HorizontalAlignment="Center" DockPanel.Dock="Top">
+				<TextBlock.Text>
+					<MultiBinding StringFormat="Used {0:00} / {1:00}; Pending:">
+						<Binding ElementName="slider_active_job_count" Path="Value" />
+						<Binding ElementName="slider_want_job_count" Path="Value" />
+					</MultiBinding>
+				</TextBlock.Text>
+			</TextBlock>
+
+			<TextBlock x:Name="tb_pending_jobs_count" Text="0" HorizontalAlignment="Center" DockPanel.Dock="Top" />
+
+			<Border BorderBrush="Black" BorderThickness="0,0,0,1" Margin="0,5,0,5" DockPanel.Dock="Top" />
+
+			<DockPanel DockPanel.Dock="Top">
+				<Button x:Name="b_cache_rebuild" Content="Rebuild" DockPanel.Dock="Right" Margin="5,0,3,0" />
+				<Button x:Name="b_cache_clear" Content="Clear" DockPanel.Dock="Right" Margin="3,0,0,0" />
+				<TextBlock x:Name="tb_cache_info" d:Text="Cache size: 123.45 KB" Margin="3,0,0,0" />
+			</DockPanel>
+
+			<Border BorderBrush="Black" BorderThickness="0,0,0,1" Margin="0,5,0,5" DockPanel.Dock="Top" />
+
+			<TextBlock Text="Allowed extensions" HorizontalAlignment="Center" DockPanel.Dock="Top" />
+
+			<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" DockPanel.Dock="Top">
+				<Button x:Name="b_check_n_commit" Content="Check and commit" Margin="3" Padding="3,0,3,2" IsEnabled="False" />
 			</StackPanel>
-		</Border>
-		
+
+			<DockPanel DockPanel.Dock="Top">
+
+				<Button x:Name="b_add_ext" DockPanel.Dock="Right" Margin="3" >
+					<Grid Width="15" Height="15" >
+						<Line X1="2" Y1="1.5" X2="13" Y2="1.5" Stroke="Green" StrokeThickness="3" VerticalAlignment="Center" />
+						<Line X1="1.5" Y1="2" X2="1.5" Y2="13" Stroke="Green" StrokeThickness="3" HorizontalAlignment="Center" />
+					</Grid>
+				</Button>
+
+				<Border BorderBrush="Black" BorderThickness="0,0,0,0">
+					<TextBox x:Name="tb_new_ext" d:Text="mkv" FontSize="14" />
+				</Border>
+
+			</DockPanel>
+
+			<ScrollViewer VerticalScrollBarVisibility="Auto">
+				<StackPanel x:Name="allowed_ext_container">
+					<d:StackPanel>
+						<local:AllowedExt />
+						<local:AllowedExt />
+					</d:StackPanel>
+				</StackPanel>
+			</ScrollViewer>
+
+		</DockPanel>
+
+		<Border BorderBrush="Black" BorderThickness="0,0,1,0"/>
+
+		<Grid x:Name="grid_thumb_compare" Margin="7" AllowDrop="true" >
+			<Grid>
+				<Grid.RowDefinitions>
+					<RowDefinition/>
+					<RowDefinition Height="25" />
+					<RowDefinition/>
+				</Grid.RowDefinitions>
+				<Border x:Name="c_thumb_compare_1" Grid.Row="0">
+					<local:ThumbCompareViewer x:Name="thumb_compare_org" />
+				</Border>
+				<Border x:Name="c_thumb_compare_2" Grid.Row="2">
+					<local:ThumbCompareViewer x:Name="thumb_compare_gen" />
+				</Border>
+			</Grid>
+			<StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+				<Border BorderBrush="Black" BorderThickness="1" Background="White">
+					<TextBlock x:Name="tb_thumb_compare_1" Text="Original" Margin="3" HorizontalAlignment="Center" />
+				</Border>
+				<Grid Height="5" />
+				<Border BorderBrush="Black" BorderThickness="1" Background="White">
+					<TextBlock x:Name="tb_thumb_compare_2" Text="Generated" Margin="3" HorizontalAlignment="Center" />
+				</Border>
+			</StackPanel>
+			<Button x:Name="b_swap_compare" Content="swap" Margin="5" HorizontalAlignment="Left" VerticalAlignment="Center" />
+		</Grid>
+
 	</DockPanel>
 </Window>

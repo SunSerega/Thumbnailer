@@ -1,0 +1,22 @@
+﻿<UserControl x:Class="Dashboard.ThumbCompareViewer"
+			 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+			 xmlns:local="clr-namespace:Dashboard"
+			 mc:Ignorable="d" 
+			 d:DesignHeight="1480.83" d:DesignWidth="793.676"
+			 BorderBrush="Black" BorderThickness="1" Margin="5"
+			 >
+	<UserControl.Resources>
+		<ResourceDictionary>
+			<LinearGradientBrush x:Key="HatchBrush" MappingMode="Absolute" StartPoint="0,0" EndPoint="10,10" SpreadMethod="Repeat">
+				<GradientStop Offset="0" Color="White"/>
+				<GradientStop Offset="0.75" Color="White"/>
+				<GradientStop Offset="0.75" Color="LightGray"/>
+				<GradientStop Offset="1" Color="LightGray"/>
+			</LinearGradientBrush>
+		</ResourceDictionary>
+	</UserControl.Resources>
+	<Border x:Name="b" Background="{StaticResource HatchBrush}" />
+</UserControl>

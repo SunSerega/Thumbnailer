@@ -6,14 +6,20 @@ using System.Threading;
 
 namespace Dashboard
 {
-	internal class CustomThreadPool
+	public class CustomThreadPool
 	{
 		private readonly ThreadPoolItem[] items;
 
 		public int MaxJobCount { get => items.Length; }
 
 		private readonly BlockingCollection<Action> pending_jobs = new();
-		public void AddJob(Action job) => pending_jobs.Add(job);
+		public event Action<Func<int>>? PendingJobCountChanged;
+
+		public void AddJob(Action job)
+		{
+			pending_jobs.Add(job);
+			PendingJobCountChanged?.Invoke(() => pending_jobs.Count);
+		}
 
 		private volatile int want_job_count = 0;
 		private readonly object job_count_lock = new();
@@ -62,11 +68,7 @@ namespace Dashboard
 
 				thr.IsBackground = !state;
 
-				if (state)
-					Interlocked.Increment(ref root.active_job_count);
-				else
-					Interlocked.Decrement(ref root.active_job_count);
-				
+				Interlocked.Add(ref root.active_job_count, state ? +1 : -1);
 				root.ActiveJobsCountChanged?.Invoke(() => root.active_job_count);
 			}
 
@@ -91,6 +93,7 @@ namespace Dashboard
 							job = root.pending_jobs.Take();
 							ChangeState(true);
 						}
+						root.PendingJobCountChanged?.Invoke(() => root.pending_jobs.Count);
 
 						job();
 					}

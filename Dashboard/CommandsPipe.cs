@@ -5,8 +5,9 @@ using System.IO.Pipes;
 using System.Security.AccessControl;
 
 using System.Linq;
+using System.Collections.Generic;
 
-using System.Threading.Tasks;
+using Task = System.Threading.Tasks.Task;
 
 using System.Windows;
 
@@ -20,8 +21,34 @@ namespace Dashboard
 		private static class Commands
 		{
 			public const int NewerKillsOlder = 1;
-
+			public const int GimmiThumb = 2;
 		}
+
+		private readonly Dictionary<int, Action<Stream>> command_handlers = new()
+		{
+			{ Commands.NewerKillsOlder, str=>Application.Current.Dispatcher.Invoke(Application.Current.Shutdown) }
+		};
+		public void AddThumbGen(ThumbGenerator thumb_gen) =>
+			command_handlers.Add(Commands.GimmiThumb, str =>
+			{
+				var br = new BinaryReader(str);
+				var fname = br.ReadString();
+
+				var first = true;
+				thumb_gen.Generate(fname, res =>
+				{
+					if (first)
+					{
+						var bw = new BinaryWriter(str);
+						bw.Write(res);
+						first = false;
+						return;
+					}
+
+					COMManip.DeleteThumbFor(fname);
+
+				});
+			});
 
 		public CommandsPipe()
 		{
@@ -72,7 +99,7 @@ namespace Dashboard
 					{
 						var ps = new PipeSecurity();
 						ps.AddAccessRule(new PipeAccessRule(Environment.UserName, PipeAccessRights.ReadWrite, AccessControlType.Allow));
-						
+
 						using var server = NamedPipeServerStreamAcl.Create(
 							pipeName: name,
 							direction: PipeDirection.InOut,
@@ -82,17 +109,18 @@ namespace Dashboard
 							inBufferSize: 0, outBufferSize: 0,
 							pipeSecurity: ps
 						);
-						
+
 						server.WaitForConnection();
 
 						var br = new BinaryReader(server);
+						var bw = new BinaryWriter(server);
 						var command = br.ReadInt32();
-						
-						if (command == Commands.NewerKillsOlder)
-							Application.Current.Dispatcher.Invoke(Application.Current.Shutdown);
-						else
+
+						if (!command_handlers.TryGetValue(command, out var handler))
 							throw new InvalidOperationException($"Command [{command}] not defined");
 
+						handler(server);
+						server.Flush();
 					}
 					catch (Exception e)
 					{
