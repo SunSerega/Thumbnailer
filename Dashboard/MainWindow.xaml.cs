@@ -42,6 +42,8 @@ namespace Dashboard
 				if (shutdown_triggered)
 					Application.Current.Shutdown(0);
 
+				pipe.StartAccepting();
+
 				#endregion
 
 				SizeChanged += (o, e) =>
@@ -227,13 +229,15 @@ namespace Dashboard
 					thumb_gen.Generate(fname, thumb_fname =>
 						thumb_compare_gen.Set(() =>
 						{
+							using var str = File.OpenRead(thumb_fname);
 							var res = new BitmapImage();
 							res.BeginInit();
 							res.CacheOption = BitmapCacheOption.OnLoad;
-							res.UriSource = new(thumb_fname, UriKind.Absolute);
+							res.StreamSource = str;
 							res.EndInit();
 							return res;
-						})
+						}),
+						true
 					);
 					grid_thumb_compare.HorizontalAlignment = HorizontalAlignment.Center;
 					c_thumb_compare_1.VerticalAlignment = VerticalAlignment.Bottom;

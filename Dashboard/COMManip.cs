@@ -15,6 +15,7 @@ namespace Dashboard
 		private static IThumbnailCache? thumbnailCache;
 		private static IThumbnailCachePrivate? thumbnailCachePrivate;
 		private static readonly Dispatcher d;
+		private static readonly System.Threading.ManualResetEventSlim ev_init_completed = new(false);
 
 		static COMManip()
 		{
@@ -61,9 +62,21 @@ namespace Dashboard
 
 					//SHChangeNotify(HChangeNotifyEventID.SHCNE_UPDATEITEM, HChangeNotifyFlags.SHCNF_PATHW, fname, IntPtr.Zero);
 
+					ev_init_completed.Set();
 				});
-			});
+			}).Aborted += (o,e)=> { MessageBox.Show("Init error"); };
 
+		}
+
+		private static void Invoke(Action a)
+		{
+			ev_init_completed.Wait();
+			d.Invoke(a);
+		}
+		private static T Invoke<T>(Func<T> a)
+		{
+			ev_init_completed.Wait();
+			return d.Invoke(a);
 		}
 
 		public sealed class ThumbnailMissingException : Exception
@@ -74,7 +87,7 @@ namespace Dashboard
 		private static BitmapSource? ConvertHBitmap(IntPtr bmp) => bmp == default ? null :
 			System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(bmp, 0, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
 
-		public static BitmapSource? GetExistingThumbFor(string fname) => ConvertHBitmap(d.Invoke(() =>
+		public static BitmapSource? GetExistingThumbFor(string fname) => ConvertHBitmap(Invoke(() =>
 		{
 			SHCreateItemFromParsingName(fname, 0, typeof(IShellItem).GUID, out var item);
 
@@ -94,7 +107,7 @@ namespace Dashboard
 			return bmp;
 		}));
 
-		public static bool DeleteThumbFor(string fname) => d.Invoke(() =>
+		private static bool DeleteThumbFor(string fname) => Invoke(() =>
 		{
 			SHCreateItemFromParsingName(fname, 0, typeof(IShellItem).GUID, out var item);
 
@@ -111,13 +124,21 @@ namespace Dashboard
 
 			if (0!=thumbnailCachePrivate!.DeleteThumbnail(id))
 				throw new Win32Exception();
-
-			SHChangeNotify(HChangeNotifyEventID.SHCNE_UPDATEITEM, HChangeNotifyFlags.SHCNF_PATHW, fname, IntPtr.Zero);
-
-			return false;
+			return true;
 		});
 
-		public static BitmapSource? GetOrTryMakeThumbFor(string fname) => ConvertHBitmap(d.Invoke(() =>
+		public static void ResetThumbFor(string? path)
+		{
+			while (path != null)
+			{
+				DeleteThumbFor(path);
+				SHChangeNotify(HChangeNotifyEventID.SHCNE_UPDATEITEM, HChangeNotifyFlags.SHCNF_PATHW, path, IntPtr.Zero);
+				//SHChangeNotify(HChangeNotifyEventID.SHCNE_ALLEVENTS, HChangeNotifyFlags.SHCNF_PATHW, path, IntPtr.Zero);
+				path = System.IO.Path.GetDirectoryName(path);
+			}
+		}
+
+		public static BitmapSource? GetOrTryMakeThumbFor(string fname) => ConvertHBitmap(Invoke(() =>
 		{
 			SHCreateItemFromParsingName(fname, 0, typeof(IShellItem).GUID, out var item);
 

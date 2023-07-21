@@ -12,7 +12,7 @@
 	</PropertyGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="powershell -File &quot;$(ProjectDir)Shutdown.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;&#xD;&#xA;powershell -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(OutDir)$(ProjectName)&quot; &quot;Hardcodet.NotifyIcon&quot;&#xD;&#xA;powershell -File &quot;$(ProjectDir)Restart.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;&#xD;&#xA;powershell -File &quot;$(ProjectDir)Make startup lnk.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;" />
+		<Exec Command="powershell -File &quot;$(ProjectDir)Shutdown.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;&#xD;&#xA;powershell -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(OutDir)$(ProjectName)&quot; &quot;Hardcodet.NotifyIcon&quot; &quot;CopyOnWrite&quot;&#xD;&#xA;powershell -File &quot;$(ProjectDir)Restart.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;&#xD;&#xA;powershell -File &quot;$(ProjectDir)Make startup lnk.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;" />
 	</Target>
 	
 	<ItemGroup>
@@ -20,6 +20,7 @@
 	</ItemGroup>
 	
 	<ItemGroup>
+	  <PackageReference Include="CopyOnWrite" Version="0.3.6" />
 	  <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
 	</ItemGroup>
 	

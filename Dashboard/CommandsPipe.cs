@@ -16,6 +16,7 @@ namespace Dashboard
 	public class CommandsPipe
 	{
 		private const string file_lock_name = @".lock";
+		private readonly string name = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name!;
 		private readonly FileStream file_lock;
 
 		private static class Commands
@@ -37,22 +38,17 @@ namespace Dashboard
 				var first = true;
 				thumb_gen.Generate(fname, res =>
 				{
-					if (first)
-					{
-						var bw = new BinaryWriter(str);
-						bw.Write(res);
-						first = false;
-						return;
-					}
+					if (!first) return;
 
-					COMManip.DeleteThumbFor(fname);
+					var bw = new BinaryWriter(str);
+					bw.Write(res);
+					first = false;
 
-				});
+				}, false);
 			});
 
 		public CommandsPipe()
 		{
-			var name = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name!;
 
 			{
 				var old_procs = System.Diagnostics.Process.GetProcessesByName(name).ToList();
@@ -92,6 +88,9 @@ namespace Dashboard
 
 			file_lock = File.Create(file_lock_name);
 
+		}
+
+		public void StartAccepting() =>
 			new System.Threading.Thread(() =>
 			{
 				while (true)
@@ -121,6 +120,7 @@ namespace Dashboard
 
 						handler(server);
 						server.Flush();
+						server.Disconnect();
 					}
 					catch (Exception e)
 					{
@@ -130,8 +130,6 @@ namespace Dashboard
 			{
 				IsBackground = true
 			}.Start();
-
-		}
 
 		public void Shutdown()
 		{
