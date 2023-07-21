@@ -226,8 +226,14 @@ namespace Dashboard
 					thumb_compare_org.Set(() => COMManip.GetExistingThumbFor(fname));
 					thumb_gen.Generate(fname, thumb_fname =>
 						thumb_compare_gen.Set(() =>
-							new BitmapImage(new Uri(thumb_fname, UriKind.Absolute))
-						)
+						{
+							var res = new BitmapImage();
+							res.BeginInit();
+							res.CacheOption = BitmapCacheOption.OnLoad;
+							res.UriSource = new(thumb_fname, UriKind.Absolute);
+							res.EndInit();
+							return res;
+						})
 					);
 					grid_thumb_compare.HorizontalAlignment = HorizontalAlignment.Center;
 					c_thumb_compare_1.VerticalAlignment = VerticalAlignment.Bottom;

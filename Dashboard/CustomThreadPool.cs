@@ -56,6 +56,7 @@ namespace Dashboard
 				this.root = root;
 				this.ind = ind;
 				thr = new(JobConsumingLoop);
+				thr.SetApartmentState(ApartmentState.STA);
 				thr.Start();
 			}
 

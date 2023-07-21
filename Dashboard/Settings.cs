@@ -56,6 +56,12 @@ namespace Dashboard
 			set => SetSetting(nameof(ThumbPath), value);
 		}
 
+		public string LastRecalcTime
+		{
+			//get => GetSetting(nameof(LastRecalcTime), null as string);
+			set => SetSetting(nameof(LastRecalcTime), value);
+		}
+
 	}
 
 	public abstract class Settings
@@ -145,7 +151,7 @@ namespace Dashboard
 
 		}
 
-		public string GetSettingsFileName() => main_save_fname;
+		public string GetDir() => Path.GetDirectoryName(main_save_fname)!;
 
 		private static KeyValuePair<Type, (Func<object, string> save, Func<string, object> load)> MakeSettingTypeConverter<T>(Func<T, string> save, Func<string, T> load) where T : notnull =>
 			new(typeof(T), new( o => save((T)o), s => load(s) ));

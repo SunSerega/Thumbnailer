@@ -15,7 +15,7 @@
 			</Grid>
 		</Button>
 
-		<Border BorderBrush="Black" BorderThickness="0,1,0,0">
+		<Border BorderBrush="Black" BorderThickness="0,0,0,1">
 			<TextBlock x:Name="tb_name" d:Text="mkv" FontSize="14" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="3,0,3,2" />
 		</Border>
 		
