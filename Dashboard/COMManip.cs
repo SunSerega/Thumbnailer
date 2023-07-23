@@ -87,9 +87,25 @@ namespace Dashboard
 		private static BitmapSource? ConvertHBitmap(IntPtr bmp) => bmp == default ? null :
 			System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(bmp, 0, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
 
+		private static IShellItem? GetShellItem(string name)
+		{
+			try
+			{
+				SHCreateItemFromParsingName(name, 0, typeof(IShellItem).GUID, out var item);
+				return item;
+			}
+			catch (System.IO.FileNotFoundException)
+			{
+				if (System.IO.File.Exists(name) || System.IO.Directory.Exists(name))
+					throw new InvalidOperationException(name);
+				return null;
+			}
+		}
+
 		public static BitmapSource? GetExistingThumbFor(string fname) => ConvertHBitmap(Invoke(() =>
 		{
-			SHCreateItemFromParsingName(fname, 0, typeof(IShellItem).GUID, out var item);
+			var item = GetShellItem(fname);
+			if (item is null) return default;
 
 			ISharedBitmap shared_bmp;
 			try
@@ -109,7 +125,8 @@ namespace Dashboard
 
 		private static bool DeleteThumbFor(string fname) => Invoke(() =>
 		{
-			SHCreateItemFromParsingName(fname, 0, typeof(IShellItem).GUID, out var item);
+			var item = GetShellItem(fname);
+			if (item is null) return false;
 
 			WTS_THUMBNAILID id;
 			try
@@ -119,6 +136,11 @@ namespace Dashboard
 			}
 			catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
 			{
+				return false;
+			}
+			catch (COMException e) when (e.HResult == WTS_E_FAILEDEXTRACTION)
+			{
+				MessageBox.Show(fname, nameof(WTS_E_FAILEDEXTRACTION));
 				return false;
 			}
 
@@ -131,6 +153,8 @@ namespace Dashboard
 		{
 			while (path != null)
 			{
+				if (System.IO.Path.GetPathRoot(path) == path)
+					break;
 				DeleteThumbFor(path);
 				SHChangeNotify(HChangeNotifyEventID.SHCNE_UPDATEITEM, HChangeNotifyFlags.SHCNF_PATHW, path, IntPtr.Zero);
 				//SHChangeNotify(HChangeNotifyEventID.SHCNE_ALLEVENTS, HChangeNotifyFlags.SHCNF_PATHW, path, IntPtr.Zero);
@@ -140,7 +164,8 @@ namespace Dashboard
 
 		public static BitmapSource? GetOrTryMakeThumbFor(string fname) => ConvertHBitmap(Invoke(() =>
 		{
-			SHCreateItemFromParsingName(fname, 0, typeof(IShellItem).GUID, out var item);
+			var item = GetShellItem(fname);
+			if (item is null) return default;
 
 			ISharedBitmap shared_bmp;
 			try
@@ -163,6 +188,7 @@ namespace Dashboard
 		}));
 
 		private const int STG_E_FILENOTFOUND			= unchecked((int)0x80030002);
+		private const int WTS_E_FAILEDEXTRACTION		= unchecked((int)0x8004B200);
 		private const int CoreHostIncompatibleConfig	= unchecked((int)0x800080a5);
 
 		[DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]

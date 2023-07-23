@@ -167,6 +167,7 @@ namespace Dashboard
 						{
 							return;
 						}
+						// https://learn.microsoft.com/en-us/dotnet/standard/io/handling-io-errors#handling-ioexception
 						catch (IOException e) when ((e.HResult & 0xFFFF) == 32) // ERROR_SHARING_VIOLATION
 						{
 							var res = Path.GetFullPath(locked_fname);
@@ -183,7 +184,7 @@ namespace Dashboard
 							var has_vid = KnownRegexes.MetadataVideoStreamHead().IsMatch(metadata);
 							var m_dur = KnownRegexes.MetadataDuration().Matches(metadata).SingleOrDefault()
 								?? throw new Exception($"Cannot find duration of [{FilePath}] in:\n\n{metadata}");
-							var dur = TimeSpan.Parse(m_dur.Groups[1].Value);
+							var dur = m_dur.Groups[1].Value==@"N/A" ? default(TimeSpan?) : TimeSpan.Parse(m_dur.Groups[1].Value);
 
 							var attachments_dir = make_dir(Path.Combine(settings.GetDir()!, "attachments"));
 							use_ffmpeg($"-dump_attachment:t \"\" -i \"{temp_fname}\"", attachments_dir.FullName).Wait();
@@ -223,17 +224,26 @@ namespace Dashboard
 							string bg_file;
 							if (valid_embeds.Length != 0)
 								bg_file = valid_embeds[0];
-							else if (!has_vid)
+							else if (!has_vid || dur is null)
 								bg_file = Path.GetFullPath(sound_only_fname);
 							else
 							{
 								if (File.Exists(frame_fname))
 									File.Delete(frame_fname);
-								var frame_at = dur * 0.3;
-								var ffmpeg_res = use_ffmpeg($"-skip_frame nokey -ss {Math.Truncate(frame_at.TotalSeconds)} -i \"{temp_fname}\" -vframes 1 -vf scale=256:256:force_original_aspect_ratio=decrease \"{frame_fname}\"").Result;
+								var frame_at = dur.Value * 0.3;
+								string ffmpeg_res;
+								while (true)
+								{
+									ffmpeg_res = use_ffmpeg($"-skip_frame nokey -ss {Math.Truncate(frame_at.TotalSeconds)} -i \"{temp_fname}\" -vframes 1 -vf scale=256:256:force_original_aspect_ratio=decrease \"{frame_fname}\"").Result;
+									if (!ffmpeg_res.Contains("File ended prematurely")) break;
+									frame_at /= 2;
+									if (frame_at != default) continue;
+									frame_fname = Path.GetFullPath(sound_only_fname);
+									break;
+								}
 								if (!File.Exists(frame_fname))
 								{
-									MessageBox.Show(ffmpeg_res, temp_fname);
+									MessageBox.Show($"> -skip_frame nokey -ss {Math.Truncate(frame_at.TotalSeconds)} -i \"{temp_fname}\" -vframes 1 -vf scale=256:256:force_original_aspect_ratio=decrease \"{frame_fname}\"\n\n"+ffmpeg_res, FilePath!);
 									return;
 								}
 								bg_file = frame_fname;
@@ -254,18 +264,19 @@ namespace Dashboard
 							var sz = bg_im.DesiredSize;
 
 							var dur_s = "";
+							if (dur != null)
 							{
-								if (dur_s!="" || dur.TotalHours>=1)
-									dur_s += Math.Truncate(dur.TotalHours).ToString() + ':';
-								if (dur_s!="" || dur.Minutes!=0)
-									dur_s += dur.Minutes.ToString("00") + ':';
-								if (dur_s!="" || dur.Seconds!=0)
-									dur_s += dur.Seconds.ToString("00");
-								if (dur_s.Length<4)
+								if (dur_s!="" || dur.Value.TotalHours>=1)
+									dur_s += Math.Truncate(dur.Value.TotalHours).ToString() + ':';
+								if (dur_s!="" || dur.Value.Minutes!=0)
+									dur_s += dur.Value.Minutes.ToString("00") + ':';
+								if (dur_s!="" || dur.Value.Seconds!=0)
+									dur_s += dur.Value.Seconds.ToString("00");
+								if (dur_s.Length<5)
 								{
-									var s = dur.TotalSeconds;
+									var s = dur.Value.TotalSeconds;
 									s -= Math.Truncate(s);
-									dur_s += s.ToString("N"+(4-dur_s.Length))[1..];
+									dur_s += '('+s.ToString("N"+(5-dur_s.Length))[2..].TrimEnd('0')+')';
 								}
 							}
 

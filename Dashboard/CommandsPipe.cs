@@ -75,10 +75,29 @@ namespace Dashboard
 					{
 						if (p.WaitForExit(TimeSpan.FromSeconds(1)))
 							return;
-						MessageBox.Show($"Force killing [{p.Id}]");
+
+						var mb_thr = new System.Threading.Thread(() =>
+						{
+							try
+							{
+								MessageBox.Show($"Force killing [{p.Id}]");
+							}
+							catch (System.Threading.ThreadInterruptedException) { }
+						});
+						mb_thr.Start();
+						Task.WaitAny(
+							Task.Run(mb_thr.Join),
+							p.WaitForExitAsync()
+						);
+
 						p.Kill();
+                        System.Windows.Threading.Dispatcher
+							.FromThread(mb_thr).InvokeShutdown();
+						mb_thr.Interrupt();
+
 						if (p.WaitForExit(TimeSpan.FromSeconds(1)))
 							return;
+
 						throw new InvalidOperationException();
 					})).ToArray());
 
