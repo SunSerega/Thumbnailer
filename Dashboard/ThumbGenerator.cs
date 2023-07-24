@@ -103,7 +103,7 @@ namespace Dashboard
 							catch (Exception e)
 							{
 								if (i%100 == 0)
-									MessageBox.Show($"Struggling to delete [{path}]: {e}");
+									CustomMessageBox.Show("Struggling to delete [{path}]", e.ToString());
 								System.Threading.Thread.Sleep(10);
 							}
 					}
@@ -221,9 +221,10 @@ namespace Dashboard
 							if (p.WaitForExit(TimeSpan.FromSeconds(10)))
 								return;
 							p.Kill();
-							//MessageBox.Show(otp.ToString(), "FFmpeg hanged. Output:");
-							//MessageBox.Show(res.Result, $"[{p.StartInfo.FileName} {p.StartInfo.Arguments}] hanged. Output:");
-							MessageBox.Show(otp.ToString() + "\n\n===================\n\n" + res.Result, $"[{p.StartInfo.FileName} {p.StartInfo.Arguments}] hanged. Output:");
+							CustomMessageBox.Show(
+								$"[{p.StartInfo.FileName} {p.StartInfo.Arguments}] hanged. Output:",
+								otp.ToString() + "\n\n===================\n\n" + res.Result
+							);
 						}));
 
 						return res;
@@ -327,7 +328,7 @@ namespace Dashboard
 						}
 						if (!File.Exists(frame_fname))
 						{
-							MessageBox.Show($"> -skip_frame nokey -ss {Math.Truncate(frame_at.TotalSeconds)} -i \"{temp_fname}\" -vframes 1 -vf scale=256:256:force_original_aspect_ratio=decrease \"{frame_fname}\"\n\n"+ffmpeg_res, FilePath!);
+							CustomMessageBox.Show(FilePath!, $"> -skip_frame nokey -ss {Math.Truncate(frame_at.TotalSeconds)} -i \"{temp_fname}\" -vframes 1 -vf scale=256:256:force_original_aspect_ratio=decrease \"{frame_fname}\"\n\n"+ffmpeg_res);
 							return;
 						}
 						bg_file = frame_fname;
@@ -347,7 +348,7 @@ namespace Dashboard
 					catch (System.Runtime.InteropServices.COMException e)
 					{
 						//TODO bg_file is null or "" sometimes?????
-						MessageBox.Show(e.Message, $"File: [{settings.FilePath}] Image: [{bg_file}]");
+						CustomMessageBox.Show($"File: [{settings.FilePath}] Image: [{bg_file}]", e.ToString());
 					}
 
 					bg_im.Measure(new(256,256));
@@ -529,7 +530,9 @@ namespace Dashboard
 				}
 			ev_purge_finished.Set();
 			InvokeCacheSizeChanged(0);
-			MessageBox.Show("Done clearing cache!");
+			Application.Current.Dispatcher.Invoke(() =>
+				CustomMessageBox.Show("Done clearing cache!")
+			);
 		}
 
 		public void Shutdown()

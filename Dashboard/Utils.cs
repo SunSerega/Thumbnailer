@@ -59,7 +59,7 @@ namespace Dashboard
 
 		public static void HandleExtension(Exception e)
 		{
-			System.Windows.MessageBox.Show(e.ToString());
+			CustomMessageBox.Show("ERROR", e.ToString());
 		}
 
 		public static void HandleExtension(Action act)

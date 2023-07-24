@@ -183,7 +183,7 @@ namespace Dashboard
 
 					sb.AppendLine($"Commit?");
 
-					if (MessageBoxResult.Yes == MessageBox.Show(sb.ToString(), "Confirm changes", MessageBoxButton.YesNo))
+					if (CustomMessageBox.ShowYesNo("Confirm changes", sb.ToString()))
 					{
 						var reg_ext_args = new System.Collections.Generic.List<string>();
 						if (add.Any()) reg_ext_args.Add("add:"+string.Join(';', add));

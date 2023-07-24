@@ -64,7 +64,10 @@ namespace Dashboard
 
 					ev_init_completed.Set();
 				});
-			}).Aborted += (o,e)=> { MessageBox.Show("Init error"); };
+			}).Aborted += (o,e)=> { 
+				CustomMessageBox.Show("Init error");
+				Application.Current.Shutdown();
+			};
 
 		}
 
@@ -140,7 +143,7 @@ namespace Dashboard
 			}
 			catch (COMException e) when (e.HResult == WTS_E_FAILEDEXTRACTION)
 			{
-				MessageBox.Show(fname, nameof(WTS_E_FAILEDEXTRACTION));
+				CustomMessageBox.Show(nameof(WTS_E_FAILEDEXTRACTION), fname);
 				return false;
 			}
 

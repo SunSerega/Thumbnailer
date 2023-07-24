@@ -7,8 +7,6 @@ using System.Security.AccessControl;
 using System.Linq;
 using System.Collections.Generic;
 
-using Task = System.Threading.Tasks.Task;
-
 using System.Windows;
 
 namespace Dashboard
@@ -71,37 +69,23 @@ namespace Dashboard
 						}
 						catch (TimeoutException) { }
 
-					Task.WaitAll(old_procs.Select(p => Task.Run(() =>
+					foreach (var p in old_procs)
 					{
 						if (p.WaitForExit(TimeSpan.FromSeconds(1)))
-							return;
+							continue;
 
-						var mb_thr = new System.Threading.Thread(() =>
-						{
-							try
-							{
-								MessageBox.Show($"Force killing [{p.Id}]");
-							}
-							catch (System.Threading.ThreadInterruptedException) { }
-						});
-						mb_thr.Start();
-						Task.WaitAny(
-							Task.Run(mb_thr.Join),
-							p.WaitForExitAsync()
-						);
+						var mb = new CustomMessageBox("Force killing [{p.Id}]", null, null);
+						p.WaitForExitAsync().ContinueWith(t => mb.Dispatcher.Invoke(mb.Close));
+						mb.ShowDialog();
 
 						p.Kill();
-                        System.Windows.Threading.Dispatcher
-							.FromThread(mb_thr).InvokeShutdown();
-						mb_thr.Interrupt();
-
 						if (p.WaitForExit(TimeSpan.FromSeconds(1)))
-							return;
+							continue;
 
 						throw new InvalidOperationException();
-					})).ToArray());
+					}
 
-					//MessageBox.Show(sw.Elapsed.ToString());
+					//CustomMessageBox.Show(sw.Elapsed.ToString());
 				}
 			}
 

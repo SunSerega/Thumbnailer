@@ -5,8 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 
-using System.Windows;
-
 namespace Dashboard
 {
 
@@ -101,7 +99,7 @@ namespace Dashboard
 
 			if (File.Exists(back_save_fname))
 			{
-				if (MessageBoxResult.Yes != MessageBox.Show("Try diff main and backup settings?", "Backup settings file exists", MessageBoxButton.YesNo))
+				if (!CustomMessageBox.ShowYesNo("Backup settings file exists", "Try meld main and backup settings?"))
 					Environment.Exit(-1);
 
 				System.Diagnostics.Process.Start(
@@ -110,7 +108,7 @@ namespace Dashboard
 
 				if (!File.Exists(main_save_fname))
 				{
-					MessageBox.Show("Settings file was not created while meld-ing", "error");
+					CustomMessageBox.Show("Error!", "Settings file was not created while meld-ing");
 					Environment.Exit(-1);
 				}
 

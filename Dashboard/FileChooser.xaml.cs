@@ -16,6 +16,7 @@ namespace Dashboard
 		public FileChooser(string? old_fname, Action<string> on_confirm)
 		{
 			InitializeComponent();
+			Owner = Application.Current.MainWindow;
 
 			void reset_dialog_location()
 			{
@@ -83,7 +84,7 @@ namespace Dashboard
 
 					if (!File.Exists(fname))
 					{
-						MessageBox.Show(fname, "File does not exist");
+						CustomMessageBox.Show("File does not exist", fname, owner: this);
 						return;
 					}
 
