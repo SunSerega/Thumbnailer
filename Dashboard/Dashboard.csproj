@@ -25,13 +25,17 @@
 	</ItemGroup>
 	
 	<ItemGroup>
-		<ContentWithTargetPath Include="Assets\Default.Locked.bmp">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-			<TargetPath>$(ProjectName)-Default.Locked.bmp</TargetPath>
-		</ContentWithTargetPath>
 		<ContentWithTargetPath Include="Assets\Default.Ungenerated.bmp">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<TargetPath>$(ProjectName)-Default.Ungenerated.bmp</TargetPath>
+		</ContentWithTargetPath>
+		<ContentWithTargetPath Include="Assets\Default.Waiting.bmp">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<TargetPath>$(ProjectName)-Default.Waiting.bmp</TargetPath>
+		</ContentWithTargetPath>
+		<ContentWithTargetPath Include="Assets\Default.Locked.bmp">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<TargetPath>$(ProjectName)-Default.Locked.bmp</TargetPath>
 		</ContentWithTargetPath>
 		<ContentWithTargetPath Include="Assets\Default.SoundOnly.bmp">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

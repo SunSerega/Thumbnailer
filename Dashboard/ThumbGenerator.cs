@@ -59,16 +59,17 @@ namespace Dashboard
 					throw new InvalidOperationException(dir.FullName);
 			}
 
-			private const string locked_fname		= @"Dashboard-Default.Locked.bmp";
 			private const string ungenerated_fname	= @"Dashboard-Default.Ungenerated.bmp";
+			private const string waiting_fname		= @"Dashboard-Default.Waiting.bmp";
+			private const string locked_fname		= @"Dashboard-Default.Locked.bmp";
 			private const string sound_only_fname	= @"Dashboard-Default.SoundOnly.bmp";
 
 			public void GenerateThumb(Action<Action> addJob, Action<string> ret, bool force_regen)
 			{
 				var write_time = File.GetLastWriteTimeUtc(FilePath!);
-				if (force_regen || settings.LastUpdate != write_time)
+				if (force_regen || settings.LastUpdate != write_time) lock (this)
 				{
-					if (File.Exists(settings.ThumbPath))
+					if (File.Exists(settings.ThumbPath) && Path.GetDirectoryName(settings.ThumbPath) != Environment.CurrentDirectory)
 					{
 						CacheSizeChanged?.Invoke(new FileInfo(settings.ThumbPath).Length);
 						File.Delete(settings.ThumbPath);
@@ -76,6 +77,20 @@ namespace Dashboard
 					settings.ThumbPath = null;
 				}
 				if (settings.ThumbPath != null) return;
+
+				{
+					var total_wait = TimeSpan.FromSeconds(5);
+					var waited = DateTime.UtcNow-write_time;
+					if (waited < total_wait)
+					{
+						settings.ThumbPath = Path.GetFullPath(waiting_fname);
+						System.Threading.Tasks.Task.Delay(total_wait-waited)
+							.ContinueWith(t => Utils.HandleExtension(
+								() => GenerateThumb(addJob, ret, true)
+							));
+						return;
+					}
+				}
 
 				addJob(() =>
 				{
@@ -172,9 +187,11 @@ namespace Dashboard
 						{
 							var res = Path.GetFullPath(locked_fname);
 							settings.ThumbPath = res;
+							ret(res);
 							//settings.LastUpdate = write_time;
 							return;
 						}
+
 						try
 						{
 							var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -182,9 +199,16 @@ namespace Dashboard
 							var metadata = use_ffmpeg($"-i \"{temp_fname}\" -f ffmetadata").Result;
 
 							var has_vid = KnownRegexes.MetadataVideoStreamHead().IsMatch(metadata);
-							var m_dur = KnownRegexes.MetadataDuration().Matches(metadata).SingleOrDefault()
-								?? throw new Exception($"Cannot find duration of [{FilePath}] in:\n\n{metadata}");
-							var dur = m_dur.Groups[1].Value==@"N/A" ? default(TimeSpan?) : TimeSpan.Parse(m_dur.Groups[1].Value);
+							var dur_m = KnownRegexes.MetadataDuration().Matches(metadata).SingleOrDefault()?.Groups[1].Value;
+							if (metadata.Contains(temp_fname+@": Invalid data found when processing input"))
+							{
+								if (dur_m is null)
+									dur_m = @"N/A";
+								else
+									throw new Exception($"{FilePath}:\n\n{metadata}");
+							}
+							if (dur_m is null) throw new Exception($"Cannot find duration of [{FilePath}] in:\n\n{metadata}");
+							var dur = dur_m==@"N/A" ? default(TimeSpan?) : TimeSpan.Parse(dur_m);
 
 							var attachments_dir = make_dir(Path.Combine(settings.GetDir()!, "attachments"));
 							use_ffmpeg($"-dump_attachment:t \"\" -i \"{temp_fname}\"", attachments_dir.FullName).Wait();
@@ -250,6 +274,7 @@ namespace Dashboard
 							}
 
 							var bg_im = new Image();
+							try
 							{
 								using var str = File.OpenRead(bg_file);
 								var bg_im_source = new BitmapImage();
@@ -258,6 +283,11 @@ namespace Dashboard
 								bg_im_source.StreamSource = str;
 								bg_im_source.EndInit();
 								bg_im.Source = bg_im_source;
+							}
+							catch (System.Runtime.InteropServices.COMException e)
+							{
+								//TODO bg_file is null or "" sometimes?????
+								MessageBox.Show(e.Message, $"File: [{settings.FilePath}] Image: [{bg_file}]");
 							}
 
 							bg_im.Measure(new(256,256));
