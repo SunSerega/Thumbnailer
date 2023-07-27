@@ -51,17 +51,15 @@ namespace Dashboard
 
 			}
 
-			public CachedFileInfo(DirectoryInfo dir, (uint u, string s) hash)
+			public CachedFileInfo((uint u, string s) hash)
 			{
 				this.hash = hash;
 				settings = new(hash.s);
-				if (settings.FilePath == null)
-					throw new InvalidOperationException(dir.FullName);
 			}
 
 			private static readonly string ungenerated_fname	= Path.GetFullPath(@"Dashboard-Default.Ungenerated.bmp");
 			private static readonly string waiting_fname		= Path.GetFullPath(@"Dashboard-Default.Waiting.bmp");
-			private static readonly string locked_fname			= Path.GetFullPath(@"Dashboard-Default.Locked.bmp");
+			//private static readonly string locked_fname			= Path.GetFullPath(@"Dashboard-Default.Locked.bmp");
 			private static readonly string sound_only_fname		= Path.GetFullPath(@"Dashboard-Default.SoundOnly.bmp");
 
 			private sealed class GenerationState : IDisposable
@@ -154,7 +152,10 @@ namespace Dashboard
 
 			public void GenerateThumb(Action<Action> addJob, Action<string> ret, bool force_regen)
 			{
-				var write_time = File.GetLastWriteTimeUtc(FilePath!);
+				var write_time = new[]{
+					File.GetLastWriteTimeUtc(FilePath!),
+					File.GetLastAccessTimeUtc(FilePath!),
+				}.Min();
 				if (force_regen || settings.LastUpdate != write_time) lock (this)
 				{
 					if (File.Exists(settings.ThumbPath) && Path.GetDirectoryName(settings.ThumbPath) != Environment.CurrentDirectory)
@@ -230,48 +231,77 @@ namespace Dashboard
 						return res;
 					}
 
-					var temp_fname = state.AddFile("inp").Path;
-					try
-					{
-						var f = Microsoft.CopyOnWrite.CopyOnWriteFilesystemFactory.GetInstance();
-						if (f.CopyOnWriteLinkSupportedBetweenPaths(FilePath!, temp_fname))
-						{
-							if (File.Exists(temp_fname))
-								File.Delete(temp_fname);
-							f.CloneFile(FilePath!, temp_fname);
-						}
-						else
-							File.Copy(FilePath!, temp_fname, true);
-					}
-					catch when (!File.Exists(FilePath!))
-					{
-						return;
-					}
-					// https://learn.microsoft.com/en-us/dotnet/standard/io/handling-io-errors#handling-ioexception
-					catch (IOException e) when ((e.HResult & 0xFFFF) == 32) // ERROR_SHARING_VIOLATION
-					{
-						var res = locked_fname;
-						settings.ThumbPath = res;
-						ret(res);
-						//settings.LastUpdate = write_time;
-						return;
-					}
+					//var temp_fname = state.AddFile("inp").Path;
+					//try
+					//{
+					//	var f = Microsoft.CopyOnWrite.CopyOnWriteFilesystemFactory.GetInstance();
+					//	if (f.CopyOnWriteLinkSupportedBetweenPaths(FilePath!, temp_fname))
+					//	{
+					//		if (File.Exists(temp_fname))
+					//			File.Delete(temp_fname);
+					//		f.CloneFile(FilePath!, temp_fname);
+					//	}
+					//	else
+					//		File.Copy(FilePath!, temp_fname, true);
+					//}
+					//catch when (!File.Exists(FilePath!))
+					//{
+					//	return;
+					//}
+					//// https://learn.microsoft.com/en-us/dotnet/standard/io/handling-io-errors#handling-ioexception
+					//catch (IOException e) when ((e.HResult & 0xFFFF) == 32) // ERROR_SHARING_VIOLATION
+					//{
+					//	var res = locked_fname;
+					//	settings.ThumbPath = res;
+					//	ret(res);
+					//	//settings.LastUpdate = write_time;
+					//	return;
+					//}
+					var temp_fname = FilePath!;
 
 					var sw = System.Diagnostics.Stopwatch.StartNew();
 
 					var metadata = use_ffmpeg($"-i \"{temp_fname}\" -f ffmetadata").Result;
 
-					var has_vid = KnownRegexes.MetadataVideoStreamHead().IsMatch(metadata);
-					var dur_m = KnownRegexes.MetadataDuration().Matches(metadata).SingleOrDefault()?.Groups[1].Value;
-					if (metadata.Contains(temp_fname+@": Invalid data found when processing input"))
+					const string NA_dur_str = @"N/A";
+					bool had_invalid_data = metadata.Contains(temp_fname+@": Invalid data found when processing input");
+
+					TimeSpan? full_dur = null;
+					foreach (var m in KnownRegexes.MetadataDuration().Matches(metadata).Cast<System.Text.RegularExpressions.Match>())
 					{
-						if (dur_m is null)
-							dur_m = @"N/A";
-						else
-							throw new Exception($"{FilePath}:\n\n{metadata}");
+						if (full_dur != null)
+							CustomMessageBox.Show($"Multiple full dur in {FilePath}", metadata);
+
+						var dur_gr = m.Groups[1].Value;
+						full_dur = dur_gr == NA_dur_str ? null : TimeSpan.Parse(dur_gr);
+
+						if (had_invalid_data && full_dur != null)
+							CustomMessageBox.Show($"{FilePath}: dur found despite wrong input", metadata);
+
 					}
-					if (dur_m is null) throw new Exception($"Cannot find duration of [{FilePath}] in:\n\n{metadata}");
-					var dur = dur_m==@"N/A" ? default(TimeSpan?) : TimeSpan.Parse(dur_m);
+
+					bool has_vid = false;
+					TimeSpan? vid_dur = null;
+					foreach (var m in KnownRegexes.MetadataVideoStreamHead().Matches(metadata).Cast<System.Text.RegularExpressions.Match>())
+					{
+						if (has_vid)
+							CustomMessageBox.Show($"Multiple video streams in {FilePath}", metadata);
+						has_vid = true;
+
+						vid_dur = KnownRegexes.MetadataVideoDuration()
+							.Matches(metadata, m.Index+m.Length)
+							.Select(m => (TimeSpan?)TimeSpan.Parse(m.Groups[1].Value))
+							.DefaultIfEmpty(full_dur).First();
+
+						if (had_invalid_data && vid_dur != null)
+							CustomMessageBox.Show($"{FilePath}: dur found despite wrong input", metadata);
+
+						break; //TODO some files have their thumb as a secondary video stream, instead of attachment
+					}
+					if (has_vid && full_dur is null)
+						CustomMessageBox.Show($"{FilePath}: cannot find full dur", metadata);
+					if (has_vid && vid_dur is null)
+						CustomMessageBox.Show($"{FilePath}: cannot find vid dur", metadata);
 
 					var attachments_dir = state.AddDir("attachments").Path;
 					Directory.CreateDirectory(attachments_dir);
@@ -307,17 +337,21 @@ namespace Dashboard
 					//TODO embed chooser
 					if (valid_embeds.Length != 0)
 						bg_file = valid_embeds[0];
-					else if (!has_vid || dur is null)
+					else if (!has_vid || vid_dur is null)
 						bg_file = sound_only_fname;
 					else
 					{
 						if (File.Exists(frame_fname))
 							File.Delete(frame_fname);
-						var frame_at = dur.Value * 0.3;
+						var frame_at = vid_dur.Value * 0.3;
+						var ffmpeg_arg_seek = "";
+						if (frame_at.TotalSeconds>=1)
+							ffmpeg_arg_seek = $" -ss {Math.Truncate(frame_at.TotalSeconds)}";
+						var ffmpeg_arg = $"-skip_frame nokey{ffmpeg_arg_seek} -i \"{temp_fname}\" -vframes 1 -vf scale=256:256:force_original_aspect_ratio=decrease \"{frame_fname}\"";
 						string ffmpeg_res;
 						while (true)
 						{
-							ffmpeg_res = use_ffmpeg($"-skip_frame nokey -ss {Math.Truncate(frame_at.TotalSeconds)} -i \"{temp_fname}\" -vframes 1 -vf scale=256:256:force_original_aspect_ratio=decrease \"{frame_fname}\"").Result;
+							ffmpeg_res = use_ffmpeg(ffmpeg_arg).Result;
 							if (!ffmpeg_res.Contains("File ended prematurely")) break;
 							if (File.Exists(frame_fname))
 								throw new InvalidOperationException(frame_fname+"\n\n\n"+ffmpeg_res);
@@ -328,7 +362,7 @@ namespace Dashboard
 						}
 						if (!File.Exists(frame_fname))
 						{
-							CustomMessageBox.Show(FilePath!, $"> -skip_frame nokey -ss {Math.Truncate(frame_at.TotalSeconds)} -i \"{temp_fname}\" -vframes 1 -vf scale=256:256:force_original_aspect_ratio=decrease \"{frame_fname}\"\n\n"+ffmpeg_res);
+							CustomMessageBox.Show(FilePath!, $"> {ffmpeg_arg}\n\n"+ffmpeg_res);
 							return;
 						}
 						bg_file = frame_fname;
@@ -355,17 +389,17 @@ namespace Dashboard
 					var sz = bg_im.DesiredSize;
 
 					var dur_s = "";
-					if (dur != null)
+					if (full_dur != null)
 					{
-						if (dur_s!="" || dur.Value.TotalHours>=1)
-							dur_s += Math.Truncate(dur.Value.TotalHours).ToString() + ':';
-						if (dur_s!="" || dur.Value.Minutes!=0)
-							dur_s += dur.Value.Minutes.ToString("00") + ':';
-						if (dur_s!="" || dur.Value.Seconds!=0)
-							dur_s += dur.Value.Seconds.ToString("00");
+						if (dur_s!="" || full_dur.Value.TotalHours>=1)
+							dur_s += Math.Truncate(full_dur.Value.TotalHours).ToString() + ':';
+						if (dur_s!="" || full_dur.Value.Minutes!=0)
+							dur_s += full_dur.Value.Minutes.ToString("00") + ':';
+						if (dur_s!="" || full_dur.Value.Seconds!=0)
+							dur_s += full_dur.Value.Seconds.ToString("00");
 						if (dur_s.Length<5)
 						{
-							var s = dur.Value.TotalSeconds;
+							var s = full_dur.Value.TotalSeconds;
 							s -= Math.Truncate(s);
 							dur_s += '('+s.ToString("N"+(5-dur_s.Length))[2..].TrimEnd('0')+')';
 						}
@@ -472,7 +506,7 @@ namespace Dashboard
 			foreach (var dir in this.cache_dir.EnumerateDirectories())
 			{
 				var hash = Convert.ToUInt32(dir.Name, 16);
-				var cfi = new CachedFileInfo(dir, (hash, dir.Name));
+				var cfi = new CachedFileInfo((hash, dir.Name));
 				if (!File.Exists(cfi.FilePath))
 				{
 					dir.Delete(true);
@@ -531,7 +565,7 @@ namespace Dashboard
 			ev_purge_finished.Set();
 			InvokeCacheSizeChanged(0);
 			Application.Current.Dispatcher.Invoke(() =>
-				CustomMessageBox.Show("Done clearing cache!")
+				CustomMessageBox.Show("Done clearing cache!", Application.Current.MainWindow)
 			);
 		}
 

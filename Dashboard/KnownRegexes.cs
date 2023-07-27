@@ -11,5 +11,8 @@ namespace Dashboard
 		[GeneratedRegex(@"Stream #\d+:\d+(?>\[\w+\])?(?>\(\w+\))?: Video")]
 		public static partial Regex MetadataVideoStreamHead();
 
+		[GeneratedRegex(@"DURATION(?>-eng)?\s*: ([\d:]+\.\d{7})\d{2}(?>\r|$)", RegexOptions.Multiline)]
+		public static partial Regex MetadataVideoDuration();
+
 	}
 }

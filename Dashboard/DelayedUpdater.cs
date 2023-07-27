@@ -27,6 +27,7 @@ namespace Dashboard
 						if (!controller_ref.TryGetTarget(out var controller))
 							return;
 						var wait_left = controller.save_time - DateTime.Now;
+						controller = null;
 						if (wait_left <= TimeSpan.Zero) break;
 						Thread.Sleep(wait_left);
 					}
@@ -36,6 +37,7 @@ namespace Dashboard
 						if (controller.is_shut_down)
 							return;
 						controller.can_delay_further = true;
+						controller = null;
 					}
 
 					ev.Reset();
@@ -70,7 +72,7 @@ namespace Dashboard
 			var next_time = DateTime.Now + delay;
 			if (
 				!ev.IsSet ||
-				(this.can_delay_further?1:0) >= (can_delay_further?1:0) ||
+				(!can_delay_further && next_time<save_time) ||
 				(this.can_delay_further && next_time>save_time)
 			)
 			{

@@ -99,7 +99,7 @@ namespace Dashboard
 
 			if (File.Exists(back_save_fname))
 			{
-				if (!CustomMessageBox.ShowYesNo("Backup settings file exists", "Try meld main and backup settings?"))
+				if (!CustomMessageBox.ShowYesNo("Backup settings file exists", "Try meld main and backup settings?", new()))
 					Environment.Exit(-1);
 
 				System.Diagnostics.Process.Start(

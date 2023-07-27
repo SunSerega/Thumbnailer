@@ -74,7 +74,7 @@ namespace Dashboard
 						if (p.WaitForExit(TimeSpan.FromSeconds(1)))
 							continue;
 
-						var mb = new CustomMessageBox("Force killing [{p.Id}]", null, null);
+						var mb = new CustomMessageBox("Force killing [{p.Id}]", null, default(Window));
 						p.WaitForExitAsync().ContinueWith(t => mb.Dispatcher.Invoke(mb.Close));
 						mb.ShowDialog();
 
