@@ -1,13 +1,13 @@
 ﻿using System;
 
 using System.Linq;
+using System.Collections.Generic;
 
 using System.IO;
 using System.Text;
 
 using System.Windows;
 using System.Windows.Input;
-using System.Windows.Media.Imaging;
 
 namespace Dashboard
 {
@@ -265,7 +265,7 @@ namespace Dashboard
 			var thumb_compare_all = new[] { thumb_compare_org, thumb_compare_gen };
 
 			int current_compare_id = 0;
-			string? last_thumb_compare_fname = null;
+			string? curr_compare_fname = null;
 			void clear_thumb_compare_file()
 			{
 				foreach (var tcv in thumb_compare_all)
@@ -273,7 +273,7 @@ namespace Dashboard
 				grid_thumb_compare.HorizontalAlignment = HorizontalAlignment.Stretch;
 				c_thumb_compare_1.VerticalAlignment = VerticalAlignment.Stretch;
 				c_thumb_compare_2.VerticalAlignment = VerticalAlignment.Stretch;
-				last_thumb_compare_fname = null;
+				curr_compare_fname = null;
 			}
 			void begin_thumb_compare(string fname) => Utils.HandleExtension(() =>
 			{
@@ -289,15 +289,37 @@ namespace Dashboard
 				grid_thumb_compare.HorizontalAlignment = HorizontalAlignment.Center;
 				c_thumb_compare_1.VerticalAlignment = VerticalAlignment.Bottom;
 				c_thumb_compare_2.VerticalAlignment = VerticalAlignment.Top;
-				last_thumb_compare_fname = fname;
+				Settings.Root.LastComparedFile = fname;
+				curr_compare_fname = fname;
 			});
+			string[] extract_file_lst(IEnumerable<string> inp) =>
+				inp.SelectMany(path =>
+				{
+					if (File.Exists(path))
+						return Enumerable.Repeat(path, 1);
+					if (Directory.Exists(path))
+						return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories);
+					return Enumerable.Empty<string>();
+				}).Where(Settings.Root.AllowedExts.MatchesFile).ToArray();
+			void apply_file_lst(string[] lst)
+			{
+				if (lst.Length==1)
+				{
+					begin_thumb_compare(lst.Single());
+					return;
+				}
+
+				foreach (var fname in lst)
+					thumb_gen.Generate(fname, _ => { }, true);
+
+			}
 
 			foreach (var tcv in thumb_compare_all)
 				tcv.MouseDown += (o, e) =>
 				{
 					if (e.ChangedButton == MouseButton.Left)
 					{
-						new FileChooser(last_thumb_compare_fname, begin_thumb_compare).ShowDialog();
+						new FileChooser(inp => apply_file_lst(extract_file_lst(inp))).ShowDialog();
 						e.Handled = true;
 					}
 					else if (e.ChangedButton == MouseButton.Right)
@@ -307,8 +329,8 @@ namespace Dashboard
 					}
 					else if (e.ChangedButton == MouseButton.Middle)
 					{
-						if (last_thumb_compare_fname != null)
-							System.Diagnostics.Process.Start("explorer", $"/select,\"{last_thumb_compare_fname}\"");
+						if (curr_compare_fname != null)
+							System.Diagnostics.Process.Start("explorer", $"/select,\"{curr_compare_fname}\"");
 						e.Handled = true;
 					}
 				};
@@ -324,21 +346,42 @@ namespace Dashboard
 
 			};
 
-			static void drag_handler(object o, DragEventArgs e)
+			(string[] inp, string[] lst)? drag_cache = null;
+			void drag_handler(object o, DragEventArgs e)
 			{
-				var files = (string[])e.Data.GetData(DataFormats.FileDrop);
-				if (files==null || files.Length!=1 || !File.Exists(files.Single()))
-					e.Effects = DragDropEffects.None;
 				e.Handled = true;
+				e.Effects = DragDropEffects.None;
+
+				var inp = (string[])e.Data.GetData(DataFormats.FileDrop);
+				if (inp is null) return;
+
+				var lst = (inp==drag_cache?.inp ? drag_cache :
+					(drag_cache = (inp, extract_file_lst(inp)))
+				).Value.lst;
+				if (lst.Length==0) return;
+
+				e.Effects = lst.Length==1 ?
+					DragDropEffects.Link :
+					DragDropEffects.Move;
+
 			}
 			grid_thumb_compare.DragEnter += drag_handler;
 			grid_thumb_compare.DragOver += drag_handler;
 
 			grid_thumb_compare.Drop += (o, e) =>
 			{
-				var fname = ((string[])e.Data.GetData(DataFormats.FileDrop)).Single();
-				begin_thumb_compare(fname);
+				var lst = drag_cache!.Value.lst;
 				e.Handled = true;
+
+				if (lst.Length==1)
+				{
+					begin_thumb_compare(lst.Single());
+					return;
+				}
+
+				foreach (var fname in lst)
+					thumb_gen.Generate(fname, _ => { }, true);
+
 			};
 
 			Closing += (o, e) => clear_thumb_compare_file();

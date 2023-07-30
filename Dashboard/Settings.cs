@@ -26,10 +26,10 @@ namespace Dashboard
 			set => SetSetting(nameof(AllowedExts), value);
 		}
 
-		public string? LastFileChoosePath
+		public string? LastComparedFile
 		{
-			get => GetSetting(nameof(LastFileChoosePath), null as string);
-			set => SetSetting(nameof(LastFileChoosePath), value);
+			get => GetSetting(nameof(LastComparedFile), null as string);
+			set => SetSetting(nameof(LastComparedFile), value);
 		}
 
 	}
@@ -119,8 +119,13 @@ namespace Dashboard
 						continue;
 					}
 
-					var prop = this.GetType().GetProperty(key) ??
-						throw new InvalidOperationException($"Settings property [{key}] not found");
+					var prop = this.GetType().GetProperty(key);
+					if (prop is null)
+					{
+						if (!CustomMessageBox.ShowYesNo($"Settings property [{key}] not found", "Continue without it?"))
+							App.Current.Shutdown();
+						continue;
+					}
 
 					if (s_val is null)
 						settings.Remove(key);

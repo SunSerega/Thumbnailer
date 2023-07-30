@@ -3,6 +3,7 @@
 using System.IO;
 
 using System.Linq;
+using System.Collections.Generic;
 
 using System.Windows;
 using System.Windows.Input;
@@ -13,7 +14,7 @@ namespace Dashboard
 
 	public partial class FileChooser : Window
 	{
-		public FileChooser(string? old_fname, Action<string> on_confirm)
+		public FileChooser(Action<IEnumerable<string>> on_confirm)
 		{
 			InitializeComponent();
 			Owner = App.Current.MainWindow;
@@ -29,17 +30,16 @@ namespace Dashboard
 			SizeChanged += (o, e) => reset_dialog_location();
 			LocationChanged += (o, e) => reset_dialog_location();
 
-			if (old_fname != null)
+			if (Settings.Root.LastComparedFile != null)
 			{
-				tb_choise.Text = old_fname;
+				tb_choise.Text = Settings.Root.LastComparedFile;
 				tb_choise.SelectAll();
 			}
 			tb_choise.Focus();
 
-			void confirm(string fname)
+			void confirm(IEnumerable<string> res)
 			{
-				on_confirm.Invoke(fname);
-				Settings.Root.LastFileChoosePath = Path.GetDirectoryName(fname);
+				on_confirm(res);
 				Close();
 			}
 
@@ -49,6 +49,7 @@ namespace Dashboard
 				{
 					Title = "Open File",
 					Filter = $"Supported files|{string.Join(';', Settings.Root.AllowedExts.Select(ext => "*."+ext))}|All files|*.*",
+					Multiselect = true,
 				};
 
 				{
@@ -58,7 +59,7 @@ namespace Dashboard
 						path = Path.GetDirectoryName(path);
 						if (path is null)
 						{
-							openFileDialog.InitialDirectory = Settings.Root.LastFileChoosePath;
+							openFileDialog.InitialDirectory = Path.GetDirectoryName(Settings.Root.LastComparedFile);
 							break;
 						}
 						if (Directory.Exists(path))
@@ -72,7 +73,7 @@ namespace Dashboard
 				if (openFileDialog.ShowDialog() != true)
 					return;
 
-				confirm(openFileDialog.FileName);
+				confirm(openFileDialog.FileNames);
 				e.Handled = true;
 			};
 
@@ -80,15 +81,15 @@ namespace Dashboard
 			{
 				if (e.Key == Key.Enter)
 				{
-					var fname = tb_choise.Text;
+					var path = tb_choise.Text;
 
-					if (!File.Exists(fname))
+					if (!File.Exists(path) && !Directory.Exists(path))
 					{
-						CustomMessageBox.Show("File does not exist", fname, owner: this);
+						CustomMessageBox.Show("File/Dir does not exist", path, owner: this);
 						return;
 					}
 
-					confirm(fname);
+					confirm(Enumerable.Repeat(path, 1));
 					e.Handled = true;
 				}
 				else if (e.Key == Key.Escape)

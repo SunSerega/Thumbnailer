@@ -132,6 +132,13 @@ namespace Dashboard
 		public void Clear() => l.Clear();
 
 		public bool Contains(string ext) => l.Contains(Validated(ext));
+		public bool MatchesFile(string? fname)
+		{
+			var ext = System.IO.Path.GetExtension(fname);
+			if (ext is null) return false;
+			if (!ext.StartsWith('.')) return false;
+			return Contains(ext.Remove(0, 1));
+		}
 
 		public void CopyTo(string[] array, int arrayIndex) => l.CopyTo(array, arrayIndex);
 

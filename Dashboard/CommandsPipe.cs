@@ -64,7 +64,7 @@ namespace Dashboard
 						{
 							client.Connect(TimeSpan.FromSeconds(1));
 						}
-						catch (TimeoutException) { }
+						catch (TimeoutException) { return; }
 						try
 						{
 							new BinaryWriter(client)
@@ -72,7 +72,7 @@ namespace Dashboard
 							client.Flush();
 							client.WaitForPipeDrain();
 						}
-						catch (IOException) { }
+						catch (IOException) { return; }
 					}))
 					{
 						IsBackground = true,
