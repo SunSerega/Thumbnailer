@@ -47,6 +47,7 @@ namespace Dashboard
 				ShowIco();
 				e.Cancel = true;
 			};
+			Application.Current.Exit += (o, e) => Dispose();
 
 			NoLeftClickDelay = true;
 			LeftClickCommand = new DummyCommand(ShowWin);
