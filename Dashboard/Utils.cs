@@ -7,7 +7,8 @@ using System.Collections.Generic;
 
 using System.Runtime.CompilerServices;
 
-using Color = System.Windows.Media.Color;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace Dashboard
 {
@@ -210,6 +211,17 @@ namespace Dashboard
 				HandleExtension(e);
 				return no_res;
 			}
+		}
+
+		public static BitmapImage LoadUncachedBitmap(string fname)
+		{
+			using var str = System.IO.File.OpenRead(fname);
+			var res = new BitmapImage();
+			res.BeginInit();
+			res.CacheOption = BitmapCacheOption.OnLoad;
+			res.StreamSource = str;
+			res.EndInit();
+			return res;
 		}
 
 	}

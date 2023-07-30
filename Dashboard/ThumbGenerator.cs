@@ -144,7 +144,7 @@ namespace Dashboard
 						Utils.HandleExtension(e);
 						// unrecoverable, but also unimaginable
 						Console.Beep(); Console.Beep(); Console.Beep();
-						Application.Current.Shutdown();
+						App.Current.Shutdown();
 					}
 				}
 
@@ -382,12 +382,7 @@ namespace Dashboard
 					var bg_im = new Image();
 					try
 					{
-						using var str = File.OpenRead(bg_file);
-						var bg_im_source = new BitmapImage();
-						bg_im_source.BeginInit();
-						bg_im_source.CacheOption = BitmapCacheOption.OnLoad;
-						bg_im_source.StreamSource = str;
-						bg_im_source.EndInit();
+						var bg_im_source = Utils.LoadUncachedBitmap(bg_file);
 						sz = new(bg_im_source.Width, bg_im_source.Height);
 						bg_im.Source = bg_im_source;
 					}
@@ -588,8 +583,8 @@ namespace Dashboard
 				}
 			ev_purge_finished.Set();
 			InvokeCacheSizeChanged(0);
-			Application.Current.Dispatcher.Invoke(() =>
-				CustomMessageBox.Show("Done clearing cache!", Application.Current.MainWindow)
+			App.Current.Dispatcher.Invoke(() =>
+				CustomMessageBox.Show("Done clearing cache!", App.Current.MainWindow)
 			);
 		}
 

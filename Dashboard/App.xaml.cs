@@ -8,11 +8,12 @@ namespace Dashboard
 
 		public bool IsShuttingDown { get; private set; } = false;
 
-		public static new App? Current { get; private set; }
+		private static App? inst;
+		public static new App Current => inst!;
 
 		public App()
 		{
-			Current = this;
+			inst = this;
 			SessionEnding += (o, e) =>
 				IsShuttingDown = true;
 		}

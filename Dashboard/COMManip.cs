@@ -67,7 +67,7 @@ namespace Dashboard
 				});
 			}).Aborted += (o,e)=> { 
 				CustomMessageBox.Show("Init error");
-				Application.Current.Shutdown();
+				App.Current.Shutdown();
 			};
 
 		}

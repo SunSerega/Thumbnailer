@@ -29,7 +29,7 @@ namespace Dashboard
 
 				if (shutdown_triggered)
 				{
-					Application.Current.Shutdown(0);
+					App.Current.Shutdown(0);
 					return;
 				}
 
@@ -39,7 +39,7 @@ namespace Dashboard
 
 				LoadThumbGenerator(main_thr_pool, thumb_gen =>
 				{
-					Application.Current.Exit += (o, e) => thumb_gen.Shutdown();
+					App.Current.Exit += (o, e) => thumb_gen.Shutdown();
 
 					pipe.AddThumbGen(thumb_gen);
 					pipe.StartAccepting();
@@ -91,7 +91,7 @@ namespace Dashboard
 			/**/
 
 			var pipe = new CommandsPipe();
-			Application.Current.Exit += (o, e) => pipe.Shutdown();
+			App.Current.Exit += (o, e) => pipe.Shutdown();
 
 			return (main_thr_pool, pipe);
 		}
@@ -264,28 +264,8 @@ namespace Dashboard
 		{
 			var thumb_compare_all = new[] { thumb_compare_org, thumb_compare_gen };
 
+			int current_compare_id = 0;
 			string? last_thumb_compare_fname = null;
-			void choose_thumb_compare_file(string fname) => Utils.HandleExtension(() =>
-			{
-				thumb_compare_org.Set(() => COMManip.GetExistingThumbFor(fname));
-				thumb_gen.Generate(fname, thumb_fname =>
-					thumb_compare_gen.Set(() =>
-					{
-						using var str = File.OpenRead(thumb_fname);
-						var res = new BitmapImage();
-						res.BeginInit();
-						res.CacheOption = BitmapCacheOption.OnLoad;
-						res.StreamSource = str;
-						res.EndInit();
-						return res;
-					}),
-					true
-				);
-				grid_thumb_compare.HorizontalAlignment = HorizontalAlignment.Center;
-				c_thumb_compare_1.VerticalAlignment = VerticalAlignment.Bottom;
-				c_thumb_compare_2.VerticalAlignment = VerticalAlignment.Top;
-				last_thumb_compare_fname = fname;
-			});
 			void clear_thumb_compare_file()
 			{
 				foreach (var tcv in thumb_compare_all)
@@ -295,13 +275,29 @@ namespace Dashboard
 				c_thumb_compare_2.VerticalAlignment = VerticalAlignment.Stretch;
 				last_thumb_compare_fname = null;
 			}
+			void begin_thumb_compare(string fname) => Utils.HandleExtension(() =>
+			{
+				clear_thumb_compare_file();
+				var compare_id = ++current_compare_id;
+
+				thumb_compare_org.Set(COMManip.GetExistingThumbFor(fname));
+				thumb_gen.Generate(fname, thumb_fname => Dispatcher.InvokeAsync(() => Utils.HandleExtension(() =>
+				{
+					if (compare_id != current_compare_id) return;
+					thumb_compare_gen.Set(Utils.LoadUncachedBitmap(thumb_fname));
+				})), true);
+				grid_thumb_compare.HorizontalAlignment = HorizontalAlignment.Center;
+				c_thumb_compare_1.VerticalAlignment = VerticalAlignment.Bottom;
+				c_thumb_compare_2.VerticalAlignment = VerticalAlignment.Top;
+				last_thumb_compare_fname = fname;
+			});
 
 			foreach (var tcv in thumb_compare_all)
 				tcv.MouseDown += (o, e) =>
 				{
 					if (e.ChangedButton == MouseButton.Left)
 					{
-						new FileChooser(last_thumb_compare_fname, choose_thumb_compare_file).ShowDialog();
+						new FileChooser(last_thumb_compare_fname, begin_thumb_compare).ShowDialog();
 						e.Handled = true;
 					}
 					else if (e.ChangedButton == MouseButton.Right)
@@ -341,7 +337,7 @@ namespace Dashboard
 			grid_thumb_compare.Drop += (o, e) =>
 			{
 				var fname = ((string[])e.Data.GetData(DataFormats.FileDrop)).Single();
-				choose_thumb_compare_file(fname);
+				begin_thumb_compare(fname);
 				e.Handled = true;
 			};
 

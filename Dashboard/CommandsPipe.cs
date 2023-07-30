@@ -25,7 +25,7 @@ namespace Dashboard
 
 		private readonly Dictionary<int, Action<Stream>> command_handlers = new()
 		{
-			{ Commands.NewerKillsOlder, str=>Application.Current.Dispatcher.Invoke(Application.Current.Shutdown) }
+			{ Commands.NewerKillsOlder, str=>App.Current.Dispatcher.Invoke(App.Current.Shutdown) }
 		};
 		public void AddThumbGen(ThumbGenerator thumb_gen) =>
 			command_handlers.Add(Commands.GimmiThumb, str =>

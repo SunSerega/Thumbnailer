@@ -13,7 +13,7 @@ namespace Dashboard
 		{
 			private readonly Window? owner;
 
-			public OwnerWindowContainer() => owner = Application.Current.MainWindow.IsVisible ? Application.Current.MainWindow : null;
+			public OwnerWindowContainer() => owner = App.Current.MainWindow.IsVisible ? App.Current.MainWindow : null;
 			public OwnerWindowContainer(Window? owner) => this.owner = owner;
 
 			public static implicit operator OwnerWindowContainer(Window? owner) => new(owner);
@@ -24,7 +24,7 @@ namespace Dashboard
 
 		public CustomMessageBox(string title, string? content, OwnerWindowContainer cont, params string[] button_names)
 		{
-			if (App.Current!.IsShuttingDown)
+			if (App.Current.IsShuttingDown)
 			{
 				MessageBox.Show(content??"", title);
 				return;

@@ -13,22 +13,25 @@ namespace Dashboard
 		{
 			InitializeComponent();
 		}
-		public void Set(Func<BitmapSource?> make_im) =>
-			Dispatcher.InvokeAsync(() =>
-				Utils.HandleExtension(() =>
-				{
-					b.Child = new Image()
-					{
-						Source = make_im(),
-					};
-					HorizontalAlignment = HorizontalAlignment.Center;
-					VerticalAlignment = VerticalAlignment.Center;
-				})
-			);
+		public void Set(BitmapSource? source)
+		{
+			if (source is null)
+				b.Child = null;
+			else
+			{
+				b.Child = new Image() { Source = source };
+				b.MaxWidth = source.Width;
+				b.MaxHeight = source.Height;
+			}
+			HorizontalAlignment = HorizontalAlignment.Center;
+			VerticalAlignment = VerticalAlignment.Center;
+		}
 
 		public void Reset()
 		{
 			b.Child = null;
+			b.MaxWidth = double.PositiveInfinity;
+			b.MaxHeight = double.PositiveInfinity;
 			HorizontalAlignment = HorizontalAlignment.Stretch;
 			VerticalAlignment = VerticalAlignment.Stretch;
 		}
