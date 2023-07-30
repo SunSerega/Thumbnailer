@@ -22,6 +22,7 @@ namespace Dashboard
 			var thr = new System.Threading.Thread(Dispatcher.Run)
 			{
 				IsBackground = true,
+				Name = $"COMManip common thread",
 			};
 			thr.SetApartmentState(System.Threading.ApartmentState.STA);
 			thr.Start();

@@ -1,8 +1,10 @@
 ﻿
 
 
+using Dashboard;
 using System;
 using System.Drawing;
+using System.IO;
 using System.Runtime.InteropServices;
 
 partial class Test
@@ -45,14 +47,33 @@ partial class Test
 
 
 		//try
-		{
-			ReplaceThumbnail(@"G:\0Music\3Sort\!temp\Geoxor\!good\[20230714] Geoxor - Apathy.mkv", @"G:\0Prog\Thumbnailer\Test\0.bmp");
-		}
+		//{
+		//	ReplaceThumbnail(@"G:\0Music\3Sort\!temp\Geoxor\!good\[20230714] Geoxor - Apathy.mkv", @"G:\0Prog\Thumbnailer\Test\0.bmp");
+		//}
 		//catch (Exception e)
 		//{
 		//	Console.WriteLine(e);
 		//}
 		//ReplaceThumbnail(@"C:\Users\SunMachine\Desktop\Thumbnailer broken files\kevin macleod merry go.mp3", new Bitmap(@"G:\0Prog\Thumbnailer\Test\0.bmp"));
+
+		//var w = 256;
+		//var r = w/2d;
+		//var bmp = new Bitmap(w, w);
+
+		//for (var y = 0; y < w; y++)
+		//	for (var x = 0; x < w; x++)
+		//	{
+		//		var dx = x - r;
+		//		var dy = y - r;
+		//		var d = Math.Sqrt(dx*dx + dy*dy)/r;
+		//		if (d>1) continue;
+		//		var c = ColorExtensions.FromAhsb(255, h:Math.Atan2(dy, dx)/(2*Math.PI)+0.5, s:d, b:1);
+		//		bmp.SetPixel(x, y, Color.FromArgb(255, c.R, c.G, c.B));
+		//	}
+
+		//var res = @"temp.bmp";
+		//bmp.Save(res);
+		//Console.WriteLine(res);
 
 	}
 

@@ -24,6 +24,11 @@ namespace Dashboard
 
 		public CustomMessageBox(string title, string? content, OwnerWindowContainer cont, params string[] button_names)
 		{
+			if (App.Current!.IsShuttingDown)
+			{
+				MessageBox.Show(content??"", title);
+				return;
+			}
 			InitializeComponent();
 
 			if (cont.Owner != null)
@@ -90,6 +95,23 @@ namespace Dashboard
 
 		public static string? Show(string title, string? content, OwnerWindowContainer owner, params string[] button_names)
 		{
+			if (System.Threading.Thread.CurrentThread.GetApartmentState() != System.Threading.ApartmentState.STA)
+			{
+				if (owner.Owner != null)
+					throw new InvalidOperationException();
+				string? res = null;
+				var thr = new System.Threading.Thread(() => Utils.HandleExtension(() =>
+					res = Show(title, content, owner, button_names)
+				))
+				{
+					IsBackground = true,
+					Name = $"STA thread for {nameof(CustomMessageBox)}.{nameof(Show)}",
+				};
+				thr.SetApartmentState(System.Threading.ApartmentState.STA);
+				thr.Start();
+				thr.Join();
+				return res;
+			}
 			var mb = new CustomMessageBox(title, content, owner, button_names);
 			mb.ShowDialog();
 			return mb.ChosenOption;

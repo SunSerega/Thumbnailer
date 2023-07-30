@@ -8,7 +8,7 @@
 		Title="Thumbnailer Config" WindowState="Maximized" d:DesignHeight="389.663" d:DesignWidth="557.597" >
 	<DockPanel>
 
-		<DockPanel MinWidth="225" DockPanel.Dock="Left" Margin="7" >
+		<DockPanel Width="225" Margin="7" DockPanel.Dock="Left" >
 
 			<TextBlock Text="Job slots" HorizontalAlignment="Center" DockPanel.Dock="Top" />
 
@@ -17,17 +17,23 @@
 				<Slider x:Name="slider_want_job_count" Minimum="0" Maximum="{Binding ElementName=slider_active_job_count, Path=Maximum}" TickFrequency="1" IsSnapToTickEnabled="True" />
 			</Grid>
 
-			<TextBlock HorizontalAlignment="Center" DockPanel.Dock="Top">
-				<TextBlock.Text>
-					<MultiBinding StringFormat="Used {0:00} / {1:00}; Pending:">
-						<Binding ElementName="slider_active_job_count" Path="Value" />
-						<Binding ElementName="slider_want_job_count" Path="Value" />
-					</MultiBinding>
-				</TextBlock.Text>
-			</TextBlock>
+			<DockPanel DockPanel.Dock="Top">
+				
+				<TextBlock HorizontalAlignment="Center" DockPanel.Dock="Left">
+					<TextBlock.Text>
+						<MultiBinding StringFormat="Used {0:00} / {1:00}; Pending: ">
+							<Binding ElementName="slider_active_job_count" Path="Value" />
+							<Binding ElementName="slider_want_job_count" Path="Value" />
+						</MultiBinding>
+					</TextBlock.Text>
+				</TextBlock>
 
-			<TextBlock x:Name="tb_pending_jobs_count" Text="0" HorizontalAlignment="Center" DockPanel.Dock="Top" />
+				<TextBlock x:Name="tb_pending_jobs_count" Text="0" HorizontalAlignment="Center" DockPanel.Dock="Left" />
 
+				<Button x:Name="b_view_jobs" Content="View" HorizontalAlignment="Right"/>
+
+			</DockPanel>
+			
 			<Border BorderBrush="Black" BorderThickness="0,0,0,1" Margin="0,5,0,5" DockPanel.Dock="Top" />
 
 			<DockPanel DockPanel.Dock="Top">
@@ -70,7 +76,7 @@
 
 		</DockPanel>
 
-		<Border BorderBrush="Black" BorderThickness="0,0,1,0"/>
+		<Border BorderBrush="Black" BorderThickness="0,0,1,0" DockPanel.Dock="Left" />
 
 		<Grid x:Name="grid_thumb_compare" Margin="7" AllowDrop="true" >
 			<Grid>

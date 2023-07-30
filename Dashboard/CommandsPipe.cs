@@ -56,25 +56,35 @@ namespace Dashboard
 				{
 					var sw = System.Diagnostics.Stopwatch.StartNew();
 
-					using (var client = new NamedPipeClientStream(name))
+					//Separate thread, in case old process accepts message, but then hangs
+					new System.Threading.Thread(() => Utils.HandleExtension(() =>
+					{
+						using var client = new NamedPipeClientStream(name);
 						try
 						{
 							client.Connect(TimeSpan.FromSeconds(1));
-
-							var bw = new BinaryWriter(client);
-							bw.Write(Commands.NewerKillsOlder);
-
+						}
+						catch (TimeoutException) { }
+						try
+						{
+							new BinaryWriter(client)
+								.Write(Commands.NewerKillsOlder);
 							client.Flush();
 							client.WaitForPipeDrain();
 						}
-						catch (TimeoutException) { }
+						catch (IOException) { }
+					}))
+					{
+						IsBackground = true,
+						Name = $"Try ask elder to die"
+					}.Start();
 
 					foreach (var p in old_procs)
 					{
 						if (p.WaitForExit(TimeSpan.FromSeconds(1)))
 							continue;
 
-						var mb = new CustomMessageBox("Force killing [{p.Id}]", null, default(Window));
+						var mb = new CustomMessageBox($"Force killing [{p.Id}]", null, default(Window));
 						p.WaitForExitAsync().ContinueWith(t => mb.Dispatcher.Invoke(mb.Close));
 						mb.ShowDialog();
 
@@ -131,7 +141,8 @@ namespace Dashboard
 					}
 			})
 			{
-				IsBackground = true
+				IsBackground = true,
+				Name = $"Commands pipe",
 			}.Start();
 
 		public void Shutdown()

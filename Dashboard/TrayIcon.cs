@@ -39,7 +39,11 @@ namespace Dashboard
 			};
 			w.Closing += (o, e) =>
 			{
-				if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) return;
+				if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+				{
+					Application.Current.Shutdown();
+					return;
+				}
 				ShowIco();
 				e.Cancel = true;
 			};

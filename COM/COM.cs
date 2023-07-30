@@ -136,43 +136,45 @@ namespace Thumbnailer
 
 		public void GetThumbnail(int cx, out IntPtr hBitmap, out WTS_ALPHATYPE bitmapType)
 		{
-			var sw = System.Diagnostics.Stopwatch.StartNew();
-
-			File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.info.log", new[] { $"{DateTime.Now} | Starter: {curr_file_name}" }, Common.Encoding);
+			//var sw = System.Diagnostics.Stopwatch.StartNew();
+			//File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.info.log", new[] { $"{DateTime.Now} | Starter: {curr_file_name}" }, Common.Encoding);
 
 			hBitmap = IntPtr.Zero;
 			bitmapType = WTS_ALPHATYPE.WTSAT_UNKNOWN;
 			try
 			{
-				using var client = new System.IO.Pipes.NamedPipeClientStream("Dashboard for Thumbnailer");
-				client.Connect();
 
-				var bw = new BinaryWriter(client);
-				{
-					bw.Write(2); // GimmiThumb
-					bw.Write(curr_file_name!);
-					bw.Flush();
-				}
-
-				using (var br = new BinaryReader(client))
-				{
-					var res_fname = br.ReadString();
-					var loaded_bmp = LoadBitmap(res_fname);
-
-					var format = PixelFormat.Format32bppArgb;
-					var res_bmp = loaded_bmp;
-					if (loaded_bmp.PixelFormat != format)
+				string res_fname;
+				for (int try_ind = 0; ; ++try_ind)
+					try
 					{
-						res_bmp = new Bitmap(res_bmp.Width, res_bmp.Height, format);
-						using var gr = Graphics.FromImage(res_bmp);
-						gr.DrawImageUnscaled(loaded_bmp, Point.Empty);
+						using var client = new System.IO.Pipes.NamedPipeClientStream("Dashboard for Thumbnailer");
+						client.Connect();
+						var bw = new BinaryWriter(client);
+						var br = new BinaryReader(client);
+						bw.Write(2); // GimmiThumb
+						bw.Write(curr_file_name!);
+						bw.Flush();
+						res_fname = br.ReadString();
+						break;
+					}
+					catch (IOException) {
+						if (try_ind>=100) throw;
 					}
 
-					bitmapType = WTS_ALPHATYPE.WTSAT_ARGB;
-					hBitmap = res_bmp.GetHbitmap();
+				var loaded_bmp = LoadBitmap(res_fname);
+
+				var format = PixelFormat.Format32bppArgb;
+				var res_bmp = loaded_bmp;
+				if (loaded_bmp.PixelFormat != format)
+				{
+					res_bmp = new Bitmap(res_bmp.Width, res_bmp.Height, format);
+					using var gr = Graphics.FromImage(res_bmp);
+					gr.DrawImageUnscaled(loaded_bmp, Point.Empty);
 				}
 
-				client.Close();
+				bitmapType = WTS_ALPHATYPE.WTSAT_ARGB;
+				hBitmap = res_bmp.GetHbitmap();
 
 				//outBitmap.Save(Path.ChangeExtension(curr_file_name, ".bmp"));
 
@@ -185,7 +187,7 @@ namespace Thumbnailer
 			}
 			finally
 			{
-				File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.info.log", new[] { $"{DateTime.Now} | Finished: {curr_file_name} ({sw.Elapsed})" }, Common.Encoding);
+				//File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.info.log", new[] { $"{DateTime.Now} | Finished: {curr_file_name} ({sw.Elapsed})" }, Common.Encoding);
 			}
 		}
 

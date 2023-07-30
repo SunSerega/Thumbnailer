@@ -57,12 +57,13 @@ namespace Dashboard
 				}
 		};
 
-		public DelayedUpdater(Action update)
+		public DelayedUpdater(Action update, string description)
 		{
 
 			new Thread(MakeThreadStart(update, ev, new(this)))
 			{
-				IsBackground=true
+				IsBackground=true,
+				Name = $"DelayedUpdater: {description}",
 			}.Start();
 
 		}

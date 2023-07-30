@@ -10,7 +10,9 @@ namespace Dashboard
 
 	public sealed class RootSettings : Settings
 	{
-		public RootSettings() : base(@"Settings (Dashboard)") { }
+		public RootSettings() : base("Settings (Dashboard)") { }
+
+		protected override string SettingsDescription() => $"Root settings";
 
 		public int MaxJobCount
 		{
@@ -34,7 +36,9 @@ namespace Dashboard
 
 	public sealed class FileSettings : Settings
 	{
-		public FileSettings(string hash) : base(Path.Combine("cache", hash, @"Settings")) { }
+		public FileSettings(string hash) : base(Path.Combine("cache", hash, "Settings")) { }
+
+		protected override string SettingsDescription() => $"Settings of [{FilePath}]";
 
 		public string? FilePath
 		{
@@ -77,6 +81,56 @@ namespace Dashboard
 			main_save_fname = Path.GetFullPath($"{path}.dat");
 			back_save_fname = Path.GetFullPath($"{path}-Backup.dat");
 
+			if (File.Exists(back_save_fname))
+			{
+				if (!CustomMessageBox.ShowYesNo("Backup settings file exists", "Try meld main and backup settings?", new()))
+					Environment.Exit(-1);
+
+				System.Diagnostics.Process.Start(
+					"meld", $"\"{Path.GetFullPath(main_save_fname)}\" \"{Path.GetFullPath(back_save_fname)}\""
+				).WaitForExit();
+
+				if (!File.Exists(main_save_fname))
+				{
+					CustomMessageBox.Show("Error!", "Settings file was not created while meld-ing");
+					Environment.Exit(-1);
+				}
+
+				File.Delete(back_save_fname);
+			}
+
+			if (File.Exists(main_save_fname))
+				foreach (var l in File.ReadLines(main_save_fname, enc).Select(l => l.Trim()))
+				{
+					if (l == "") continue;
+
+					var ind = l.IndexOf('=');
+					if (ind == -1) throw new FormatException(l);
+
+					var key = l.Remove(ind);
+					var s_val = l.Remove(0, ind+1);
+
+					if (key.EndsWith('!'))
+					{
+						key = key.Remove(key.Length-1);
+						if (s_val != "")
+							throw new FormatException(l);
+						s_val = null;
+						continue;
+					}
+
+					var prop = this.GetType().GetProperty(key) ??
+						throw new InvalidOperationException($"Settings property [{key}] not found");
+
+					if (s_val is null)
+						settings.Remove(key);
+					else if (setting_type_converter.TryGetValue(prop.PropertyType, out var conv))
+						settings[key] = conv.load(s_val);
+					else
+						throw new NotImplementedException(prop.PropertyType.ToString());
+
+				}
+
 			resaver = new(() =>
 			{
 				lock (settings)
@@ -95,59 +149,12 @@ namespace Dashboard
 					sw.Close();
 					File.Delete(back_save_fname);
 				}
-			});
-
-			if (File.Exists(back_save_fname))
-			{
-				if (!CustomMessageBox.ShowYesNo("Backup settings file exists", "Try meld main and backup settings?", new()))
-					Environment.Exit(-1);
-
-				System.Diagnostics.Process.Start(
-					"meld", $"\"{Path.GetFullPath(main_save_fname)}\" \"{Path.GetFullPath(back_save_fname)}\""
-				).WaitForExit();
-
-				if (!File.Exists(main_save_fname))
-				{
-					CustomMessageBox.Show("Error!", "Settings file was not created while meld-ing");
-					Environment.Exit(-1);
-				}
-
-				File.Delete(back_save_fname);
-			}
-			if (!File.Exists(main_save_fname)) return;
-
-			foreach (var l in File.ReadLines(main_save_fname, enc).Select(l => l.Trim()))
-			{
-				if (l == "") continue;
-
-				var ind = l.IndexOf('=');
-				if (ind == -1) throw new FormatException(l);
-
-				var key = l.Remove(ind);
-				var s_val = l.Remove(0, ind+1);
-
-				if (key.EndsWith('!'))
-				{
-					key = key.Remove(key.Length-1);
-					if (s_val != "")
-						throw new FormatException(l);
-					s_val = null;
-					continue;
-				}
-
-				var prop = this.GetType().GetProperty(key) ??
-					throw new InvalidOperationException($"Settings property [{key}] not found");
-
-				if (s_val is null)
-					settings.Remove(key);
-				else if (setting_type_converter.TryGetValue(prop.PropertyType, out var conv))
-					settings[key] = conv.load(s_val);
-				else
-					throw new NotImplementedException(prop.PropertyType.ToString());
-
-			}
+			}, $"settings resave for {SettingsDescription()}");
+			//resaver.Shutdown(); // for debug, to minimize number of bg threads
 
 		}
+
+		protected abstract string SettingsDescription();
 
 		public string GetDir() => Path.GetDirectoryName(main_save_fname)!;
 
@@ -155,10 +162,10 @@ namespace Dashboard
 			new(typeof(T), new( o => save((T)o), s => load(s) ));
 		private static readonly Dictionary<Type, (Func<object, string> save, Func<string, object> load)> setting_type_converter = new[]
 		{
-			MakeSettingTypeConverter<string>		(x => x,					s => s),
-			MakeSettingTypeConverter<int>			(x => x.ToString(),			Convert.ToInt32),
-			MakeSettingTypeConverter<DateTime>		(x => x.Ticks.ToString(),	s => new DateTime(Convert.ToInt64(s))),
-			MakeSettingTypeConverter<FileExtList>	(x => x.ToString(),			FileExtList.Parse),		
+			MakeSettingTypeConverter(x => x,					s => s),
+			MakeSettingTypeConverter(x => x.ToString(),			Convert.ToInt32),
+			MakeSettingTypeConverter(x => x.Ticks.ToString(),	s => new DateTime(Convert.ToInt64(s))),
+			MakeSettingTypeConverter(x => x.ToString(),			FileExtList.Parse),
 		}.ToDictionary(kvp=>kvp.Key, kvp=>kvp.Value);
 
 		private readonly Dictionary<string, object> settings = new(StringComparer.OrdinalIgnoreCase);

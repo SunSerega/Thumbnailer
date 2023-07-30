@@ -150,7 +150,7 @@ namespace Dashboard
 
 			}
 
-			public void GenerateThumb(Action<Action> addJob, Action<string> ret, bool force_regen)
+			public void GenerateThumb(Action<CustomThreadPool.JobWork> add_job, Action<string> ret, bool force_regen)
 			{
 				var write_time = new[]{
 					File.GetLastWriteTimeUtc(FilePath!),
@@ -175,14 +175,16 @@ namespace Dashboard
 						settings.ThumbPath = waiting_fname;
 						System.Threading.Tasks.Task.Delay(total_wait-waited)
 							.ContinueWith(t => Utils.HandleExtension(
-								() => GenerateThumb(addJob, ret, true)
+								() => GenerateThumb(add_job, ret, true)
 							));
 						return;
 					}
 				}
 
-				addJob(() =>
+				add_job(change_subjob =>
 				{
+					var sw = System.Diagnostics.Stopwatch.StartNew();
+
 					if (settings.ThumbPath != null) return;
 					using var state = new GenerationState(this);
 					if (settings.ThumbPath != null) return;
@@ -231,6 +233,7 @@ namespace Dashboard
 						return res;
 					}
 
+					//change_subjob("copy");
 					//var temp_fname = state.AddFile("inp").Path;
 					//try
 					//{
@@ -259,10 +262,11 @@ namespace Dashboard
 					//}
 					var temp_fname = FilePath!;
 
-					var sw = System.Diagnostics.Stopwatch.StartNew();
-
+					change_subjob("get metadata");
 					var metadata = use_ffmpeg($"-i \"{temp_fname}\" -f ffmetadata").Result;
+					change_subjob(null);
 
+					change_subjob("parse metadata");
 					const string NA_dur_str = @"N/A";
 					bool had_invalid_data = metadata.Contains(temp_fname+@": Invalid data found when processing input");
 
@@ -298,15 +302,20 @@ namespace Dashboard
 
 						break; //TODO some files have their thumb as a secondary video stream, instead of attachment
 					}
-					if (has_vid && full_dur is null)
-						CustomMessageBox.Show($"{FilePath}: cannot find full dur", metadata);
+					// can be N/A in webm, when it's dynamic
+					//if (has_vid && full_dur is null)
+					//	CustomMessageBox.Show($"{FilePath}: cannot find full dur", metadata);
 					if (has_vid && vid_dur is null)
 						CustomMessageBox.Show($"{FilePath}: cannot find vid dur", metadata);
+					change_subjob(null);
 
+					change_subjob("get attachments");
 					var attachments_dir = state.AddDir("attachments").Path;
 					Directory.CreateDirectory(attachments_dir);
 					use_ffmpeg($"-dump_attachment:t \"\" -i \"{temp_fname}\"", attachments_dir).Wait();
+					change_subjob(null);
 
+					change_subjob("get embmeded images");
 					var valid_embeds_temp = state.AddDir("valid_embeds");
 					var valid_embeds_dir = valid_embeds_temp.Path;
 					Directory.CreateDirectory(valid_embeds_dir);
@@ -328,9 +337,9 @@ namespace Dashboard
 
 							return otp_created;
 						}).Select(r => r.otp).ToArray();
-
 					if (valid_embeds.Length > 1)
 						valid_embeds_temp.DisableDispose();
+					change_subjob(null);
 
 					var frame_fname = state.AddFile("frame.png").Path;
 					string bg_file;
@@ -341,8 +350,7 @@ namespace Dashboard
 						bg_file = sound_only_fname;
 					else
 					{
-						if (File.Exists(frame_fname))
-							File.Delete(frame_fname);
+						change_subjob("get frame");
 						var frame_at = vid_dur.Value * 0.3;
 						var ffmpeg_arg_seek = "";
 						if (frame_at.TotalSeconds>=1)
@@ -366,8 +374,11 @@ namespace Dashboard
 							return;
 						}
 						bg_file = frame_fname;
+						change_subjob(null);
 					}
 
+					change_subjob("load bg image");
+					Size sz;
 					var bg_im = new Image();
 					try
 					{
@@ -377,6 +388,7 @@ namespace Dashboard
 						bg_im_source.CacheOption = BitmapCacheOption.OnLoad;
 						bg_im_source.StreamSource = str;
 						bg_im_source.EndInit();
+						sz = new(bg_im_source.Width, bg_im_source.Height);
 						bg_im.Source = bg_im_source;
 					}
 					catch (System.Runtime.InteropServices.COMException e)
@@ -384,10 +396,9 @@ namespace Dashboard
 						//TODO bg_file is null or "" sometimes?????
 						CustomMessageBox.Show($"File: [{settings.FilePath}] Image: [{bg_file}]", e.ToString());
 					}
+					change_subjob(null);
 
-					bg_im.Measure(new(256,256));
-					var sz = bg_im.DesiredSize;
-
+					change_subjob("make dur string");
 					var dur_s = "";
 					if (full_dur != null)
 					{
@@ -404,7 +415,9 @@ namespace Dashboard
 							dur_s += '('+s.ToString("N"+(5-dur_s.Length))[2..].TrimEnd('0')+')';
 						}
 					}
+					change_subjob(null);
 
+					change_subjob("compose output");
 					var res_c = new Grid();
 					res_c.Children.Add(bg_im);
 					res_c.Children.Add(new Viewbox
@@ -434,25 +447,32 @@ namespace Dashboard
 							).BuildGeometry(default)
 						} } },
 					});
+					change_subjob(null);
 
+					change_subjob("render output");
 					var bitmap = new RenderTargetBitmap((int)sz.Width, (int)sz.Height, 96, 96, PixelFormats.Pbgra32);
-
 					res_c.Measure(sz);
 					res_c.Arrange(new(sz));
 					bitmap.Render(res_c);
+					change_subjob(null);
 
-					var res_path = Path.Combine(settings.GetDir(), "thumb.png");
+					var res_temp = state.AddFile("thumb.png");
+					var res_path = res_temp.Path;
 
+					change_subjob("save output");
 					var enc = new PngBitmapEncoder();
 					enc.Frames.Add(BitmapFrame.Create(bitmap));
 					using (Stream fs = File.Create(res_path))
 						enc.Save(fs);
+					change_subjob(null);
 
+					change_subjob("pass output out");
 					// Make sure this is not mixed with .Generate call
 					//lock (this)
 					// Instead, this whole job is locked
 					{
 						settings.LastRecalcTime = sw.Elapsed.ToString();
+						res_temp.DisableDispose();
 						settings.ThumbPath = res_path;
 						settings.LastUpdate = write_time;
 						ret(res_path);
@@ -497,14 +517,17 @@ namespace Dashboard
 		private readonly ConcurrentDictionary<string, CachedFileInfo> files = new();
 		private readonly ConcurrentDictionary<uint, uint> used_hashes = new();
 
-		public ThumbGenerator(CustomThreadPool thr_pool, string cache_dir)
+		public ThumbGenerator(CustomThreadPool thr_pool, string cache_dir, Action<string?> change_subjob)
 		{
 			this.thr_pool = thr_pool;
 			this.cache_dir = Directory.CreateDirectory(cache_dir);
 			this.lock_file = File.Create(Path.Combine(this.cache_dir.FullName, ".lock"));
 
-			foreach (var dir in this.cache_dir.EnumerateDirectories())
+			var dirs = this.cache_dir.GetDirectories();
+			for (var i = 0; i < dirs.Length; ++i)
 			{
+				change_subjob($"Loaded {i}/{dirs.Length}");
+				var dir = dirs[i];
 				var hash = Convert.ToUInt32(dir.Name, 16);
 				var cfi = new CachedFileInfo((hash, dir.Name));
 				if (!File.Exists(cfi.FilePath))
@@ -539,18 +562,19 @@ namespace Dashboard
 
 			lock (cfi)
 			{
-				cfi.GenerateThumb(thr_pool.AddJob, ret, force_regen);
+				cfi.GenerateThumb(w=>thr_pool.AddJob($"Generating thumb for: {fname}", w), ret, force_regen);
 				ret(cfi.ThumbPath);
 			}
 
 		}
 
-		public void ClearAll()
+		public void ClearAll(Action<string?> change_subjob)
 		{
 			ev_purge_finished.Reset();
 			while (files.Any())
 				try
 				{
+					change_subjob($"left: {files.Count}");
 					var fname = files.Keys.First();
 					if (!files.TryRemove(fname, out var cfi))
 						continue;
