@@ -3,8 +3,6 @@
 using System.Runtime.InteropServices;
 using Win32Exception = System.ComponentModel.Win32Exception;
 
-using System.Windows;
-using System.Windows.Threading;
 using System.Windows.Media.Imaging;
 
 namespace Dashboard
@@ -12,76 +10,9 @@ namespace Dashboard
 
 	public partial class COMManip
 	{
-		private static IThumbnailCache? thumbnailCache;
-		private static IThumbnailCachePrivate? thumbnailCachePrivate;
-		private static readonly Dispatcher d;
-		private static readonly System.Threading.ManualResetEventSlim ev_init_completed = new(false);
-
-		static COMManip()
-		{
-			var thr = new System.Threading.Thread(Dispatcher.Run)
-			{
-				IsBackground = true,
-				Name = $"COMManip common thread",
-			};
-			thr.SetApartmentState(System.Threading.ApartmentState.STA);
-			thr.Start();
-
-			while (d is null)
-				d = Dispatcher.FromThread(thr);
-			while (true)
-				try
-				{
-					d.Invoke(() => { });
-					break;
-				}
-				catch (System.Threading.Tasks.TaskCanceledException) { }
-
-			d.InvokeAsync(() =>
-			{
-				Utils.HandleExtension(() =>
-				{
-					var CLSID_LocalThumbnailCache = new Guid("50EF4544-AC9F-4A8E-B21B-8A26180DB13F");
-					thumbnailCache = (IThumbnailCache)Activator.CreateInstance(Type.GetTypeFromCLSID(CLSID_LocalThumbnailCache, true)!)!;
-					thumbnailCachePrivate = (IThumbnailCachePrivate)thumbnailCache;
-
-					//var fname = Path.GetFullPath("Dashboard-Default.Ungenerated.bmp");
-					//if (!File.Exists(fname))
-					//	throw new NotImplementedException();
-
-					//SHCreateItemFromParsingName(fname, 0, typeof(IShellItem).GUID, out var item);
-
-					//try
-					//{
-					//	if (0!=thumbnailCache.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out _, out _, out _))
-					//		throw new Win32Exception();
-					//}
-					//catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND) {}
-
-					//if (0!=thumbnailCachePrivate.DeleteThumbnail(new()))
-					//	throw new Win32Exception();
-
-					//SHChangeNotify(HChangeNotifyEventID.SHCNE_UPDATEITEM, HChangeNotifyFlags.SHCNF_PATHW, fname, IntPtr.Zero);
-
-					ev_init_completed.Set();
-				});
-			}).Aborted += (o,e)=> { 
-				CustomMessageBox.Show("Init error");
-				App.Current.Shutdown();
-			};
-
-		}
-
-		private static void Invoke(Action a)
-		{
-			ev_init_completed.Wait();
-			d.Invoke(a);
-		}
-		private static T Invoke<T>(Func<T> a)
-		{
-			ev_init_completed.Wait();
-			return d.Invoke(a);
-		}
+		private static IThumbnailCache MakeLocalTC() =>
+			(IThumbnailCache)Activator.CreateInstance(Type.GetTypeFromCLSID(new("50EF4544-AC9F-4A8E-B21B-8A26180DB13F"), true)!)!;
+		private static IThumbnailCachePrivate MakePrivateTC() => (IThumbnailCachePrivate)MakeLocalTC();
 
 		public sealed class ThumbnailMissingException : Exception
 		{
@@ -89,7 +20,7 @@ namespace Dashboard
 		}
 
 		private static BitmapSource? ConvertHBitmap(IntPtr bmp) => bmp == default ? null :
-			System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(bmp, 0, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+			System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(bmp, 0, default, BitmapSizeOptions.FromEmptyOptions());
 
 		private static IShellItem? GetShellItem(string name)
 		{
@@ -106,7 +37,7 @@ namespace Dashboard
 			}
 		}
 
-		public static BitmapSource? GetExistingThumbFor(string fname) => ConvertHBitmap(Invoke(() =>
+		public static BitmapSource? GetExistingThumbFor(string fname)
 		{
 			var item = GetShellItem(fname);
 			if (item is null) return default;
@@ -114,7 +45,7 @@ namespace Dashboard
 			ISharedBitmap shared_bmp;
 			try
 			{
-				if (0!=thumbnailCache!.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out shared_bmp, out _, out _))
+				if (0!=MakeLocalTC().GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out shared_bmp, out _, out _))
 					throw new Win32Exception();
 			}
 			catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
@@ -124,18 +55,20 @@ namespace Dashboard
 
 			if (0!=shared_bmp.GetSharedBitmap(out var bmp))
 				throw new Win32Exception();
-			return bmp;
-		}));
-
-		private static bool DeleteThumbFor(string fname) => Invoke(() =>
+			if (bmp == IntPtr.Zero)
+				throw new InvalidOperationException();
+			return ConvertHBitmap(bmp);
+		}
+		
+		private static bool DeleteThumbFor(string path)
 		{
-			var item = GetShellItem(fname);
+			var item = GetShellItem(path);
 			if (item is null) return false;
 
 			WTS_THUMBNAILID id;
 			try
 			{
-				if (0!=thumbnailCache!.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out _, out _, out id))
+				if (0!=MakeLocalTC().GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out _, out _, out id))
 					throw new Win32Exception();
 			}
 			catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
@@ -144,14 +77,23 @@ namespace Dashboard
 			}
 			catch (COMException e) when (e.HResult == WTS_E_FAILEDEXTRACTION)
 			{
-				CustomMessageBox.Show(nameof(WTS_E_FAILEDEXTRACTION), fname);
+				//TODO WTS_E_FAILEDEXTRACTION for "C:\Users\SunMachine\Desktop"
+				//CustomMessageBox.Show(nameof(WTS_E_FAILEDEXTRACTION), path);
 				return false;
 			}
 
-			if (0!=thumbnailCachePrivate!.DeleteThumbnail(id))
-				throw new Win32Exception();
+			try
+			{
+				if (0!=MakePrivateTC().DeleteThumbnail(id))
+					throw new Win32Exception();
+			}
+			catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
+			{
+				return false;
+			}
+
 			return true;
-		});
+		}
 
 		public static void ResetThumbFor(string? path)
 		{
@@ -166,7 +108,7 @@ namespace Dashboard
 			}
 		}
 
-		public static BitmapSource? GetOrTryMakeThumbFor(string fname) => ConvertHBitmap(Invoke(() =>
+		public static BitmapSource? GetOrTryMakeThumbFor(string fname)
 		{
 			var item = GetShellItem(fname);
 			if (item is null) return default;
@@ -174,7 +116,7 @@ namespace Dashboard
 			ISharedBitmap shared_bmp;
 			try
 			{
-				if (0!=thumbnailCache!.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_EXTRACT, out shared_bmp, out _, out _))
+				if (0!=MakeLocalTC().GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_EXTRACT, out shared_bmp, out _, out _))
 					throw new Win32Exception();
 			}
 			catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
@@ -188,8 +130,10 @@ namespace Dashboard
 
 			if (0!=shared_bmp.GetSharedBitmap(out var bmp))
 				throw new Win32Exception();
-			return bmp;
-		}));
+			if (bmp == IntPtr.Zero)
+				throw new InvalidOperationException();
+			return ConvertHBitmap(bmp);
+		}
 
 		private const int STG_E_FILENOTFOUND			= unchecked((int)0x80030002);
 		private const int WTS_E_FAILEDEXTRACTION		= unchecked((int)0x8004B200);

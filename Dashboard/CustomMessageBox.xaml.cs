@@ -24,12 +24,15 @@ namespace Dashboard
 
 		public CustomMessageBox(string title, string? content, OwnerWindowContainer cont, params string[] button_names)
 		{
-			if (App.Current.IsShuttingDown)
+			try
+			{
+				InitializeComponent();
+			}
+			catch when (App.Current.IsShuttingDown)
 			{
 				MessageBox.Show(content??"", title);
 				return;
 			}
-			InitializeComponent();
 
 			if (cont.Owner != null)
 				Owner = cont.Owner;

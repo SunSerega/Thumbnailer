@@ -91,19 +91,20 @@ namespace Dashboard
 					public void Dispose()
 					{
 						if (dispose_disabled) return;
-						//TODO remove
-						for (int i = 1; ; ++i)
-							try
-							{
-								on_unload(path);
-								break;
-							}
-							catch (Exception e)
-							{
-								if (i%100 == 0)
-									CustomMessageBox.Show("Struggling to delete [{path}]", e.ToString());
-								System.Threading.Thread.Sleep(10);
-							}
+						on_unload(path);
+						//for (int i = 1; ; ++i)
+						//	try
+						//	{
+						//		on_unload(path);
+						//		break;
+						//	}
+						//	catch (Exception e)
+						//	{
+						//		if (i%100 == 0)
+						//			CustomMessageBox.Show("Struggling to delete [{path}]", e.ToString());
+						//		System.Threading.Thread.Sleep(10);
+						//	}
+						dispose_disabled = true;
 					}
 
 				}
@@ -389,7 +390,7 @@ namespace Dashboard
 					catch (System.Runtime.InteropServices.COMException e)
 					{
 						//TODO bg_file is null or "" sometimes?????
-						CustomMessageBox.Show($"File: [{settings.FilePath}] Image: [{bg_file}]", e.ToString());
+						CustomMessageBox.Show($"File: [{settings.FilePath}] Image: [{bg_file??"<null>"}]", e.ToString());
 					}
 					change_subjob(null);
 
