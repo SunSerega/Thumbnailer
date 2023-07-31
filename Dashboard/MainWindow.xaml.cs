@@ -28,10 +28,9 @@ namespace Dashboard
 				var (main_thr_pool, pipe) = LogicInit();
 
 				if (shutdown_triggered)
-				{
 					App.Current.Shutdown(0);
+				if (App.Current.IsShuttingDown)
 					return;
-				}
 
 				SetUpJobCount(main_thr_pool);
 
@@ -204,6 +203,7 @@ namespace Dashboard
 			main_thr_pool.AddJob("Init ThumbGenerator", change_subjob =>
 			{
 				var thumb_gen = new ThumbGenerator(main_thr_pool, "cache", change_subjob);
+				if (App.Current.IsShuttingDown) return;
 
 				change_subjob($"Apply ThumbGenerator");
 				Dispatcher.Invoke(()=>on_load(thumb_gen));
@@ -385,6 +385,7 @@ namespace Dashboard
 			};
 
 			Closing += (o, e) => clear_thumb_compare_file();
+			grid_thumb_compare.AllowDrop = true;
 		}
 
 	}

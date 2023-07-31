@@ -36,7 +36,7 @@ namespace Dashboard
 
 	public sealed class FileSettings : Settings
 	{
-		public FileSettings(string hash) : base(Path.Combine("cache", hash, "Settings")) { }
+		public FileSettings(string cache_file_path) : base(Path.Combine(cache_file_path, "Settings")) { }
 
 		protected override string SettingsDescription() => $"Settings of [{FilePath}]";
 

@@ -1,6 +1,7 @@
 ﻿using System;
 
 using System.Linq;
+using System.Collections.Generic;
 using System.Collections.Concurrent;
 
 using System.IO;
@@ -18,44 +19,41 @@ namespace Dashboard
 		private readonly DirectoryInfo cache_dir;
 		private readonly FileStream lock_file;
 
-		private class CachedFileInfo
+		private sealed class CacheFileLoadCanceledException : Exception
 		{
-			private (uint u, string s) hash;
+			public CacheFileLoadCanceledException(string? message)
+				: base(message) { }
+		}
+
+		private sealed class CachedFileInfo
+		{
+			private readonly uint id;
 			private readonly FileSettings settings;
-			//private WeakReference<Bitmap?> cached_bitmap = new(null);
 
 			public event Action<long>? CacheSizeChanged;
 
-			public (uint u, string s) Hash => hash;
-
-			public CachedFileInfo(string fname, Func<uint, bool> validate_new_hash, Action<long> on_cache_changed)
+			public CachedFileInfo(uint id, string cache_path, Action<long> on_cache_changed)
 			{
+				if (!Path.IsPathRooted(cache_path))
+					throw new ArgumentException($"Path [{cache_path}] was not rooted", nameof(cache_path));
+				if (!Directory.Exists(cache_path))
+					throw new InvalidOperationException();
+				this.id = id;
 				CacheSizeChanged += on_cache_changed;
-
-				if (!Path.IsPathRooted(fname))
-					throw new ArgumentException($"Path [{fname}] was not rooted", nameof(fname));
-
-				{
-					var hash = 17u;
-					foreach (var ch in fname)
-						hash = unchecked(hash*23 + ch);
-					while (!validate_new_hash(hash))
-						hash = unchecked(hash * 59);
-					this.hash = (hash, hash.ToString("X8"));
-				}
-
-				settings = new(hash.s)
-				{
-					FilePath = fname
-				};
-
+				settings = new(cache_path);
 			}
 
-			public CachedFileInfo((uint u, string s) hash)
+			public CachedFileInfo(uint id, string cache_path, string target_fname, Action<long> on_cache_changed)
+				: this(id, cache_path, on_cache_changed)
 			{
-				this.hash = hash;
-				settings = new(hash.s);
+				if (!Path.IsPathRooted(target_fname))
+					throw new ArgumentException($"Path [{target_fname}] was not rooted", nameof(target_fname));
+				settings.FilePath = target_fname;
 			}
+
+			public uint Id => id;
+			public string? FilePath => settings.FilePath;
+			public string ThumbPath => settings.ThumbPath ?? ungenerated_fname;
 
 			private static readonly string ungenerated_fname	= Path.GetFullPath(@"Dashboard-Default.Ungenerated.bmp");
 			private static readonly string waiting_fname		= Path.GetFullPath(@"Dashboard-Default.Waiting.bmp");
@@ -104,7 +102,6 @@ namespace Dashboard
 						//			CustomMessageBox.Show("Struggling to delete [{path}]", e.ToString());
 						//		System.Threading.Thread.Sleep(10);
 						//	}
-						dispose_disabled = true;
 					}
 
 				}
@@ -479,9 +476,6 @@ namespace Dashboard
 				});
 			}
 
-			public string? FilePath => settings.FilePath;
-			public string ThumbPath => settings.ThumbPath ?? ungenerated_fname;
-
 			public void Erase()
 			{
 				lock (this)
@@ -497,21 +491,8 @@ namespace Dashboard
 
 			public void Shutdown() => settings.Shutdown();
 
-			//public Bitmap ThumbBitmap {
-			//	get {
-			//		if (!cached_bitmap.TryGetTarget(out var res))
-			//			using (var str = File.OpenRead(ready_thumb_fname ?? ungenerated_fname))
-			//			{
-			//				res = new Bitmap(str);
-			//				cached_bitmap.SetTarget(res);
-			//			}
-			//		return res;
-			//	}
-			//}
-
 		}
 		private readonly ConcurrentDictionary<string, CachedFileInfo> files = new();
-		private readonly ConcurrentDictionary<uint, uint> used_hashes = new();
 
 		public ThumbGenerator(CustomThreadPool thr_pool, string cache_dir, Action<string?> change_subjob)
 		{
@@ -520,22 +501,96 @@ namespace Dashboard
 			this.lock_file = File.Create(Path.Combine(this.cache_dir.FullName, ".lock"));
 
 			var dirs = this.cache_dir.GetDirectories();
+
+			var all_file_paths = new HashSet<string>();
+			var purge_acts = new List<Action>();
+			var failed_load = new List<(string id, string message)>();
+			var conflicting_caches = new Dictionary<string, List<uint>>();
+
 			for (var i = 0; i < dirs.Length; ++i)
 			{
 				change_subjob($"Loaded {i}/{dirs.Length}");
 				var dir = dirs[i];
-				var hash = Convert.ToUInt32(dir.Name, 16);
-				var cfi = new CachedFileInfo((hash, dir.Name));
-				if (!File.Exists(cfi.FilePath))
+				Action? purge_act = () => dir.Delete(true);
+				try
 				{
-					dir.Delete(true);
-					continue;
+					if (!uint.TryParse(dir.Name, out var id))
+						throw new CacheFileLoadCanceledException($"1!Invalid ID");
+					var cfi = new CachedFileInfo(id, dir.FullName, InvokeCacheSizeChanged);
+					purge_act = cfi.Erase;
+					var path = cfi.FilePath ?? 
+						throw new CacheFileLoadCanceledException($"2!No file is assigned");
+					if (!File.Exists(path))
+						throw new CacheFileLoadCanceledException($"3!File [{path}] does not exist");
+					if (!all_file_paths.Add(path))
+					{
+						if (!conflicting_caches.TryGetValue(path, out var l))
+						{
+							if (!files.TryRemove(path, out var old_cfi))
+								throw new InvalidOperationException();
+							purge_acts.Add(old_cfi.Erase);
+							l = new() { old_cfi.Id };
+							conflicting_caches[path] = l;
+						}
+						l.Add(id);
+						throw new CacheFileLoadCanceledException("");
+					}
+					if (!files.TryAdd(path, cfi))
+						throw new InvalidOperationException();
+					purge_act = null;
 				}
-				if (!used_hashes.TryAdd(hash, hash))
-					throw new InvalidOperationException(dir.FullName);
-				if (!files.TryAdd(cfi.FilePath, cfi))
-					throw new InvalidOperationException(dir.FullName);
+				catch (CacheFileLoadCanceledException e)
+				{
+					if (purge_act is null)
+						throw new InvalidOperationException();
+					purge_acts.Add(purge_act);
+					if (!string.IsNullOrEmpty(e.Message))
+						failed_load.Add((dir.Name, e.Message));
+				}
 			}
+
+			if (purge_acts.Count==0) return;
+			{
+				var lns = new List<string>();
+				void header(string h)
+				{
+					if (lns.Count!=0)
+						lns.Add("");
+					lns.Add(h);
+				}
+
+				if (failed_load.Count!=0)
+				{
+					header("Id-s failed to load");
+					foreach (var g in failed_load.GroupBy(t=>t.message).OrderBy(g=>g.Key))
+					{
+						var message = g.Key;
+						var ids = g.Select(t => t.id).Order();
+						lns.Add($"{string.Join(',',ids)}: {message}");
+					}
+					lns.Add(new string('=', 30));
+				}
+
+				if (conflicting_caches.Count!=0)
+				{
+					header("Id-s referred to the same file");
+					foreach (var (path, ids) in conflicting_caches)
+						lns.Add($"[{path}]: {string.Join(',', ids)}");
+					lns.Add(new string('=', 30));
+				}
+
+				header("Purge all the deviants?");
+
+				if (!CustomMessageBox.ShowYesNo("Settings load failed",
+					string.Join(Environment.NewLine, lns)
+				))
+				{
+					App.Current.Dispatcher.Invoke(()=>App.Current.Shutdown(-1));
+					return;
+				}
+
+			}
+			foreach (var purge_act in purge_acts) purge_act();
 
 		}
 
@@ -545,16 +600,21 @@ namespace Dashboard
 
 		private readonly System.Threading.ManualResetEventSlim ev_purge_finished = new(true);
 
+		private uint last_used_id = 0;
 		public void Generate(string fname, Action<string> ret, bool force_regen)
 		{
 			ev_purge_finished.Wait();
 
-			var cfi = files.GetOrAdd(fname,
-				fname => new(fname,
-					hash => used_hashes.TryAdd(hash, hash),
-					InvokeCacheSizeChanged
-				)
-			);
+			var cfi = files.GetOrAdd(fname, fname =>
+			{
+				while (true)
+				{
+					var id = System.Threading.Interlocked.Increment(ref last_used_id);
+					var cache_file_dir = cache_dir.CreateSubdirectory(id.ToString());
+					if (cache_file_dir.EnumerateFileSystemInfos().Any()) continue;
+					return new(id, cache_file_dir.FullName, fname, InvokeCacheSizeChanged);
+				}
+			});
 
 			lock (cfi)
 			{
@@ -571,11 +631,8 @@ namespace Dashboard
 				try
 				{
 					change_subjob($"left: {files.Count}");
-					var fname = files.Keys.First();
-					if (!files.TryRemove(fname, out var cfi))
+					if (!files.TryRemove(files.Keys.First(), out var cfi))
 						continue;
-					if (!used_hashes.TryRemove(cfi.Hash.u, out _))
-						throw new InvalidOperationException();
 					cfi.Erase();
 				}
 				catch (Exception e)

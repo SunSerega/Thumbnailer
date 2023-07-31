@@ -78,7 +78,7 @@
 
 		<Border BorderBrush="Black" BorderThickness="0,0,1,0" DockPanel.Dock="Left" />
 
-		<Grid x:Name="grid_thumb_compare" Margin="7" AllowDrop="true" >
+		<Grid x:Name="grid_thumb_compare" Margin="7" >
 			<Grid>
 				<Grid.RowDefinitions>
 					<RowDefinition/>
