@@ -21,6 +21,8 @@ namespace Dashboard.Tests
 		{
 			var l = new OneToManyLock();
 
+			var one_priority = true;
+
 			var one_thr_c = 3;
 			var many_thr_c = 100;
 
@@ -49,7 +51,7 @@ namespace Dashboard.Tests
 							Thread.Sleep(100);
 							lock (counter_lock)
 								one_counter--;
-						});
+						}, one_priority);
 						Thread.Sleep(1000);
 						Interlocked.Increment(ref done_one);
 					}

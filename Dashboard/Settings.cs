@@ -32,6 +32,13 @@ namespace Dashboard
 			set => SetSetting(nameof(LastComparedFile), value);
 		}
 
+		private static readonly ByteCount default_max_cache_size = ByteCount.Parse("700 MB");
+		public ByteCount MaxCacheSize
+		{
+			get => GetSetting(nameof(MaxCacheSize), default_max_cache_size);
+			set => SetSetting(nameof(MaxCacheSize), value);
+		}
+
 	}
 
 	public sealed class FileSettings : Settings
@@ -64,6 +71,12 @@ namespace Dashboard
 			set => SetSetting(nameof(LastRecalcTime), value);
 		}
 
+		public DateTime LastUsedTime
+		{
+			get => GetSetting(nameof(LastUsedTime), DateTime.MinValue);
+			set => SetSetting(nameof(LastUsedTime), value);
+		}
+		
 	}
 
 	public abstract class Settings
@@ -170,7 +183,8 @@ namespace Dashboard
 			MakeSettingTypeConverter(x => x,					s => s),
 			MakeSettingTypeConverter(x => x.ToString(),			Convert.ToInt32),
 			MakeSettingTypeConverter(x => x.Ticks.ToString(),	s => new DateTime(Convert.ToInt64(s))),
-			MakeSettingTypeConverter(x => x.ToString(),			FileExtList.Parse),
+			MakeSettingTypeConverter(x => x.ToString(),         FileExtList.Parse),
+			MakeSettingTypeConverter(x => x.ToString(),         ByteCount.Parse),
 		}.ToDictionary(kvp=>kvp.Key, kvp=>kvp.Value);
 
 		private readonly Dictionary<string, object> settings = new(StringComparer.OrdinalIgnoreCase);

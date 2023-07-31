@@ -24,15 +24,16 @@ namespace Dashboard
 
 		private static IShellItem? GetShellItem(string name)
 		{
+			if (!System.IO.File.Exists(name) && !System.IO.Directory.Exists(name))
+				return null;
 			try
 			{
 				SHCreateItemFromParsingName(name, 0, typeof(IShellItem).GUID, out var item);
 				return item;
 			}
 			catch (System.IO.FileNotFoundException)
+			when (!System.IO.File.Exists(name) && !System.IO.Directory.Exists(name))
 			{
-				if (System.IO.File.Exists(name) || System.IO.Directory.Exists(name))
-					throw new InvalidOperationException(name);
 				return null;
 			}
 		}

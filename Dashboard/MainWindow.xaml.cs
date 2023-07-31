@@ -214,31 +214,29 @@ namespace Dashboard
 
 		private void SetUpCacheInfo(ThumbGenerator thumb_gen, CustomThreadPool main_thr_pool)
 		{
-			long cache_byte_count = 0;
-			var byte_scales = new[] { "KB", "MB", "GB" };
-			void update_cache_info()
-			{
-				var c = (double)cache_byte_count;
+			ByteCount cache_size = 0;
+			void update_cache_info() =>
+				tb_cache_info.Text = $"Cache size: {cache_size}";
 
-				string chosen_byte_scale = "B";
-				foreach (var byte_scale in byte_scales)
+			var cache_info_updater = new DelayedUpdater(() =>
+			{
+				Dispatcher.Invoke(() =>
 				{
-					if (c < 5000) break;
-					c /= 1024;
-					chosen_byte_scale = byte_scale;
+					cache_size =
+						new DirectoryInfo("cache")
+						.EnumerateFiles("*", SearchOption.AllDirectories)
+						.Sum(f => f.Length);
+					update_cache_info();
+				});
+
+				if (cache_size > Settings.Root.MaxCacheSize)
+				{
+					if (thumb_gen.ClearInvalid()!=0)
+						return;
+					thumb_gen.ClearOne();
 				}
 
-				c = Math.Round(c, 2);
-				tb_cache_info.Text = $"Cache size: {c} {chosen_byte_scale}";
-			}
-			var cache_info_updater = new DelayedUpdater(() => Dispatcher.Invoke(() =>
-			{
-				cache_byte_count =
-					new DirectoryInfo("cache")
-					.EnumerateFiles("*", SearchOption.AllDirectories)
-					.Sum(f => f.Length);
-				update_cache_info();
-			}), $"cache size recalculation");
+			}, $"cache size recalculation");
 			IsVisibleChanged += (o, e) =>
 			{
 				if (!IsVisible) return;
@@ -246,9 +244,9 @@ namespace Dashboard
 			};
 			thumb_gen.CacheSizeChanged += byte_change => Dispatcher.Invoke(() =>
 			{
-				cache_byte_count += byte_change;
+				cache_size += byte_change;
 				update_cache_info();
-				cache_info_updater.Trigger(TimeSpan.FromSeconds(0.1), true);
+				cache_info_updater.Trigger(TimeSpan.FromSeconds(0.5), true);
 			});
 			cache_info_updater.Trigger(TimeSpan.Zero, false);
 

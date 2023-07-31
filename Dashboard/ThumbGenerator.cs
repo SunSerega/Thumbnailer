@@ -18,6 +18,7 @@ namespace Dashboard
 		private readonly CustomThreadPool thr_pool;
 		private readonly DirectoryInfo cache_dir;
 		private readonly FileStream lock_file;
+		private readonly System.Timers.Timer cleanup_timer;
 
 		private sealed class CacheFileLoadCanceledException : Exception
 		{
@@ -54,6 +55,8 @@ namespace Dashboard
 			public uint Id => id;
 			public string? FilePath => settings.FilePath;
 			public string ThumbPath => settings.ThumbPath ?? ungenerated_fname;
+			public DateTime LastUsedTime => settings.LastUsedTime;
+			public bool IsInvalid => !File.Exists(FilePath);
 
 			private static readonly string ungenerated_fname	= Path.GetFullPath(@"Dashboard-Default.Ungenerated.bmp");
 			private static readonly string waiting_fname		= Path.GetFullPath(@"Dashboard-Default.Waiting.bmp");
@@ -150,9 +153,11 @@ namespace Dashboard
 
 			public void GenerateThumb(Action<CustomThreadPool.JobWork> add_job, Action<string> ret, bool force_regen)
 			{
+				settings.LastUsedTime = DateTime.UtcNow;
 				var write_time = new[]{
 					File.GetLastWriteTimeUtc(FilePath!),
 					File.GetLastAccessTimeUtc(FilePath!),
+					new FileInfo(FilePath!).CreationTimeUtc,
 				}.Min();
 				if (force_regen || settings.LastUpdate != write_time) lock (this)
 				{
@@ -549,7 +554,7 @@ namespace Dashboard
 				}
 			}
 
-			if (purge_acts.Count==0) return;
+			if (purge_acts.Count!=0)
 			{
 				var lns = new List<string>();
 				void header(string h)
@@ -589,8 +594,13 @@ namespace Dashboard
 					return;
 				}
 
+				foreach (var purge_act in purge_acts) purge_act();
 			}
-			foreach (var purge_act in purge_acts) purge_act();
+
+			//TODO Change delay, when there is more of a cache
+			cleanup_timer = new System.Timers.Timer(TimeSpan.FromSeconds(1));
+			cleanup_timer.Elapsed += (_,_) => ClearInvalid();
+			cleanup_timer.Start();
 
 		}
 
@@ -598,12 +608,11 @@ namespace Dashboard
 		private void InvokeCacheSizeChanged(long byte_change) =>
 			CacheSizeChanged?.Invoke(byte_change);
 
-		private readonly System.Threading.ManualResetEventSlim ev_purge_finished = new(true);
+		private readonly OneToManyLock purge_lock = new();
 
-		private uint last_used_id = 0;
-		public void Generate(string fname, Action<string> ret, bool force_regen)
+		private volatile uint last_used_id = 0;
+		public void Generate(string fname, Action<string> ret, bool force_regen) => purge_lock.ManyLocked(() =>
 		{
-			ev_purge_finished.Wait();
 
 			var cfi = files.GetOrAdd(fname, fname =>
 			{
@@ -618,16 +627,49 @@ namespace Dashboard
 
 			lock (cfi)
 			{
-				cfi.GenerateThumb(w=>thr_pool.AddJob($"Generating thumb for: {fname}", w), ret, force_regen);
+				cfi.GenerateThumb(w => thr_pool.AddJob($"Generating thumb for: {fname}", w), ret, force_regen);
 				ret(cfi.ThumbPath);
 			}
 
-		}
+		});
 
-		public void ClearAll(Action<string?> change_subjob)
+		public int ClearInvalid() => purge_lock.OneLocked(() =>
 		{
-			ev_purge_finished.Reset();
-			while (files.Any())
+			var to_remove = new List<KeyValuePair<string, CachedFileInfo>>(files.Count);
+			foreach (var kvp in files)
+				if (kvp.Value.IsInvalid)
+					to_remove.Add(kvp);
+
+			foreach (var kvp in to_remove)
+			{
+				if (!files.TryRemove(kvp))
+					throw new InvalidOperationException();
+				kvp.Value.Erase();
+			}
+
+			if (to_remove.Count!=0)
+			{
+				last_used_id = 0;
+				InvokeCacheSizeChanged(0);
+			}
+
+			return to_remove.Count;
+		}, false);
+
+		public void ClearOne() => purge_lock.OneLocked(() =>
+		{
+			if (files.IsEmpty) return;
+			var kvp = files.MinBy(kvp => kvp.Value.LastUsedTime);
+			if (!files.TryRemove(kvp))
+				throw new InvalidOperationException();
+			kvp.Value.Erase();
+			last_used_id = 0;
+			InvokeCacheSizeChanged(0);
+		}, false);
+
+		public void ClearAll(Action<string?> change_subjob) => purge_lock.OneLocked(() =>
+		{
+			while (!files.IsEmpty)
 				try
 				{
 					change_subjob($"left: {files.Count}");
@@ -639,12 +681,13 @@ namespace Dashboard
 				{
 					Utils.HandleExtension(e);
 				}
-			ev_purge_finished.Set();
+			last_used_id = 0;
 			InvokeCacheSizeChanged(0);
-			App.Current.Dispatcher.Invoke(() =>
-				CustomMessageBox.Show("Done clearing cache!", App.Current.MainWindow)
-			);
-		}
+			Console.Beep();
+			//App.Current.Dispatcher.Invoke(() =>
+			//	CustomMessageBox.Show("Done clearing cache!", App.Current.MainWindow)
+			//);
+		});
 
 		public void Shutdown()
 		{

@@ -13,6 +13,55 @@ using System.Windows.Media.Imaging;
 namespace Dashboard
 {
 
+	public readonly struct ByteCount
+	{
+		private static readonly string[] byte_scales = { "B", "KB", "MB", "GB" };
+		private static readonly int scale_up_threshold = 5000;
+
+		private readonly long in_bytes;
+		public ByteCount(long in_bytes) => this.in_bytes = in_bytes;
+		public static implicit operator ByteCount(long in_bytes) => new(in_bytes);
+
+		public static ByteCount Parse(string s)
+		{
+			var spl = s.Split(new[] { ' ' }, 2);
+			if (spl.Length==1) return long.Parse(s);
+
+			var c = double.Parse(spl[0]);
+			var scale_i = byte_scales.AsReadOnly().IndexOf(spl[1]);
+			if (scale_i==-1) throw new FormatException($"[{spl[1]}] is not a byte scale");
+			for (var i = 0; i< scale_i; ++i)
+				c *= 1024;
+
+			return (long)c;
+		}
+
+		public static bool operator <(ByteCount c1, ByteCount c2) => c1.in_bytes < c2.in_bytes;
+		public static bool operator >(ByteCount c1, ByteCount c2) => c1.in_bytes > c2.in_bytes;
+
+		public static ByteCount operator +(ByteCount c1, ByteCount c2) => c1.in_bytes + c2.in_bytes;
+
+		public override string ToString()
+		{
+			var c = (double)in_bytes;
+
+			var byte_scales_enmr = byte_scales.AsReadOnly().GetEnumerator();
+			if (!byte_scales_enmr.MoveNext()) throw new NotImplementedException();
+			var byte_scale = byte_scales_enmr.Current;
+
+			while (true)
+			{
+				if (c<scale_up_threshold) break;
+				if (!byte_scales_enmr.MoveNext()) break;
+				byte_scale = byte_scales_enmr.Current;
+				c /= 1024;
+			}
+
+			return $"{c:.##} {byte_scale}";
+		}
+
+	}
+
 	public sealed class OneToManyLock
 	{
 		private readonly object sync_lock = new();
@@ -24,13 +73,15 @@ namespace Dashboard
 		public OneToManyLock() { }
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T OneLocked<T>(Func<T> act)
+		public T OneLocked<T>(Func<T> act, bool with_priority = true)
 		{
 			one_wh.Reset();
-			// Set before fully locking so "ManyLocked"
-			// will not continue incrementing "doing_many"
-			// In effect gives priority to "OneLocked"
-			Interlocked.Increment(ref doing_one);
+			var need_dec = false;
+			if (with_priority)
+			{
+				Interlocked.Increment(ref doing_one);
+				need_dec = true;
+			}
 			Monitor.Enter(sync_lock);
 			try
 			{
@@ -40,17 +91,23 @@ namespace Dashboard
 					many_wh.Wait();
 					Monitor.Enter(sync_lock);
 				}
+				if (!with_priority)
+				{
+					Interlocked.Increment(ref doing_one);
+					need_dec = true;
+				}
 				return act();
 			}
 			finally
 			{
-				Interlocked.Decrement(ref doing_one);
+				if (need_dec)
+					Interlocked.Decrement(ref doing_one);
 				one_wh.Set();
 				Monitor.Exit(sync_lock);
 			}
 		}
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void OneLocked(Action act) => OneLocked(() => { act(); return 0; });
+		public void OneLocked(Action act, bool with_priority = true) => OneLocked(() => { act(); return 0; }, with_priority);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public T ManyLocked<T>(Func<T> act)
