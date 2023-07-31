@@ -10,4 +10,17 @@
 		WindowState="Maximized"
 		
 		>
+	<DockPanel>
+
+		<Border x:Name="b_wjl_cont" BorderBrush="Black" BorderThickness="1" DockPanel.Dock="Top" />
+
+		<!--<TextBlock x:Name="temp1" DockPanel.Dock="Top" />-->
+
+		<!--<TextBlock x:Name="temp2" DockPanel.Dock="Top" />-->
+
+		<ScrollViewer VerticalScrollBarVisibility = "Auto">
+			<StackPanel x:Name="sp_pending" />
+		</ScrollViewer>
+		
+	</DockPanel>
 </Window>

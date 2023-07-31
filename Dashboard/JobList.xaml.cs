@@ -15,26 +15,17 @@ namespace Dashboard
 
 	public partial class JobList : Window
 	{
+		//[ThreadStatic]
+		//public static TextBlock? t1, t2;
 
 		public JobList(CustomThreadPool thr_pool)
 		{
 			InitializeComponent();
+			//t1 = temp1;
+			//t2 = temp2;
 
 			var wjl = new WorkingJobList(thr_pool.MaxJobCount);
-
-			var sp_pending = new StackPanel();
-
-			Content = new StackPanel
-			{
-				Children = {
-					new Border{
-						Child = wjl,
-						BorderBrush = Brushes.Black,
-						BorderThickness = new Thickness(1),
-					},
-					sp_pending,
-				}
-			};
+			b_wjl_cont.Child = wjl;
 
 			var is_open = true;
 			var change_wh = new System.Threading.ManualResetEventSlim(false);
@@ -168,7 +159,7 @@ namespace Dashboard
 		};
 		private static TextBlock MakeTB() => new()
 		{
-			Margin = new Thickness(2),
+			Padding = new Thickness(2),
 			Background = Brushes.LightGray,
 		};
 
@@ -185,11 +176,11 @@ namespace Dashboard
 			content_tbs = Enumerable.Range(0, max_jobs).Select(_ => (MakeTB(), MakeTB())).ToArray();
 
 			all_visuals = Enumerable.Empty<UIElement>()
-				.Concat(hor_lines)
-				.Concat(ver_lines)
 				.Concat(header_rects)
 				.Concat(content_tbs.Select(t => t.name))
 				.Concat(content_tbs.Select(t => t.subjob))
+				.Concat(hor_lines)
+				.Concat(ver_lines)
 				.ToArray();
 			foreach (var v in all_visuals)
 			{
@@ -218,19 +209,21 @@ namespace Dashboard
 
 		public void ChangeJob(int ind, string? name)
 		{
+			if (content_tbs[ind].name.DesiredSize.Width >= max_name_w)
+				InvalidateMeasure();
 			content_tbs[ind].name.Text = name??"";
 			content_tbs[ind].name.Background =
 				name is null ? Brushes.LightGray : Brushes.Transparent;
 			if (name is null) ChangeSubJob(ind, null);
-			InvalidateMeasure();
 		}
 
 		public void ChangeSubJob(int ind, string? subjob)
 		{
+			if (content_tbs[ind].subjob.DesiredSize.Width >= max_subjob_w)
+				InvalidateMeasure();
 			content_tbs[ind].subjob.Text = subjob??"";
 			content_tbs[ind].subjob.Background =
 				subjob is null ? Brushes.LightGray : Brushes.Transparent;
-			InvalidateMeasure();
 		}
 
 		protected override int VisualChildrenCount => all_visuals.Length;
@@ -241,6 +234,7 @@ namespace Dashboard
 		private double max_subjob_w = 0;
 		protected override Size MeasureOverride(Size sz)
 		{
+			//var sw = Stopwatch.StartNew();
 			var inf_sz = new Size(double.PositiveInfinity, double.PositiveInfinity);
 
 			max_header_w = 0;
@@ -263,11 +257,11 @@ namespace Dashboard
 					max_header_w = h;
 
 			}
-			foreach (var (name_tb, subjob_tb) in content_tbs)
-			{
-				name_tb.Measure(new(max_name_w, max_header_w));
-				subjob_tb.Measure(new(max_name_w, max_header_w));
-			}
+			//foreach (var (name_tb, subjob_tb) in content_tbs)
+			//{
+			//	name_tb.Measure(new(max_name_w, max_header_w));
+			//	subjob_tb.Measure(new(max_name_w, max_header_w));
+			//}
 
 			foreach (var header_r in header_rects)
 			{
@@ -280,11 +274,13 @@ namespace Dashboard
 				Math.Min(max_header_w+1+max_name_w+1+max_subjob_w, sz.Width),
 				(max_header_w+1)*content_tbs.Length - 1
 			);
+			//JobList.t1!.Text = sw.Elapsed.ToString();
 			return sz;
 		}
 
 		protected override Size ArrangeOverride(Size sz)
 		{
+			//var sw = Stopwatch.StartNew();
 			var header_w = max_header_w;
 			var name_w = max_name_w;
 			var subjob_w = max_subjob_w;
@@ -311,26 +307,35 @@ namespace Dashboard
 				}
 			}
 
+			name_w = Math.Ceiling(name_w);
+			subjob_w = Math.Ceiling(subjob_w);
+
 			{
 				var name_x = header_w;
+				name_x += 1;
 				var subjob_x = name_x + name_w;
+				subjob_x += 1;
 
 				ver_lines[0].X1 = name_x; ver_lines[0].Y1 = 0;
 				ver_lines[0].X2 = name_x; ver_lines[0].Y2 = sz.Height;
+				//sw.Stop();
 				ver_lines[0].Arrange(new(sz));
-				name_x += 1;
+				//sw.Start();
 
 				ver_lines[1].X1 = subjob_x; ver_lines[1].Y1 = 0;
 				ver_lines[1].X2 = subjob_x; ver_lines[1].Y2 = sz.Height;
+				//sw.Stop();
 				ver_lines[1].Arrange(new(sz));
-				subjob_x += 1;
+				//sw.Start();
 
 				var y = 0;
 				foreach (var (header_r, (name_tb, subjob_tb)) in header_rects.Zip(content_tbs))
 				{
+					//sw.Stop();
 					header_r.Arrange(new(0, y, header_w, header_w));
 					name_tb.Arrange(new(name_x, y, name_w, header_w));
 					subjob_tb.Arrange(new(subjob_x, y, subjob_w, header_w));
+					//sw.Start();
 					y += header_w+1;
 				}
 			}
@@ -342,7 +347,9 @@ namespace Dashboard
 					y += header_w+1;
 					l.Y1 = y; l.X1 = 0;
 					l.Y2 = y; l.X2 = sz.Width;
+					//sw.Stop();
 					l.Arrange(new(sz));
+					//sw.Start();
 				}
 			}
 
@@ -350,6 +357,7 @@ namespace Dashboard
 				header_w +1+ name_w +1+ subjob_w,
 				(max_header_w+1)*content_tbs.Length - 1
 			);
+			//JobList.t2!.Text = sw.Elapsed.ToString();
 			return sz;
 		}
 
