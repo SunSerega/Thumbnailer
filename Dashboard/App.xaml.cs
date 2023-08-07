@@ -24,7 +24,8 @@ namespace Dashboard
 			SessionEnding += (o, e) =>
 			{
 				if (IsShuttingDown) return;
-                MessageBox.Show($"Application.Shutdown instead of App.Shutdown");
+				if (e.ReasonSessionEnding != ReasonSessionEnding.Shutdown)
+					MessageBox.Show($"Application.Shutdown instead of App.Shutdown");
 				IsShuttingDown = true;
 			};
 		}

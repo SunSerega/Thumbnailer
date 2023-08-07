@@ -144,25 +144,30 @@ namespace Thumbnailer
 			try
 			{
 
-				string res_fname;
-				for (int try_ind = 0; ; ++try_ind)
-					try
-					{
-						using var client = new System.IO.Pipes.NamedPipeClientStream("Dashboard for Thumbnailer");
-						client.Connect();
-						var bw = new BinaryWriter(client);
-						var br = new BinaryReader(client);
-						bw.Write(2); // GimmiThumb
-						bw.Write(curr_file_name!);
-						bw.Flush();
-						res_fname = br.ReadString();
-						break;
-					}
-					catch (IOException) {
-						if (try_ind>=100) throw;
-					}
-
-				var loaded_bmp = LoadBitmap(res_fname);
+				Bitmap loaded_bmp;
+				{
+					var load_exc_lst = new System.Collections.Generic.List<Exception>();
+					while (true)
+						try
+						{
+							using var client = new System.IO.Pipes.NamedPipeClientStream("Dashboard for Thumbnailer");
+							client.Connect();
+							var bw = new BinaryWriter(client);
+							var br = new BinaryReader(client);
+							bw.Write(2); // GimmiThumb
+							bw.Write(curr_file_name!);
+							bw.Flush();
+							var res_fname = br.ReadString();
+							loaded_bmp = LoadBitmap(res_fname);
+							break;
+						}
+						catch (Exception e)
+						{
+							load_exc_lst.Add(e);
+							if (load_exc_lst.Count<100) continue;
+							throw new AggregateException(load_exc_lst.ToArray());
+						}
+				}
 
 				var format = PixelFormat.Format32bppArgb;
 				var res_bmp = loaded_bmp;
