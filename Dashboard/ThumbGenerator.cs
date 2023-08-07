@@ -850,16 +850,22 @@ namespace Dashboard
 		public ICachedFileInfo Generate(string fname, Action<ICachedFileInfo> on_regenerated, bool force_regen) => purge_lock.ManyLocked(() =>
 		{
 
-			var cfi = files.GetOrAdd(fname, fname =>
-			{
-				while (true)
+			if (!files.TryGetValue(fname, out var cfi))
+				// Cannot add concurently, because .GetOrAdd can create
+				// multiple instances of cfi for the same fname in different threads
+				lock (files)
 				{
-					var id = System.Threading.Interlocked.Increment(ref last_used_id);
-					var cache_file_dir = cache_dir.CreateSubdirectory(id.ToString());
-					if (cache_file_dir.EnumerateFileSystemInfos().Any()) continue;
-					return new(id, cache_file_dir.FullName, InvokeCacheSizeChanged, fname);
+					if (!files.TryGetValue(fname, out cfi))
+						while (true)
+						{
+							var id = System.Threading.Interlocked.Increment(ref last_used_id);
+							var cache_file_dir = cache_dir.CreateSubdirectory(id.ToString());
+							if (cache_file_dir.EnumerateFileSystemInfos().Any()) continue;
+							cfi = new(id, cache_file_dir.FullName, InvokeCacheSizeChanged, fname);
+							if (!files.TryAdd(fname, cfi))
+								throw new InvalidOperationException();
+						}
 				}
-			});
 
 			lock (cfi) cfi.GenerateThumb(w => thr_pool.AddJob($"Generating thumb for: {fname}", w), on_regenerated, force_regen);
 
