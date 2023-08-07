@@ -1,8 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 	
 	<PropertyGroup>
-		<OutputType>Exe</OutputType>
+		<OutputType>WinExe</OutputType>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
+		<UseWPF>True</UseWPF>
 	</PropertyGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">

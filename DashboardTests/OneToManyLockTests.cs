@@ -39,7 +39,7 @@ namespace Dashboard.Tests
 			var done_many = 0;
 
 			for (var i = 0; i<one_thr_c; ++i)
-				threads.Add(new Thread(() => Utils.HandleExtension(() =>
+				threads.Add(new Thread(() => Utils.HandleException(() =>
 				{
 					Thread.Sleep(1000);
 					for (int i = 0; i<one_rep_c; ++i)
@@ -61,7 +61,7 @@ namespace Dashboard.Tests
 				});
 
 			for (var i = 0; i<many_thr_c; ++i)
-				threads.Add(new Thread(() => Utils.HandleExtension(() =>
+				threads.Add(new Thread(() => Utils.HandleException(() =>
 				{
 					Thread.Sleep(1000);
 					for (int i = 0; i<many_rep_c; ++i)
@@ -85,7 +85,7 @@ namespace Dashboard.Tests
 			foreach (var thr in threads)
 				thr.Start();
 
-			var win_thr = new Thread(() => Utils.HandleExtension(() =>
+			var win_thr = new Thread(() => Utils.HandleException(() =>
 			{
 				static UIElement make_otp_line(string name, out TextBlock tb) => new Viewbox
 				{

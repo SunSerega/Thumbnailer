@@ -274,12 +274,12 @@ namespace Dashboard
 	public static class Utils
 	{
 
-		public static void HandleExtension(Exception e)
+		public static void HandleException(Exception e)
 		{
 			CustomMessageBox.Show("ERROR", e.ToString());
 		}
 
-		public static void HandleExtension(Action act)
+		public static void HandleException(Action act)
 		{
 			try
 			{
@@ -287,11 +287,11 @@ namespace Dashboard
 			}
 			catch (Exception e)
 			{
-				HandleExtension(e);
+				HandleException(e);
 			}
 		}
 
-		public static T? HandleExtension<T>(Func<T> act, T? no_res = default)
+		public static T? HandleException<T>(Func<T> act, T? no_res = default)
 		{
 			try
 			{
@@ -299,7 +299,7 @@ namespace Dashboard
 			}
 			catch (Exception e)
 			{
-				HandleExtension(e);
+				HandleException(e);
 				return no_res;
 			}
 		}

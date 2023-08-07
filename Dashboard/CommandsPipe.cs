@@ -51,7 +51,7 @@ namespace Dashboard
 					var sw = System.Diagnostics.Stopwatch.StartNew();
 
 					//Separate thread, in case old process accepts message, but then hangs
-					new System.Threading.Thread(() => Utils.HandleExtension(() =>
+					new System.Threading.Thread(() => Utils.HandleException(() =>
 					{
 						using var client = new NamedPipeClientStream(name);
 						try
@@ -131,7 +131,7 @@ namespace Dashboard
 					}
 					catch (Exception e)
 					{
-						Utils.HandleExtension(e);
+						Utils.HandleException(e);
 					}
 			})
 			{

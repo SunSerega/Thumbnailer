@@ -350,7 +350,7 @@ namespace Dashboard
 					}
 					catch (Exception e)
 					{
-						Utils.HandleExtension(e);
+						Utils.HandleException(e);
 					}
 			}
 

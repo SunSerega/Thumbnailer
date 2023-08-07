@@ -56,7 +56,7 @@ namespace Dashboard
 			}
 			catch (Exception e)
 			{
-				Utils.HandleExtension(e);
+				Utils.HandleException(e);
 				Environment.Exit(-1);
 			}
 
@@ -107,12 +107,12 @@ namespace Dashboard
 
 			slider_active_job_count.Maximum = main_thr_pool.MaxJobCount;
 			main_thr_pool.ActiveJobsCountChanged += () =>
-				Dispatcher.InvokeAsync(() => Utils.HandleExtension(() =>
+				Dispatcher.InvokeAsync(() => Utils.HandleException(() =>
 					slider_active_job_count.Value = main_thr_pool.ActiveJobsCount
 				));
 
 			main_thr_pool.PendingJobCountChanged += () =>
-				Dispatcher.InvokeAsync(() => Utils.HandleExtension(() =>
+				Dispatcher.InvokeAsync(() => Utils.HandleException(() =>
 					 tb_pending_jobs_count.Text = main_thr_pool.PendingJobCount.ToString()
 				));
 
@@ -134,13 +134,20 @@ namespace Dashboard
 				e.Handled = !FileExtList.Validate(Clipboard.GetText());
 			});
 
-			b_add_ext.Click += (o, e) =>
+			void add_ext()
 			{
+				if (tb_new_ext.Text=="") return;
 				_=new AllowedExt(tb_new_ext.Text, allowed_ext_container);
 				tb_new_ext.Clear();
+			}
+			tb_new_ext.KeyDown += (o, e) =>
+			{
+				if (e.Key == Key.Enter)
+					add_ext();
 			};
+			b_add_ext.Click += (_, _) => add_ext();
 
-			b_check_n_commit.Click += (o, e) =>
+			b_check_n_commit.Click += (o, e) => Utils.HandleException(()=>
 			{
 
 				var sb = new StringBuilder();
@@ -170,22 +177,27 @@ namespace Dashboard
 
 				if (CustomMessageBox.ShowYesNo("Confirm changes", sb.ToString(), this))
 				{
-					var reg_ext_args = new System.Collections.Generic.List<string>();
+					var reg_ext_args = new List<string>();
 					if (add.Any()) reg_ext_args.Add("add:"+string.Join(';', add));
 					if (rem.Any()) reg_ext_args.Add("rem:"+string.Join(';', rem));
 					var psi = new System.Diagnostics.ProcessStartInfo(@"RegExtController.exe", string.Join(' ', reg_ext_args))
 					{
+						UseShellExecute = true,
+						Verb = "runas",
+						WorkingDirectory = Environment.CurrentDirectory,
 						CreateNoWindow = true,
-						UseShellExecute = false,
+						//UseShellExecute = false,
 						//RedirectStandardOutput = true,
-						RedirectStandardError = true,
+						//RedirectStandardError = true,
 					};
 
 					var p = System.Diagnostics.Process.Start(psi)!;
 
-					var err = p.StandardError.ReadToEnd();
+					//var err = p.StandardError.ReadToEnd();
+					p.WaitForExit();
 					if (p.ExitCode != 0)
-						throw new Exception($"ExitCode={p.ExitCode}; err:\n{err}");
+						//throw new Exception($"ExitCode={p.ExitCode}; err:\n{err}");
+						throw new Exception($"ExitCode={p.ExitCode}");
 
 					AllowedExt.CommitChanges();
 				}
@@ -196,7 +208,7 @@ namespace Dashboard
 					foreach (var ext in add)
 						allowed_ext_container.Children.Cast<AllowedExt>().Single(ae => ae.tb_name.Text == ext).Delete(allowed_ext_container);
 				}
-			};
+			});
 
 			foreach (var ext in Settings.Root.AllowedExts)
 				_=new AllowedExt(ext, allowed_ext_container);
@@ -289,13 +301,13 @@ namespace Dashboard
 				b_reload_compare.IsEnabled = false;
 				sp_gen_controls.Visibility = Visibility.Hidden;
 			}
-			void begin_thumb_compare(string fname) => Utils.HandleExtension(() =>
+			void begin_thumb_compare(string fname) => Utils.HandleException(() =>
 			{
 				clear_thumb_compare_file();
 				var compare_id = ++current_compare_id;
 
 				thumb_compare_org.Set(COMManip.GetExistingThumbFor(fname));
-				var cfi = thumb_gen.Generate(fname, cfi => Dispatcher.InvokeAsync(() => Utils.HandleExtension(() =>
+				var cfi = thumb_gen.Generate(fname, cfi => Dispatcher.InvokeAsync(() => Utils.HandleException(() =>
 				{
 					if (compare_id != current_compare_id) return;
 					thumb_compare_gen.Set(cfi.CurrentThumbBmp);

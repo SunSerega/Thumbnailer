@@ -103,7 +103,7 @@ namespace Dashboard
 				if (owner.Owner != null)
 					throw new InvalidOperationException();
 				string? res = null;
-				var thr = new System.Threading.Thread(() => Utils.HandleExtension(() =>
+				var thr = new System.Threading.Thread(() => Utils.HandleException(() =>
 					res = Show(title, content, owner, button_names)
 				))
 				{

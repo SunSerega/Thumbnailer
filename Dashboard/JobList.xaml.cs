@@ -35,7 +35,7 @@ namespace Dashboard
 				change_wh.Set();
 			};
 
-			new System.Threading.Thread(() => Utils.HandleExtension(() => thr_pool.ObserveLoop(change_wh.Set, observer =>
+			new System.Threading.Thread(() => Utils.HandleException(() => thr_pool.ObserveLoop(change_wh.Set, observer =>
 			{
 				var pending_tb_map = new Dictionary<object, TextBlock>();
 

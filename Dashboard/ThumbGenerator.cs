@@ -53,7 +53,7 @@ namespace Dashboard
 			var t_otp = p.StandardOutput.ReadToEndAsync();
 			var t_err = p.StandardError.ReadToEndAsync();
 
-			_=System.Threading.Tasks.Task.Run(() => Utils.HandleExtension(() =>
+			_=System.Threading.Tasks.Task.Run(() => Utils.HandleException(() =>
 			{
 				if (p.WaitForExit(TimeSpan.FromSeconds(10)))
 					return;
@@ -343,7 +343,7 @@ namespace Dashboard
 					}
 					catch (Exception e)
 					{
-						Utils.HandleExtension(e);
+						Utils.HandleException(e);
 						// unrecoverable, but also unimaginable
 						Console.Beep(); Console.Beep(); Console.Beep();
 						App.Current.Dispatcher.Invoke(() => App.Current.Shutdown(-1));
@@ -397,7 +397,7 @@ namespace Dashboard
 						{
 							SetTempSource(CommonThumbSources.Waiting);
 							System.Threading.Tasks.Task.Delay(total_wait-waited)
-								.ContinueWith(t => Utils.HandleExtension(
+								.ContinueWith(t => Utils.HandleException(
 									() => GenerateThumb(add_job, on_regenerated, force_regen)
 								));
 							return;
@@ -918,7 +918,7 @@ namespace Dashboard
 				}
 				catch (Exception e)
 				{
-					Utils.HandleExtension(e);
+					Utils.HandleException(e);
 				}
 			last_used_id = 0;
 			InvokeCacheSizeChanged(0);
