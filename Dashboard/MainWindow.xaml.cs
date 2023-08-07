@@ -353,14 +353,6 @@ namespace Dashboard
 					}
 					select_source(cfi.ChosenThumbOptionInd);
 
-					//next_thumb_compare_update = () =>
-					//{
-					//	select_source(cfi.ChosenThumbOptionInd);
-					//	foreach (var b in bts)
-					//		sp_vid_stream_buttons.Children.Add(b);
-					//};
-					//thump_compare_updater.Trigger(TimeSpan.Zero, false);
-
 				})), true);
 				thumb_compare_gen.Set(cfi.CurrentThumbBmp);
 				grid_thumb_compare.HorizontalAlignment = HorizontalAlignment.Center;
