@@ -8,8 +8,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Test", "Test\Test.csproj", 
 		{9FFB21D9-F687-46C4-B2BF-5BC7F3AB844A} = {9FFB21D9-F687-46C4-B2BF-5BC7F3AB844A}
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FFmpeg.NET", "C:\Users\SunMachine\Desktop\0\FFmpeg.NET\src\FFmpeg.NET\FFmpeg.NET.csproj", "{E79430B6-9781-4AA1-A20C-A13068137B15}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "COM", "COM\COM.csproj", "{9FFB21D9-F687-46C4-B2BF-5BC7F3AB844A}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dashboard", "Dashboard\Dashboard.csproj", "{4A155CEC-710C-4525-96FE-77E64AB14C85}"
@@ -23,7 +21,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RegExtController", "RegExtController\RegExtController.csproj", "{0237FD5D-595D-4577-A05A-D58CC43C849E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DashboardTests", "DashboardTests\DashboardTests.csproj", "{17F0F7A7-767C-47D7-B430-0F4ED461FB22}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DashboardTests", "DashboardTests\DashboardTests.csproj", "{17F0F7A7-767C-47D7-B430-0F4ED461FB22}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -35,10 +33,6 @@ Global
 		{6EB65B99-D3C3-4488-A29E-C086C7069361}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6EB65B99-D3C3-4488-A29E-C086C7069361}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6EB65B99-D3C3-4488-A29E-C086C7069361}.Release|Any CPU.Build.0 = Release|Any CPU
-		{E79430B6-9781-4AA1-A20C-A13068137B15}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{E79430B6-9781-4AA1-A20C-A13068137B15}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{E79430B6-9781-4AA1-A20C-A13068137B15}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{E79430B6-9781-4AA1-A20C-A13068137B15}.Release|Any CPU.Build.0 = Release|Any CPU
 		{9FFB21D9-F687-46C4-B2BF-5BC7F3AB844A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{9FFB21D9-F687-46C4-B2BF-5BC7F3AB844A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9FFB21D9-F687-46C4-B2BF-5BC7F3AB844A}.Release|Any CPU.ActiveCfg = Release|Any CPU

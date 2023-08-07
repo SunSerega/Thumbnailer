@@ -50,6 +50,10 @@ namespace Dashboard
 				});
 
 			}
+			catch (LoadCanceledException)
+			{
+				Environment.Exit(-1);
+			}
 			catch (Exception e)
 			{
 				Utils.HandleExtension(e);
@@ -262,6 +266,16 @@ namespace Dashboard
 		{
 			var thumb_compare_all = new[] { thumb_compare_org, thumb_compare_gen };
 
+			Action<double>? vid_timestamp_handler = null;
+			slider_vid_timestamp.ValueChanged += (_, _) =>
+				vid_timestamp_handler?.Invoke(slider_vid_timestamp.Value);
+
+			Action? next_thumb_compare_update = null;
+			var thump_compare_updater = new DelayedUpdater(
+				() => next_thumb_compare_update?.Invoke(),
+				"thumb compare update"
+			);
+
 			int current_compare_id = 0;
 			string? curr_compare_fname = null;
 			void clear_thumb_compare_file()
@@ -272,6 +286,8 @@ namespace Dashboard
 				c_thumb_compare_1.VerticalAlignment = VerticalAlignment.Stretch;
 				c_thumb_compare_2.VerticalAlignment = VerticalAlignment.Stretch;
 				curr_compare_fname = null;
+				b_reload_compare.IsEnabled = false;
+				sp_gen_controls.Visibility = Visibility.Hidden;
 			}
 			void begin_thumb_compare(string fname) => Utils.HandleExtension(() =>
 			{
@@ -279,17 +295,82 @@ namespace Dashboard
 				var compare_id = ++current_compare_id;
 
 				thumb_compare_org.Set(COMManip.GetExistingThumbFor(fname));
-				thumb_gen.Generate(fname, thumb_fname => Dispatcher.InvokeAsync(() => Utils.HandleExtension(() =>
+				var cfi = thumb_gen.Generate(fname, cfi => Dispatcher.InvokeAsync(() => Utils.HandleExtension(() =>
 				{
 					if (compare_id != current_compare_id) return;
-					thumb_compare_gen.Set(Utils.LoadUncachedBitmap(thumb_fname));
+					thumb_compare_gen.Set(cfi.CurrentThumbBmp);
+
+					var sources = cfi.ThumbSources;
+					if (sources.Count==1 && sources[0].Length==TimeSpan.Zero) return;
+					sp_gen_controls.Visibility = Visibility.Visible;
+
+					var bts = new System.Windows.Controls.Button[sources.Count];
+					sp_vid_stream_buttons.Children.Clear();
+					for (var i=0; i<sources.Count; i++)
+					{
+						bts[i] = new()
+						{
+							Margin = new Thickness(0,0,5,0),
+							Content = sources[i].Name,
+						};
+						{
+							var ind = i;
+							bts[i].Click += (_, _) =>
+							{
+								next_thumb_compare_update = () => select_source(ind);
+								thump_compare_updater.Trigger(TimeSpan.Zero, false);
+							};
+						}
+						sp_vid_stream_buttons.Children.Add(bts[i]);
+					}
+
+					void select_source(int new_ind)
+					{
+						vid_timestamp_handler = pos =>
+						{
+							tb_vid_timestamp.Text = (slider_vid_timestamp.Value * sources[new_ind].Length).ToString();
+							next_thumb_compare_update = () =>
+							{
+								cfi.ApplySourceAt(false, _ => { }, new_ind, pos, out _);
+								Dispatcher.Invoke(() =>
+									thumb_compare_gen.Set(cfi.CurrentThumbBmp)
+								);
+							};
+							thump_compare_updater.Trigger(TimeSpan.Zero, false);
+						};
+						var old_ind = cfi.ChosenThumbOptionInd;
+						cfi.ApplySourceAt(false, _ => { }, new_ind, null, out var initial_pos);
+						Dispatcher.Invoke(() =>
+						{
+							//slider_vid_timestamp.Value = -1;
+							slider_vid_timestamp.Value = initial_pos;
+							thumb_compare_gen.Set(cfi.CurrentThumbBmp);
+							tb_vid_timestamp.Visibility = slider_vid_timestamp.Visibility =
+								sources[new_ind].Length != TimeSpan.Zero ? Visibility.Visible : Visibility.Hidden;
+							bts[old_ind].IsEnabled = true;
+							bts[new_ind].IsEnabled = false;
+						});
+					}
+					select_source(cfi.ChosenThumbOptionInd);
+
+					//next_thumb_compare_update = () =>
+					//{
+					//	select_source(cfi.ChosenThumbOptionInd);
+					//	foreach (var b in bts)
+					//		sp_vid_stream_buttons.Children.Add(b);
+					//};
+					//thump_compare_updater.Trigger(TimeSpan.Zero, false);
+
 				})), true);
+				thumb_compare_gen.Set(cfi.CurrentThumbBmp);
 				grid_thumb_compare.HorizontalAlignment = HorizontalAlignment.Center;
 				c_thumb_compare_1.VerticalAlignment = VerticalAlignment.Bottom;
 				c_thumb_compare_2.VerticalAlignment = VerticalAlignment.Top;
 				Settings.Root.LastComparedFile = fname;
 				curr_compare_fname = fname;
+				b_reload_compare.IsEnabled = true;
 			});
+			//TODO Use everything search
 			string[] extract_file_lst(IEnumerable<string> inp) =>
 				inp.SelectMany(path =>
 				{
@@ -308,7 +389,7 @@ namespace Dashboard
 				}
 
 				foreach (var fname in lst)
-					thumb_gen.Generate(fname, _ => { }, true);
+					_ = thumb_gen.Generate(fname, _ => { }, true);
 
 			}
 
@@ -344,6 +425,12 @@ namespace Dashboard
 
 			};
 
+			b_reload_compare.Click += (o, e) =>
+			{
+				if (curr_compare_fname is null) return;
+				begin_thumb_compare(curr_compare_fname);
+			};
+
 			(string[] inp, string[] lst)? drag_cache = null;
 			void drag_handler(object o, DragEventArgs e)
 			{
@@ -369,17 +456,8 @@ namespace Dashboard
 			grid_thumb_compare.Drop += (o, e) =>
 			{
 				var lst = drag_cache!.Value.lst;
+				apply_file_lst(lst);
 				e.Handled = true;
-
-				if (lst.Length==1)
-				{
-					begin_thumb_compare(lst.Single());
-					return;
-				}
-
-				foreach (var fname in lst)
-					thumb_gen.Generate(fname, _ => { }, true);
-
 			};
 
 			Closing += (o, e) => clear_thumb_compare_file();

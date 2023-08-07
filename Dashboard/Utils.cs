@@ -45,6 +45,13 @@ namespace Dashboard
 		{
 			var c = (double)in_bytes;
 
+			var sign = "";
+			if (c<0)
+			{
+				c = -c;
+				sign = "-";
+			}
+
 			var byte_scales_enmr = byte_scales.AsReadOnly().GetEnumerator();
 			if (!byte_scales_enmr.MoveNext()) throw new NotImplementedException();
 			var byte_scale = byte_scales_enmr.Current;
@@ -57,7 +64,7 @@ namespace Dashboard
 				c /= 1024;
 			}
 
-			return $"{c:.##} {byte_scale}";
+			return $"{sign}{c:.##} {byte_scale}";
 		}
 
 	}
@@ -242,6 +249,26 @@ namespace Dashboard
 			};
 
 		}
+	}
+
+	public sealed class LoadCanceledException : Exception { }
+
+	public static class Handler<TErr>
+		where TErr: Exception
+	{
+
+		public static T Try<T>(Func<T> body, Func<TErr,T> handle, Func<TErr, bool>? cond = null)
+		{
+			try
+			{
+				return body();
+			}
+			catch (TErr e) when (cond is null || cond(e))
+			{
+				return handle(e);
+			}
+		}
+
 	}
 
 	public static class Utils

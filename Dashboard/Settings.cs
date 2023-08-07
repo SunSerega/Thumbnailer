@@ -10,7 +10,8 @@ namespace Dashboard
 
 	public sealed class RootSettings : Settings
 	{
-		public RootSettings() : base("Settings (Dashboard)") { }
+		public RootSettings()
+			: base("Settings (Dashboard)") { }
 
 		protected override string SettingsDescription() => $"Root settings";
 
@@ -43,40 +44,77 @@ namespace Dashboard
 
 	public sealed class FileSettings : Settings
 	{
-		public FileSettings(string cache_file_path) : base(Path.Combine(cache_file_path, "Settings")) { }
+		public FileSettings(string cache_file_path)
+			: base(Path.Combine(cache_file_path, "Settings")) { }
 
-		protected override string SettingsDescription() => $"Settings of [{FilePath}]";
+		protected override string SettingsDescription() => $"Settings of [{InpPath}]";
 
-		public string? FilePath
+		public string? InpPath
 		{
-			get => GetSetting(nameof(FilePath), null as string);
-			set => SetSetting(nameof(FilePath), value);
+			get => GetSetting(nameof(InpPath), null as string);
+			set => SetSetting(nameof(InpPath), value);
 		}
 
-		public DateTime LastUpdate
+		public DateTime LastInpChangeTime
 		{
-			get => GetSetting(nameof(LastUpdate), default(DateTime));
-			set => SetSetting(nameof(LastUpdate), value);
+			get => GetSetting(nameof(LastInpChangeTime), DateTime.MinValue);
+			set => SetSetting(nameof(LastInpChangeTime), value);
 		}
 
-		public string? ThumbPath
+		public DateTime LastCacheUseTime
 		{
-			get => GetSetting(nameof(ThumbPath), null as string);
-			set => SetSetting(nameof(ThumbPath), value);
-		}
-
-		public string LastRecalcTime
-		{
-			//get => GetSetting(nameof(LastRecalcTime), null as string);
-			set => SetSetting(nameof(LastRecalcTime), value);
-		}
-
-		public DateTime LastUsedTime
-		{
-			get => GetSetting(nameof(LastUsedTime), DateTime.MinValue);
-			set => SetSetting(nameof(LastUsedTime), value);
+			get => GetSetting(nameof(LastCacheUseTime), DateTime.MinValue);
+			set => SetSetting(nameof(LastCacheUseTime), value);
 		}
 		
+		public string? CurrentThumb
+		{
+			get => GetSetting(nameof(CurrentThumb), null as string);
+			set => SetSetting(nameof(CurrentThumb), value);
+		}
+
+		public sealed class ChosenStreamPositionsInfo
+		{
+			private readonly double[] pos;
+			private const double default_pos = 0.3;
+
+			private ChosenStreamPositionsInfo(double[] pos) => this.pos=pos;
+			public ChosenStreamPositionsInfo(int c)
+			{
+				pos = new double[c];
+				Array.Fill(pos, default_pos);
+			}
+
+			public int Count => pos.Length;
+			public double this[int ind] { get => pos[ind]; set => pos[ind] = value; }
+
+			public ChosenStreamPositionsInfo Resized(int c)
+			{
+				var res = this.pos;
+				Array.Resize(ref res, c);
+				if (c > this.Count)
+					Array.Fill(res, default_pos, this.Count, c-this.Count);
+				return new(res);
+			}
+
+			public static ChosenStreamPositionsInfo Parse(string s) =>
+				new(Array.ConvertAll(s.Split(';'), double.Parse));
+
+			public override string ToString() => string.Join(';', pos);
+
+		}
+		public ChosenStreamPositionsInfo? ChosenStreamPositions
+		{
+			get => GetSetting(nameof(ChosenStreamPositions), null as ChosenStreamPositionsInfo);
+			set => SetSetting(nameof(ChosenStreamPositions), value);
+		}
+
+		public int? ChosenThumbOptionInd
+		{
+			get => GetSetting(nameof(ChosenThumbOptionInd), null as int?);
+			set => SetSetting(nameof(ChosenThumbOptionInd), value);
+		}
+
 	}
 
 	public abstract class Settings
@@ -89,14 +127,13 @@ namespace Dashboard
 		private bool is_shut_down = false;
 		public Settings(string path)
 		{
-			if (path.Contains('\\'))
-				Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 			main_save_fname = Path.GetFullPath($"{path}.dat");
 			back_save_fname = Path.GetFullPath($"{path}-Backup.dat");
+			Directory.CreateDirectory(Path.GetDirectoryName(main_save_fname)!);
 
 			if (File.Exists(back_save_fname))
 			{
-				if (!CustomMessageBox.ShowYesNo("Backup settings file exists", "Try meld main and backup settings?", new()))
+				if (!CustomMessageBox.ShowYesNo("Backup settings file exists", "Try meld main and backup settings?"))
 					Environment.Exit(-1);
 
 				System.Diagnostics.Process.Start(
@@ -140,13 +177,31 @@ namespace Dashboard
 						continue;
 					}
 
-					if (s_val is null)
-						settings.Remove(key);
-					else if (setting_type_converter.TryGetValue(prop.PropertyType, out var conv))
-						settings[key] = conv.load(s_val);
-					else
-						throw new NotImplementedException(prop.PropertyType.ToString());
+					var t = prop.PropertyType;
+					t = Nullable.GetUnderlyingType(t) ?? t;
 
+					if (!setting_type_converter.TryGetValue(t, out var conv))
+						throw new NotImplementedException(t.ToString());
+
+					if (s_val is null)
+					{
+						settings.Remove(key);
+						continue;
+					}
+
+					object o_val;
+					try
+					{
+						o_val = conv.load(s_val);
+					}
+					catch (FormatException)
+					{
+						if (CustomMessageBox.ShowYesNo($"Key=[{key}], val=[{s_val}] could not be loaded as [{t}]", $"Continue anyway?"))
+							continue;
+						App.Current.Shutdown();
+						throw new LoadCanceledException();
+					}
+					settings[key] = o_val;
 				}
 
 			resaver = new(() =>
@@ -158,9 +213,13 @@ namespace Dashboard
 					var sw = new StreamWriter(main_save_fname, false, enc);
 					foreach (var prop in this.GetType().GetProperties())
 					{
+						var t = prop.PropertyType;
+						t = Nullable.GetUnderlyingType(t) ?? t;
+
 						if (!settings.TryGetValue(prop.Name, out var val)) continue;
-						if (!setting_type_converter.TryGetValue(prop.PropertyType, out var conv))
-							throw new NotImplementedException(prop.PropertyType.ToString());
+						if (!setting_type_converter.TryGetValue(t, out var conv))
+							throw new NotImplementedException(t.ToString());
+
 						var s = conv.save(val);
 						sw.WriteLine($"{prop.Name}={s}");
 					}
@@ -172,19 +231,29 @@ namespace Dashboard
 
 		}
 
+		protected static (T1, T2) ParseSep<T1,T2>(string s, Func<string, T1> parse1, Func<string, T2> parse2, char sep = ':')
+		{
+			var ind = s.IndexOf(sep);
+			if (ind == -1) throw new FormatException(s);
+			return (parse1(s.Remove(ind)), parse2(s.Remove(0, ind+1)));
+		}
+
 		protected abstract string SettingsDescription();
 
-		public string GetDir() => Path.GetDirectoryName(main_save_fname)!;
+		public string GetSettingsFile() => main_save_fname;
+		public string GetSettingsDir() => Path.GetDirectoryName(main_save_fname)!;
 
 		private static KeyValuePair<Type, (Func<object, string> save, Func<string, object> load)> MakeSettingTypeConverter<T>(Func<T, string> save, Func<string, T> load) where T : notnull =>
 			new(typeof(T), new( o => save((T)o), s => load(s) ));
 		private static readonly Dictionary<Type, (Func<object, string> save, Func<string, object> load)> setting_type_converter = new[]
 		{
 			MakeSettingTypeConverter(x => x,					s => s),
-			MakeSettingTypeConverter(x => x.ToString(),			Convert.ToInt32),
-			MakeSettingTypeConverter(x => x.Ticks.ToString(),	s => new DateTime(Convert.ToInt64(s))),
+			MakeSettingTypeConverter(x => x.ToString(),         Convert.ToInt32),
+			MakeSettingTypeConverter(x => x.Ticks.ToString(),   s => new DateTime(Convert.ToInt64(s))),
+			MakeSettingTypeConverter(x => x.Ticks.ToString(),   s => new TimeSpan(Convert.ToInt64(s))),
 			MakeSettingTypeConverter(x => x.ToString(),         FileExtList.Parse),
 			MakeSettingTypeConverter(x => x.ToString(),         ByteCount.Parse),
+			MakeSettingTypeConverter(x => x.ToString(),         FileSettings.ChosenStreamPositionsInfo.Parse),
 		}.ToDictionary(kvp=>kvp.Key, kvp=>kvp.Value);
 
 		private readonly Dictionary<string, object> settings = new(StringComparer.OrdinalIgnoreCase);
@@ -206,6 +275,7 @@ namespace Dashboard
 				throw new FormatException(key);
 			lock (settings)
 			{
+				if (is_shut_down) throw new InvalidOperationException();
 #pragma warning disable CS8620 // settings value type is "object" instead of "object?"
 				var old_value = settings.GetValueOrDefault(key, null);
 #pragma warning restore CS8620
@@ -220,7 +290,8 @@ namespace Dashboard
 				else
 				{
 					settings[key] = value;
-					var s = setting_type_converter[typeof(T)].save(value);
+					var t = typeof(T);
+					var s = setting_type_converter[Nullable.GetUnderlyingType(t)??t].save(value);
 					file_line = $"{key}={s}";
 				}
 

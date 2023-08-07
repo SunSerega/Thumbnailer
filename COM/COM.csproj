@@ -14,10 +14,6 @@
 		<PackageReference Include="System.Runtime.InteropServices" Version="4.3.0" />
 	</ItemGroup>
 	
-	<ItemGroup>
-	  <ProjectReference Include="C:\Users\SunMachine\Desktop\0\FFmpeg.NET\src\FFmpeg.NET\FFmpeg.NET.csproj" />
-	</ItemGroup>
-	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
 		<Exec Command="powershell -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(OutDir)$(ProjectName)&quot; &quot;FFmpeg.NET&quot;&#xD;&#xA;powershell -File &quot;$(ProjectDir)register COM.ps1&quot; &quot;$(SolutionDir)0Deployed\$(ProjectName).comhost.dll&quot;&#xD;&#xA;powershell -File &quot;$(ProjectDir)clear cache.ps1&quot;" />
 	</Target>

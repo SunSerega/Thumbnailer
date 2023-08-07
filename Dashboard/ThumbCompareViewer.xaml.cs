@@ -9,10 +9,12 @@ namespace Dashboard
 
 	public partial class ThumbCompareViewer : UserControl
 	{
+
 		public ThumbCompareViewer()
 		{
 			InitializeComponent();
 		}
+
 		public void Set(BitmapSource? source)
 		{
 			if (source is null)

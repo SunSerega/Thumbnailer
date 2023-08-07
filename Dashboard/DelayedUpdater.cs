@@ -60,11 +60,13 @@ namespace Dashboard
 		public DelayedUpdater(Action update, string description)
 		{
 
-			new Thread(MakeThreadStart(update, ev, new(this)))
+			var thr = new Thread(MakeThreadStart(update, ev, new(this)))
 			{
 				IsBackground=true,
 				Name = $"DelayedUpdater: {description}",
-			}.Start();
+			};
+			thr.SetApartmentState(ApartmentState.STA);
+			thr.Start();
 
 		}
 

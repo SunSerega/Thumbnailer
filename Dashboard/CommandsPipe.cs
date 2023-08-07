@@ -31,18 +31,12 @@ namespace Dashboard
 			command_handlers.Add(Commands.GimmiThumb, str =>
 			{
 				var br = new BinaryReader(str);
+				var bw = new BinaryWriter(str);
+
 				var fname = br.ReadString();
+				var cfi = thumb_gen.Generate(fname, _ => { }, false);
+				bw.Write(cfi.CurrentThumbPath);
 
-				var first = true;
-				thumb_gen.Generate(fname, res =>
-				{
-					if (!first) return;
-
-					var bw = new BinaryWriter(str);
-					bw.Write(res);
-					first = false;
-
-				}, false);
 			});
 
 		public CommandsPipe()
