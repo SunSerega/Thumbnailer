@@ -57,6 +57,9 @@ namespace Dashboard
 		{
 			w.Show();
 			Visibility = Visibility.Hidden;
+			if (w.WindowState == WindowState.Minimized)
+				w.WindowState = WindowState.Maximized;
+			w.Focus();
 		}
 
 		public void ShowIco()
