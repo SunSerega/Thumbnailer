@@ -466,25 +466,7 @@ namespace Dashboard
 							var format_xml = metadata_xml.Descendants("format").Single();
 
 							var dur_s = "";
-							if (format_xml.Attribute("duration") is XAttribute global_dur_xml)
-							{
-								change_subjob("make dur string");
-								var global_dur = TimeSpan.FromSeconds(double.Parse(global_dur_xml.Value));
-								if (dur_s!="" || global_dur.TotalHours>=1)
-									dur_s += Math.Truncate(global_dur.TotalHours).ToString() + ':';
-								if (dur_s!="" || global_dur.Minutes!=0)
-									dur_s += global_dur.Minutes.ToString("00") + ':';
-								if (dur_s!="" || global_dur.Seconds!=0)
-									dur_s += global_dur.Seconds.ToString("00");
-								if (dur_s.Length<5)
-								{
-									var s = global_dur.TotalSeconds;
-									s -= Math.Truncate(s);
-									dur_s += '_'+s.ToString("N"+(5-dur_s.Length))[2..].TrimEnd('0');
-								}
-								change_subjob(null);
-							}
-
+							var max_frame_len = double.NaN;
 							foreach (var stream_xml in metadata_xml.Descendants("streams").Single().Descendants("stream"))
 							{
 								var ind = int.Parse(stream_xml.Attribute("index")!.Value);
@@ -497,6 +479,11 @@ namespace Dashboard
 								var tag_mimetype = get_tag("mimetype");
 
 								var stream_is_image = tag_mimetype!=null && tag_mimetype.StartsWith("image/");
+
+								var frame_rate_spl = stream_xml.Attribute("r_frame_rate")!.Value.Split(new[] { '/' }, 2);
+								var frame_len = int.Parse(frame_rate_spl[0]) / (double)int.Parse(frame_rate_spl[1]);
+								if (!(max_frame_len > frame_len))
+									max_frame_len = frame_len;
 
 								var l_dur_s1 = stream_xml.Attribute("duration")?.Value;
 								var l_dur_s2 = get_tag("DURATION") ?? get_tag("DURATION-eng");
@@ -556,6 +543,14 @@ namespace Dashboard
 									l_dur = TimeSpan.Zero;
 								}
 
+								if (!double.IsNaN(frame_len))
+								{
+									l_dur -= TimeSpan.FromSeconds(frame_len);
+									if (l_dur < TimeSpan.Zero) l_dur = TimeSpan.Zero;
+								}
+								else if (l_dur != TimeSpan.Zero)
+									throw new NotImplementedException();
+
 								sources.Add(new(source_name, l_dur, (pos, change_subjob) =>
 								{
 									lock (this)
@@ -602,7 +597,7 @@ namespace Dashboard
 										change_subjob("extract thumb");
 										var (extract_otp, extract_err) = RunFFmpeg(string.Join(' ', args)).Result;
 										if (!File.Exists(otp_fname))
-											throw new InvalidOperationException($"{extract_otp}\n\n===\n\n{extract_err}");
+											throw new InvalidOperationException($"\n{extract_otp}\n\n===\n\n{extract_err}");
 										if (is_attachment)
 											if (l_temps.TryRemove(attachments_dir_temp_name) is null)
 												throw new InvalidOperationException();
@@ -685,9 +680,35 @@ namespace Dashboard
 									}
 								}));
 
+								change_subjob(null);
 							}
 
-							change_subjob(null);
+							if (format_xml.Attribute("duration") is XAttribute global_dur_xml)
+							{
+								change_subjob("make dur string");
+								var global_dur = TimeSpan.FromSeconds(double.Parse(global_dur_xml.Value));
+								if (!double.IsNaN(max_frame_len))
+								{
+									global_dur -= TimeSpan.FromSeconds(max_frame_len);
+									if (global_dur < TimeSpan.Zero) global_dur = TimeSpan.Zero;
+								}
+
+								if (dur_s!="" || global_dur.TotalHours>=1)
+									dur_s += Math.Truncate(global_dur.TotalHours).ToString() + ':';
+								if (dur_s!="" || global_dur.Minutes!=0)
+									dur_s += global_dur.Minutes.ToString("00") + ':';
+								if (dur_s!="" || global_dur.Seconds!=0)
+									dur_s += global_dur.Seconds.ToString("00");
+								if (dur_s.Length<5)
+								{
+									var s = global_dur.TotalSeconds;
+									s -= Math.Truncate(s);
+									var frac_s = s.ToString("N"+(5-dur_s.Length))[2..].TrimEnd('0');
+									if (frac_s!="") dur_s += '_'+frac_s;
+								}
+								change_subjob(null);
+							}
+
 						}
 						catch (InvalidOperationException e)
 						{
@@ -830,7 +851,6 @@ namespace Dashboard
 				else
 					App.Current.Dispatcher.Invoke(()=>App.Current.Shutdown(-1));
 
-				foreach (var purge_act in purge_acts) purge_act();
 			}
 
 			//TODO Change delay, when there is more of a cache
@@ -864,6 +884,7 @@ namespace Dashboard
 							cfi = new(id, cache_file_dir.FullName, InvokeCacheSizeChanged, fname);
 							if (!files.TryAdd(fname, cfi))
 								throw new InvalidOperationException();
+							break;
 						}
 				}
 
