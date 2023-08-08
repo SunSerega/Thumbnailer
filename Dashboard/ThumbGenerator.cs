@@ -15,6 +15,7 @@ using System.Windows.Media.Imaging;
 
 namespace Dashboard
 {
+
 	public class ThumbGenerator
 	{
 		private readonly CustomThreadPool thr_pool;
@@ -220,9 +221,9 @@ namespace Dashboard
 			private sealed class GenerationTemp : IDisposable
 			{
 				private readonly string path;
-				private readonly Action<string> on_unload;
+				private readonly Action<string>? on_unload;
 
-				public GenerationTemp(string path, Action<string> on_unload)
+				public GenerationTemp(string path, Action<string>? on_unload)
 				{
 					this.path = path;
 					this.on_unload = on_unload;
@@ -230,12 +231,15 @@ namespace Dashboard
 
 				public string Path => path;
 
+				public bool IsDeletable => on_unload != null;
+
 				private bool dispose_disabled = false;
 				public void DisableDispose() => dispose_disabled = true;
 
 				public void Dispose()
 				{
 					if (dispose_disabled) return;
+					if (on_unload is null) return;
 					//TODO still broken sometimes
 					// - Reworked generation since then
 					//on_unload(path);
@@ -255,6 +259,7 @@ namespace Dashboard
 
 			}
 
+			private long FileSize(string fname) => new FileInfo(fname).Length;
 			private bool DeleteFile(string fname)
 			{
 				if (!fname.StartsWith(settings.GetSettingsDir()))
@@ -263,13 +268,14 @@ namespace Dashboard
 				{
 					if (!File.Exists(fname))
 						return false;
-					var info = new FileInfo(fname);
-					var sz = info.Length;
-					info.Delete();
+					var sz = FileSize(fname);
+					File.Delete(fname);
 					InvokeCacheSizeChanged(-sz);
 				}
 				return true;
 			}
+
+			private long DirSize(string dir) => Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).Sum(FileSize);
 			private bool DeleteDir(string dir)
 			{
 				if (!dir.StartsWith(settings.GetSettingsDir()))
@@ -278,9 +284,8 @@ namespace Dashboard
 				{
 					if (!Directory.Exists(dir))
 						return false;
-					var info = new DirectoryInfo(dir);
-					var sz = info.EnumerateFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
-					info.Delete(true);
+					var sz = DirSize(dir);
+					Directory.Delete(dir, true);
 					InvokeCacheSizeChanged(-sz);
 				}
 				return true;
@@ -288,8 +293,6 @@ namespace Dashboard
 
 			private sealed class LocalTempsList : IDisposable
 			{
-				private const string settings_temp_name = "settings";
-
 				private readonly CachedFileInfo cfi;
 				private readonly Dictionary<string, GenerationTemp> d = new();
 
@@ -330,7 +333,7 @@ namespace Dashboard
 				{
 					if (!IsRoot) throw new InvalidOperationException();
 					if (d.Count!=0) throw new InvalidOperationException();
-					d.Add(settings_temp_name, new GenerationTemp(cfi.settings.GetSettingsFile(), _ => { }));
+					d.Add("settings", new GenerationTemp(cfi.settings.GetSettingsFile(), null));
 					var tls = cfi.settings.TempsListStr;
 					if (tls is null) return;
 					foreach (var tle in tls.Split(';'))
@@ -338,13 +341,18 @@ namespace Dashboard
 						var tle_spl = tle.Split(new[] { '=' }, 2);
 						if (tle_spl.Length!=2) throw new FormatException(tle);
 						var temp_name = tle_spl[0];
-						if (temp_name==settings_temp_name) continue;
 						var temp_path = Path.Combine(cfi.settings.GetSettingsDir(), tle_spl[1]);
+						if (d.TryGetValue(temp_name, out var old_temp))
+						{
+							if (old_temp.IsDeletable || old_temp.Path != temp_path)
+								throw new InvalidOperationException($"{cfi.settings.GetSettingsDir()}: {temp_name}");
+							continue;
+						}
 						GenerationTemp temp;
 						if (File.Exists(temp_path))
 							temp = new(temp_path, fname => cfi.DeleteFile(fname));
 						else if (Directory.Exists(temp_path))
-							temp = new(temp_path, dir => cfi.DeleteFile(dir));
+							temp = new(temp_path, dir => cfi.DeleteDir(dir));
 						else
 							continue;
 						d.Add(temp_name, temp);
@@ -410,12 +418,11 @@ namespace Dashboard
 					cfi.temps.AddExisting(temp_name, t);
 				}
 
-				public bool CanClear => d.Count != (IsRoot ? 1 : 0);
+				public bool CanClear => d.Values.Any(t=>t.IsDeletable);
 				public void Clear()
 				{
-					foreach (var temp_name in d.Keys.ToArray())
+					foreach (var (temp_name,_) in d.Where(kvp=>kvp.Value.IsDeletable).ToArray())
 					{
-						if (temp_name == settings_temp_name) continue;
 						if (TryRemove(temp_name) is null)
 							throw new InvalidOperationException();
 					}
@@ -428,6 +435,10 @@ namespace Dashboard
 
 				public void Dispose()
 				{
+					if (IsRoot)
+						throw new InvalidOperationException();
+					if (d.Values.Any(t => !t.IsDeletable))
+						throw new InvalidOperationException();
 					try
 					{
 						foreach (var temp in d.Values)
@@ -657,7 +668,8 @@ namespace Dashboard
 										var args = new List<string>();
 
 										_=temps.TryRemove(otp_temp_name);
-										var otp_fname = l_temps.AddFile(otp_temp_name, "thump.png").Path;
+										var otp_temp = l_temps.AddFile(otp_temp_name, "thump.png");
+										var otp_fname = otp_temp.Path;
 
 										if (l_dur != TimeSpan.Zero)
 											args.Add($"-ss {pos*l_dur.TotalSeconds}");
@@ -674,6 +686,7 @@ namespace Dashboard
 											Directory.CreateDirectory(attachments_dir);
 
 											RunFFmpeg($"-nostdin -dump_attachment:t \"\" -i \"{inp_fname}\"", execute_in: attachments_dir).Wait();
+											InvokeCacheSizeChanged(+DirSize(attachments_dir));
 											var attachment_fname = Path.Combine(attachments_dir, tag_filename!);
 											if (!File.Exists(attachment_fname)) throw new InvalidOperationException();
 
@@ -696,6 +709,7 @@ namespace Dashboard
 										var (extract_otp, extract_err) = RunFFmpeg(string.Join(' ', args)).Result;
 										if (!File.Exists(otp_fname))
 											throw new InvalidOperationException($"\n{extract_otp}\n\n===\n\n{extract_err}");
+										InvokeCacheSizeChanged(+FileSize(otp_fname));
 										if (is_attachment)
 											if (l_temps.TryRemove(attachments_dir_temp_name) is null)
 												throw new InvalidOperationException();
@@ -713,7 +727,7 @@ namespace Dashboard
 													throw new InvalidOperationException();
 												bg_im.Source = bg_im_source;
 											}
-											File.Delete(otp_fname);
+											otp_temp.Dispose();
 											change_subjob(null);
 
 											change_subjob("compose output");
@@ -766,11 +780,10 @@ namespace Dashboard
 											enc.Frames.Add(BitmapFrame.Create(bitmap));
 											using (Stream fs = File.Create(otp_fname))
 												enc.Save(fs);
+											InvokeCacheSizeChanged(+FileSize(otp_fname));
 											change_subjob(null);
 
 										}
-
-										InvokeCacheSizeChanged(0);
 
 										l_temps.GiveToCFI(otp_temp_name);
 										l_temps.VerifyEmpty();
@@ -1085,4 +1098,5 @@ namespace Dashboard
 		}
 
 	}
+
 }
