@@ -247,8 +247,8 @@ namespace Dashboard
 
 				if (cache_size > Settings.Root.MaxCacheSize)
 				{
-					if (thumb_gen.ClearInvalid()!=0)
-						return;
+					if (thumb_gen.ClearInvalid()!=0) return;
+					if (thumb_gen.ClearExtraFiles()!=0) return;
 					thumb_gen.ClearOne();
 				}
 
@@ -258,12 +258,12 @@ namespace Dashboard
 				if (!IsVisible) return;
 				cache_info_updater.Trigger(TimeSpan.Zero, false);
 			};
-			thumb_gen.CacheSizeChanged += byte_change => Dispatcher.Invoke(() =>
+			thumb_gen.CacheSizeChanged += byte_change => Dispatcher.InvokeAsync(() => Utils.HandleException(()=>
 			{
 				cache_size += byte_change;
 				update_cache_info();
 				cache_info_updater.Trigger(TimeSpan.FromSeconds(0.5), true);
-			});
+			}));
 			cache_info_updater.Trigger(TimeSpan.Zero, false);
 
 			b_cache_clear.Click += (o, e) => main_thr_pool.AddJob("Clearing cache", thumb_gen.ClearAll);

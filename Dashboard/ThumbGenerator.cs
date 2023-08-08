@@ -136,7 +136,7 @@ namespace Dashboard
 				CacheSizeChanged += on_cache_changed;
 				settings = new(cache_path);
 				temps = new(this);
-				temps.AddSettings();
+				temps.InitRoot();
 			}
 
 			public CachedFileInfo(uint id, string cache_path, Action<long> on_cache_changed, string target_fname)
@@ -150,8 +150,9 @@ namespace Dashboard
 			public uint Id => id;
 			public string? InpPath => settings.InpPath;
 			public DateTime LastCacheUseTime => settings.LastCacheUseTime;
-			public string CurrentThumbPath => settings.CurrentThumb ??
-				throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb");
+			public string CurrentThumbPath => Path.Combine(settings.GetSettingsDir(), settings.CurrentThumb ??
+				throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb")
+			);
 			public int ChosenThumbOptionInd => settings.ChosenThumbOptionInd ??
 				throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb");
 			public bool IsDeletable => !File.Exists(InpPath);
@@ -202,7 +203,10 @@ namespace Dashboard
 						settings.ChosenStreamPositions = null;
 						settings.ChosenStreamPositions = poss;
 					}
-					settings.CurrentThumb = res;
+					var base_path = settings.GetSettingsDir() + @"\";
+					if (!res.StartsWith(base_path))
+						throw new InvalidOperationException();
+					settings.CurrentThumb = res.Remove(0, base_path.Length);
 					COMManip.ResetThumbFor(InpPath);
 
 				}
@@ -288,14 +292,62 @@ namespace Dashboard
 
 				public LocalTempsList(CachedFileInfo cfi) => this.cfi = cfi;
 
+				private bool IsRoot => cfi.temps == this;
+				private void OnChanged()
+				{
+					if (!IsRoot) return;
+					var common_path = cfi.settings.GetSettingsDir() + @"\";
+					cfi.settings.TempsListStr = string.Join(';',
+						d.Select(kvp =>
+						{
+							var path = kvp.Value.Path;
+							if (!path.StartsWith(common_path))
+								throw new InvalidOperationException(path);
+							path = path.Remove(0, common_path.Length);
+							return $"{kvp.Key}={path}";
+						})
+					);
+				}
+
+				private GenerationTemp AddExisting(string temp_name, GenerationTemp temp)
+				{
+					if ("=;".Any(temp_name.Contains))
+						throw new FormatException(temp_name);
+					d.Add(temp_name, temp);
+					OnChanged();
+					return temp;
+				}
 				private GenerationTemp AddNew(string temp_name, GenerationTemp temp)
 				{
 					// delete last gen leftovers
 					temp.Dispose();
-					d.Add(temp_name, temp);
-					return temp;
+					return AddExisting(temp_name, temp);
 				}
-				public void AddSettings() => d.Add("settings", new GenerationTemp(cfi.settings.GetSettingsFile(), _ => { }));
+				public void InitRoot()
+				{
+					if (!IsRoot) throw new InvalidOperationException();
+					if (d.Count!=0) throw new InvalidOperationException();
+					d.Add("settings", new GenerationTemp(cfi.settings.GetSettingsFile(), _ => { }));
+					var tls = cfi.settings.TempsListStr;
+					if (tls is null) return;
+					foreach (var tle in tls.Split(';'))
+					{
+						var tle_spl = tle.Split(new[] { '=' }, 2);
+						if (tle_spl.Length!=2) throw new FormatException(tle);
+						var temp_name = tle_spl[0];
+						if (temp_name=="settings") continue;
+						var temp_path = Path.Combine(cfi.settings.GetSettingsDir(), tle_spl[1]);
+						GenerationTemp temp;
+						if (File.Exists(temp_path))
+							temp = new(temp_path, fname => cfi.DeleteFile(fname));
+						else if (Directory.Exists(temp_path))
+							temp = new(temp_path, dir => cfi.DeleteFile(dir));
+						else
+							continue;
+						d.Add(temp_name, temp);
+					}
+					OnChanged();
+				}
 				public GenerationTemp AddFile(string temp_name, string fname) => AddNew(temp_name, new GenerationTemp(
 					Path.Combine(cfi.settings.GetSettingsDir(), fname),
 					fname => cfi.DeleteFile(fname)
@@ -310,27 +362,54 @@ namespace Dashboard
 					if (!d.Remove(temp_name, out var t))
 						return null;
 					t.Dispose();
+					OnChanged();
 					return t;
 				}
 
-				//TODO Use to clean up unused files
-				// - Make a log file to report this kind of stuff without messageboxes
-				// - Also announce with TTS
-				public IEnumerable<string> EnumerateExtraFiles()
+				public int DeleteExtraFiles()
 				{
-					throw new NotImplementedException();
+					if (!IsRoot) throw new InvalidOperationException();
+					var non_del = new HashSet<string>(d.Count);
+					foreach (var t in d.Values)
+						if (!non_del.Add(t.Path))
+							throw new InvalidOperationException();
+
+					int on_dir(string dir)
+					{
+						var res = 0;
+
+						foreach (var subdir in Directory.EnumerateDirectories(dir))
+						{
+							if (non_del.Contains(subdir)) continue;
+							res += on_dir(subdir);
+							if (!Directory.EnumerateFileSystemEntries(subdir).Any())
+								Directory.Delete(subdir, recursive: false);
+						}
+
+						foreach (var fname in Directory.EnumerateFiles(dir))
+						{
+							if (non_del.Contains(fname)) continue;
+							res += 1;
+							File.Delete(fname);
+							Log.Append($"Deleted extra file [{fname}]");
+						}
+
+						return res;
+					}
+					return on_dir(cfi.settings.GetSettingsDir());
 				}
 
 				public void GiveToCFI(string temp_name)
 				{
+					if (IsRoot) throw new InvalidOperationException();
 					if (!d.Remove(temp_name, out var t))
 						throw new InvalidOperationException(temp_name);
-					cfi.temps.d.Add(temp_name, t);
+					cfi.temps.AddExisting(temp_name, t);
 				}
 
 				public void VerifyEmpty()
 				{
-					if (d.Count == (d.ContainsKey("settings")?1:0)) return;
+					if (d.Count == (IsRoot?1:0)) return;
 					throw new InvalidOperationException();
 				}
 
@@ -352,6 +431,12 @@ namespace Dashboard
 
 			}
 			private readonly LocalTempsList temps;
+
+			public int DeleteExtraFiles()
+			{
+				lock (this)
+					return temps.DeleteExtraFiles();
+			}
 
 			#endregion
 
@@ -855,7 +940,11 @@ namespace Dashboard
 
 			//TODO Change delay, when there is more of a cache
 			cleanup_timer = new System.Timers.Timer(TimeSpan.FromSeconds(1));
-			cleanup_timer.Elapsed += (_,_) => ClearInvalid();
+			cleanup_timer.Elapsed += (_, _) =>
+			{
+				ClearInvalid();
+				ClearExtraFiles();
+			};
 			cleanup_timer.Start();
 
 		}
@@ -893,28 +982,46 @@ namespace Dashboard
 			return cfi;
 		});
 
-		public int ClearInvalid() => purge_lock.OneLocked(() =>
+		public int ClearInvalid() {
+			var c = purge_lock.OneLocked(() =>
+			{
+				var to_remove = new List<KeyValuePair<string, CachedFileInfo>>(files.Count);
+				foreach (var kvp in files)
+					if (kvp.Value.IsDeletable)
+						to_remove.Add(kvp);
+
+				foreach (var kvp in to_remove)
+				{
+					if (!files.TryRemove(kvp))
+						throw new InvalidOperationException();
+					kvp.Value.Erase();
+				}
+
+				if (to_remove.Count!=0)
+				{
+					last_used_id = 0;
+					InvokeCacheSizeChanged(0);
+				}
+
+				return to_remove.Count;
+			}, false);
+			// this... may get annoying
+			if (c!=0) TTS.Speak($"ThumbDashboard: Invalid entries: {c}");
+			return c;
+		}
+
+		public int ClearExtraFiles()
 		{
-			var to_remove = new List<KeyValuePair<string, CachedFileInfo>>(files.Count);
-			foreach (var kvp in files)
-				if (kvp.Value.IsDeletable)
-					to_remove.Add(kvp);
-
-			foreach (var kvp in to_remove)
+			var c = purge_lock.OneLocked(() =>
 			{
-				if (!files.TryRemove(kvp))
-					throw new InvalidOperationException();
-				kvp.Value.Erase();
-			}
-
-			if (to_remove.Count!=0)
-			{
-				last_used_id = 0;
-				InvokeCacheSizeChanged(0);
-			}
-
-			return to_remove.Count;
-		}, false);
+				var c = 0;
+				foreach (var cfi in files.Values)
+					c += cfi.DeleteExtraFiles();
+				return c;
+			});
+			if (c!=0) TTS.Speak($"ThumbDashboard: Extra files: {c}");
+			return c;
+		}
 
 		public void ClearOne() => purge_lock.OneLocked(() =>
 		{

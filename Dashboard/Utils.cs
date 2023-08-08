@@ -251,6 +251,34 @@ namespace Dashboard
 		}
 	}
 
+	public static class Log
+	{
+		private const string log_fname = "Dashboard.log";
+		private static readonly object log_lock = new();
+		private static readonly System.Text.Encoding enc = new System.Text.UTF8Encoding(true);
+		
+		public static void Append(string l)
+		{
+			lock (log_lock) System.IO.File.AppendAllLines(log_fname, new[] { l }, enc);
+		}
+
+	}
+
+	public static class TTS
+	{
+		private static readonly System.Speech.Synthesis.SpeechSynthesizer speaker;
+
+		static TTS()
+		{
+			speaker = new();
+			speaker.SetOutputToDefaultAudioDevice();
+			speaker.SelectVoiceByHints(System.Speech.Synthesis.VoiceGender.Female);
+		}
+
+		public static void Speak(string s) => speaker.Speak(s);
+
+	}
+
 	public sealed class LoadCanceledException : Exception { }
 
 	public static class Handler<TErr>

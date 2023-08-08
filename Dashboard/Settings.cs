@@ -49,6 +49,12 @@ namespace Dashboard
 
 		protected override string SettingsDescription() => $"Settings of [{InpPath}]";
 
+		public string? TempsListStr
+		{
+			get => GetSetting(nameof(TempsListStr), null as string);
+			set => SetSetting(nameof(TempsListStr), value);
+		}
+
 		public string? InpPath
 		{
 			get => GetSetting(nameof(InpPath), null as string);
