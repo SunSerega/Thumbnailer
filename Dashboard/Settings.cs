@@ -155,6 +155,7 @@ namespace Dashboard
 				File.Delete(back_save_fname);
 			}
 
+			var need_resave = false;
 			if (File.Exists(main_save_fname))
 				foreach (var l in File.ReadLines(main_save_fname, enc).Select(l => l.Trim()))
 				{
@@ -172,7 +173,6 @@ namespace Dashboard
 						if (s_val != "")
 							throw new FormatException(l);
 						s_val = null;
-						continue;
 					}
 
 					var prop = this.GetType().GetProperty(key);
@@ -182,6 +182,8 @@ namespace Dashboard
 							App.Current.Shutdown();
 						continue;
 					}
+
+					need_resave = need_resave || settings.ContainsKey(key);
 
 					var t = prop.PropertyType;
 					t = Nullable.GetUnderlyingType(t) ?? t;
@@ -233,6 +235,7 @@ namespace Dashboard
 					File.Delete(back_save_fname);
 				}
 			}, $"settings resave for {SettingsDescription()}");
+			if (need_resave) resaver.Trigger(default, false);
 			//resaver.Shutdown(); // for debug, to minimize number of bg threads
 
 		}

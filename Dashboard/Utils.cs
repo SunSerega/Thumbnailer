@@ -64,7 +64,7 @@ namespace Dashboard
 				c /= 1024;
 			}
 
-			return $"{sign}{c:.##} {byte_scale}";
+			return $"{sign}{c:0.##} {byte_scale}";
 		}
 
 	}

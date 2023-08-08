@@ -839,6 +839,7 @@ namespace Dashboard
 				lock (this)
 				{
 					settings.LastInpChangeTime = DateTime.MinValue;
+					settings.LastCacheUseTime = DateTime.MinValue;
 					settings.CurrentThumb = null;
 					temps.Clear();
 				}
