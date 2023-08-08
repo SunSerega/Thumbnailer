@@ -39,7 +39,7 @@
 		return $true
 	}
 	
-	foreach ($file in Get-ChildItem -Path $dep_path -File)
+	foreach ($file in Get-ChildItem -Path $dep_path)
 	{
 		if ($file.Name -like "*.old") { continue }
 		if (Is-Invalid $file.Name) { continue }
@@ -48,7 +48,7 @@
 		
 	}
 	
-	foreach ($file in Get-ChildItem -Path $bin_path -File)
+	foreach ($file in Get-ChildItem -Path $bin_path)
 	{
 		if (Is-Invalid $file.Name) {
 			Write-Host "Skipped deploying [$file]"
@@ -58,11 +58,18 @@
 		$p1 = $file.FullName
 		$p2 = Join-Path -Path $dep_path -ChildPath $file.Name
 		Write-Host "[$p1] => [$p2]"
-		Copy-Item -Path $p1 -Destination $p2
+		Copy-Item -Path $p1 -Destination $p2 -Recurse
 		
 	}
 	
-	Remove-Item "$dep_path\*.old" -ErrorAction Ignore
+	foreach ($file in Get-ChildItem -Path $dep_path)
+	{
+		if ($file.Name -notlike "*.old") { continue }
+		
+		$full_name = $file.FullName
+		Remove-Item -Path "$full_name" -Recurse -ErrorAction Ignore
+		
+	}
 	
 	
 	

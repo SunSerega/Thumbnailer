@@ -964,11 +964,11 @@ namespace Dashboard
 
 			//TODO Change delay, when there is more of a cache
 			cleanup_timer = new System.Timers.Timer(TimeSpan.FromSeconds(1));
-			cleanup_timer.Elapsed += (_, _) =>
+			cleanup_timer.Elapsed += (_, _) => Utils.HandleException(() =>
 			{
 				ClearInvalid();
 				ClearExtraFiles();
-			};
+			});
 			cleanup_timer.Start();
 
 		}
