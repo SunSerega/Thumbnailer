@@ -149,6 +149,7 @@ namespace Dashboard
 
 			public uint Id => id;
 			public string? InpPath => settings.InpPath;
+			public bool CanClearTemps => temps.CanClear;
 			public DateTime LastCacheUseTime => settings.LastCacheUseTime;
 			public string CurrentThumbPath => Path.Combine(settings.GetSettingsDir(), settings.CurrentThumb ??
 				throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb")
@@ -287,6 +288,8 @@ namespace Dashboard
 
 			private sealed class LocalTempsList : IDisposable
 			{
+				private const string settings_temp_name = "settings";
+
 				private readonly CachedFileInfo cfi;
 				private readonly Dictionary<string, GenerationTemp> d = new();
 
@@ -327,7 +330,7 @@ namespace Dashboard
 				{
 					if (!IsRoot) throw new InvalidOperationException();
 					if (d.Count!=0) throw new InvalidOperationException();
-					d.Add("settings", new GenerationTemp(cfi.settings.GetSettingsFile(), _ => { }));
+					d.Add(settings_temp_name, new GenerationTemp(cfi.settings.GetSettingsFile(), _ => { }));
 					var tls = cfi.settings.TempsListStr;
 					if (tls is null) return;
 					foreach (var tle in tls.Split(';'))
@@ -335,7 +338,7 @@ namespace Dashboard
 						var tle_spl = tle.Split(new[] { '=' }, 2);
 						if (tle_spl.Length!=2) throw new FormatException(tle);
 						var temp_name = tle_spl[0];
-						if (temp_name=="settings") continue;
+						if (temp_name==settings_temp_name) continue;
 						var temp_path = Path.Combine(cfi.settings.GetSettingsDir(), tle_spl[1]);
 						GenerationTemp temp;
 						if (File.Exists(temp_path))
@@ -407,9 +410,19 @@ namespace Dashboard
 					cfi.temps.AddExisting(temp_name, t);
 				}
 
+				public bool CanClear => d.Count != (IsRoot ? 1 : 0);
+				public void Clear()
+				{
+					foreach (var temp_name in d.Keys.ToArray())
+					{
+						if (temp_name == settings_temp_name) continue;
+						if (TryRemove(temp_name) is null)
+							throw new InvalidOperationException();
+					}
+				}
 				public void VerifyEmpty()
 				{
-					if (d.Count == (IsRoot?1:0)) return;
+					if (!CanClear) return;
 					throw new InvalidOperationException();
 				}
 
@@ -821,6 +834,16 @@ namespace Dashboard
 
 			#endregion
 
+			public void ClearTemps()
+			{
+				lock (this)
+				{
+					settings.LastInpChangeTime = DateTime.MinValue;
+					settings.CurrentThumb = null;
+					temps.Clear();
+				}
+			}
+
 			private bool is_erased = false;
 			public void Erase()
 			{
@@ -1026,12 +1049,8 @@ namespace Dashboard
 		public void ClearOne() => purge_lock.OneLocked(() =>
 		{
 			if (files.IsEmpty) return;
-			var kvp = files.MinBy(kvp => kvp.Value.LastCacheUseTime);
-			if (!files.TryRemove(kvp))
-				throw new InvalidOperationException();
-			kvp.Value.Erase();
-			last_used_id = 0;
-			InvokeCacheSizeChanged(0);
+			var cfi = files.Values.Where(cfi=>cfi.CanClearTemps).MinBy(cfi => cfi.LastCacheUseTime);
+			cfi?.ClearTemps();
 		}, false);
 
 		public void ClearAll(Action<string?> change_subjob) => purge_lock.OneLocked(() =>
