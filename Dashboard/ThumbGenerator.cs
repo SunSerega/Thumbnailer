@@ -176,6 +176,7 @@ namespace Dashboard
 			{
 				thumb_sources = new[] { source };
 				settings.CurrentThumb = source.Extract(0.3, null!);
+				COMManip.ResetThumbFor(InpPath);
 			}
 			private void SetSources(Action<string?> change_subjob, ThumbSource[] thumb_sources)
 			{
@@ -211,12 +212,13 @@ namespace Dashboard
 						settings.ChosenStreamPositions = null;
 						settings.ChosenStreamPositions = poss;
 					}
+
 					var base_path = settings.GetSettingsDir() + @"\";
 					if (res.StartsWith(base_path))
 						res = res.Remove(0, base_path.Length);
+
 					settings.CurrentThumb = res;
 					COMManip.ResetThumbFor(InpPath);
-
 				}
 			}
 
@@ -497,10 +499,17 @@ namespace Dashboard
 					if (is_erased)
 						return;
 				}
+				var inp_fname = settings.InpPath ?? throw new InvalidOperationException();
 				var otp_temp_name = "thumb file";
 
+				if (!File.Exists(inp_fname))
+				{
+					Log.Append($"Asked thumb for missing file [{inp_fname}]");
+					SetTempSource(CommonThumbSources.Broken);
+					return;
+				}
+
 				settings.LastCacheUseTime = DateTime.UtcNow;
-				var inp_fname = settings.InpPath ?? throw new InvalidOperationException();
 				var write_time = new[]{
 					File.GetLastWriteTimeUtc(inp_fname),
 					File.GetLastAccessTimeUtc(inp_fname),
@@ -808,7 +817,8 @@ namespace Dashboard
 											}
 											catch (Exception e)
 											{
-												Utils.HandleException(e);
+												Log.Append($"Error making thumb for [{inp_fname}]: {e}");
+												//Utils.HandleException(e);
 												return CommonThumbSources.Broken.Extract(0, null!);
 											}
 									}));
@@ -821,6 +831,7 @@ namespace Dashboard
 							{
 								if (sources.Count != 0)
 									throw new NotImplementedException(inp_fname);
+								Log.Append($"No format data for [{inp_fname}]: {metadata_s}");
 								sources.Add(CommonThumbSources.Broken);
 							}
 							else if (format_xml.Attribute("duration") is XAttribute global_dur_xml)

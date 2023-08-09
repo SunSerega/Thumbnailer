@@ -3,14 +3,19 @@
 
 using Dashboard;
 using System;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 
 partial class Test
 {
 	static void Main()
 	{
+
+
 
 		/**
 		var psi = new ProcessStartInfo(@"ffmpeg", @"-y -i ""C:\Users\SunMachine\Desktop\0.mkv""  -f ffmetadata -");
@@ -36,8 +41,6 @@ partial class Test
 
 		return;
 		/**/
-
-
 		/**
 		var tp = new ThumbnailProvider();
 
@@ -75,6 +78,45 @@ partial class Test
 		//bmp.Save(res);
 		//Console.WriteLine(res);
 
+		var thr = new System.Threading.Thread(() =>
+		{
+			var s = new Shell32.Shell();
+
+			var sw = Stopwatch.StartNew();
+			var lnks = new ESQuary("ext:lnk").ToArray();
+			Console.WriteLine(sw.Elapsed);
+
+			sw.Restart();
+			var targets = Array.ConvertAll(lnks, lnk =>
+			{
+				try
+				{
+					//Console.WriteLine(lnk);
+					var d = s.NameSpace(Path.GetDirectoryName(lnk));
+					if (d is null)
+						return (lnk, null);
+					var f = d.Items().Item(Path.GetFileName(lnk));
+					var l = (Shell32.ShellLinkObject)f.GetLink;
+					return (lnk, (object?)l.Path);
+				}
+				catch (Exception e)
+				{
+					return (lnk, e);
+				}
+			});
+			sw.Stop();
+
+			Console.WriteLine(sw.Elapsed);
+			//Console.WriteLine(targets);
+
+			foreach (var g in targets.Select(t=>t.Item2).OfType<Exception>().GroupBy(e=>e.ToString()))
+			{
+				Console.WriteLine(g.First());
+			}
+
+		});
+		thr.SetApartmentState(System.Threading.ApartmentState.STA);
+		thr.Start();
 	}
 
 	public static unsafe void ReplaceThumbnail(string filePath, string newThumbnailPath)

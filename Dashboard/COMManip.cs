@@ -49,10 +49,6 @@ namespace Dashboard
 				if (0!=MakeLocalTC().GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out shared_bmp, out _, out _))
 					throw new Win32Exception();
 			}
-			catch when (GetShellItem(fname) is null)
-			{
-				return default;
-			}
 			catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
 			{
 				return default;
@@ -76,7 +72,7 @@ namespace Dashboard
 				if (0!=MakeLocalTC().GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out _, out _, out id))
 					throw new Win32Exception();
 			}
-			catch when (GetShellItem(path) is null)
+			catch (System.IO.FileNotFoundException)
 			{
 				return false;
 			}
@@ -96,29 +92,29 @@ namespace Dashboard
 				if (0!=MakePrivateTC().DeleteThumbnail(id))
 					throw new Win32Exception();
 			}
-			catch when (GetShellItem(path) is null)
-			{
-				return false;
-			}
 			catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
 			{
 				return false;
 			}
 
+			SHChangeNotify(HChangeNotifyEventID.SHCNE_UPDATEITEM, HChangeNotifyFlags.SHCNF_PATHW, path, IntPtr.Zero);
+			ShortcutManager.UpdateFor(path);
 			return true;
 		}
 
 		public static void ResetThumbFor(string? path)
 		{
-			while (path != null)
-			{
-				if (System.IO.Path.GetPathRoot(path) == path)
-					break;
-				DeleteThumbFor(path);
-				SHChangeNotify(HChangeNotifyEventID.SHCNE_UPDATEITEM, HChangeNotifyFlags.SHCNF_PATHW, path, IntPtr.Zero);
-				//SHChangeNotify(HChangeNotifyEventID.SHCNE_ALLEVENTS, HChangeNotifyFlags.SHCNF_PATHW, path, IntPtr.Zero);
-				path = System.IO.Path.GetDirectoryName(path);
-			}
+
+			if (path is null) return;
+			if (System.IO.Path.GetPathRoot(path) == path) throw new NotImplementedException();
+			DeleteThumbFor(path);
+
+			path = System.IO.Path.GetDirectoryName(path);
+
+			if (path is null) throw new NotImplementedException();
+			if (System.IO.Path.GetPathRoot(path) == path) return;
+			DeleteThumbFor(path);
+
 		}
 
 		public static BitmapSource? GetOrTryMakeThumbFor(string fname)
@@ -131,10 +127,6 @@ namespace Dashboard
 			{
 				if (0!=MakeLocalTC().GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_EXTRACT, out shared_bmp, out _, out _))
 					throw new Win32Exception();
-			}
-			catch when (GetShellItem(fname) is null)
-			{
-				return default;
 			}
 			catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
 			{

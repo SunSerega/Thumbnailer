@@ -482,8 +482,9 @@ namespace Dashboard
 			}
 			void apply_file_lst(string[] lst)
 			{
-				if (lst.Length==1 && this.Visibility==Visibility.Visible)
+				if (lst.Length==1)
 				{
+					tray_icon.ShowWin();
 					begin_thumb_compare(lst.Single());
 					return;
 				}
