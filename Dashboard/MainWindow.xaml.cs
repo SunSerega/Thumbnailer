@@ -39,14 +39,14 @@ namespace Dashboard
 					App.Current.Exit += (o, e) => thumb_gen.Shutdown();
 
 					pipe.AddThumbGen(thumb_gen);
-					pipe.StartAccepting();
 
 					SetUpCacheInfo(thumb_gen, main_thr_pool);
 
 					SetUpAllowedExt(thumb_gen);
 
-					SetUpThumbCompare(thumb_gen);
+					SetUpThumbCompare(thumb_gen, pipe);
 
+					pipe.StartAccepting();
 				});
 
 			}
@@ -118,6 +118,62 @@ namespace Dashboard
 
 			b_view_jobs.Click += (o, e) =>
 				new JobList(main_thr_pool).Show();
+		}
+
+		private void LoadThumbGenerator(CustomThreadPool main_thr_pool, Action<ThumbGenerator> on_load)
+		{
+			main_thr_pool.AddJob("Init ThumbGenerator", change_subjob =>
+			{
+				var thumb_gen = new ThumbGenerator(main_thr_pool, "cache", change_subjob);
+				if (App.Current.IsShuttingDown) return;
+
+				change_subjob($"Apply ThumbGenerator");
+				Dispatcher.Invoke(()=>on_load(thumb_gen));
+
+				Console.Beep();
+			});
+		}
+
+		private void SetUpCacheInfo(ThumbGenerator thumb_gen, CustomThreadPool main_thr_pool)
+		{
+			ByteCount cache_size = 0;
+			void update_cache_info() =>
+				tb_cache_info.Text = $"Cache size: {cache_size}";
+
+			var cache_info_updater = new DelayedUpdater(() =>
+			{
+				Dispatcher.Invoke(() =>
+				{
+					cache_size =
+						new DirectoryInfo("cache")
+						.EnumerateFiles("*", SearchOption.AllDirectories)
+						.Sum(f => f.Length);
+					update_cache_info();
+				});
+
+				if (cache_size > Settings.Root.MaxCacheSize)
+				{
+					if (thumb_gen.ClearInvalid()!=0) return;
+					if (thumb_gen.ClearExtraFiles()!=0) return;
+					thumb_gen.ClearOne();
+				}
+
+			}, $"cache size recalculation");
+			IsVisibleChanged += (o, e) =>
+			{
+				if (!IsVisible) return;
+				cache_info_updater.Trigger(TimeSpan.Zero, false);
+			};
+			thumb_gen.CacheSizeChanged += byte_change => Dispatcher.InvokeAsync(() => Utils.HandleException(()=>
+			{
+				cache_size += byte_change;
+				update_cache_info();
+				cache_info_updater.Trigger(TimeSpan.FromSeconds(0.5), true);
+			}));
+			cache_info_updater.Trigger(TimeSpan.Zero, false);
+
+			b_cache_clear.Click += (o, e) => main_thr_pool.AddJob("Clearing cache", thumb_gen.ClearAll);
+
 		}
 
 		private void SetUpAllowedExt(ThumbGenerator thumb_gen)
@@ -236,63 +292,7 @@ namespace Dashboard
 				_=new AllowedExt(ext, allowed_ext_container);
 		}
 
-		private void LoadThumbGenerator(CustomThreadPool main_thr_pool, Action<ThumbGenerator> on_load)
-		{
-			main_thr_pool.AddJob("Init ThumbGenerator", change_subjob =>
-			{
-				var thumb_gen = new ThumbGenerator(main_thr_pool, "cache", change_subjob);
-				if (App.Current.IsShuttingDown) return;
-
-				change_subjob($"Apply ThumbGenerator");
-				Dispatcher.Invoke(()=>on_load(thumb_gen));
-
-				Console.Beep();
-			});
-		}
-
-		private void SetUpCacheInfo(ThumbGenerator thumb_gen, CustomThreadPool main_thr_pool)
-		{
-			ByteCount cache_size = 0;
-			void update_cache_info() =>
-				tb_cache_info.Text = $"Cache size: {cache_size}";
-
-			var cache_info_updater = new DelayedUpdater(() =>
-			{
-				Dispatcher.Invoke(() =>
-				{
-					cache_size =
-						new DirectoryInfo("cache")
-						.EnumerateFiles("*", SearchOption.AllDirectories)
-						.Sum(f => f.Length);
-					update_cache_info();
-				});
-
-				if (cache_size > Settings.Root.MaxCacheSize)
-				{
-					if (thumb_gen.ClearInvalid()!=0) return;
-					if (thumb_gen.ClearExtraFiles()!=0) return;
-					thumb_gen.ClearOne();
-				}
-
-			}, $"cache size recalculation");
-			IsVisibleChanged += (o, e) =>
-			{
-				if (!IsVisible) return;
-				cache_info_updater.Trigger(TimeSpan.Zero, false);
-			};
-			thumb_gen.CacheSizeChanged += byte_change => Dispatcher.InvokeAsync(() => Utils.HandleException(()=>
-			{
-				cache_size += byte_change;
-				update_cache_info();
-				cache_info_updater.Trigger(TimeSpan.FromSeconds(0.5), true);
-			}));
-			cache_info_updater.Trigger(TimeSpan.Zero, false);
-
-			b_cache_clear.Click += (o, e) => main_thr_pool.AddJob("Clearing cache", thumb_gen.ClearAll);
-
-		}
-
-		private void SetUpThumbCompare(ThumbGenerator thumb_gen)
+		private void SetUpThumbCompare(ThumbGenerator thumb_gen, CommandsPipe pipe)
 		{
 			var thumb_compare_all = new[] { thumb_compare_org, thumb_compare_gen };
 
@@ -482,7 +482,7 @@ namespace Dashboard
 			}
 			void apply_file_lst(string[] lst)
 			{
-				if (lst.Length==1)
+				if (lst.Length==1 && this.Visibility==Visibility.Visible)
 				{
 					begin_thumb_compare(lst.Single());
 					return;
@@ -493,6 +493,10 @@ namespace Dashboard
 				));
 
 			}
+			pipe.AddLoadCompareHandler(inp=> {
+				var lst = extract_file_lst(inp);
+				Dispatcher.Invoke(() => apply_file_lst(lst));
+			});
 
 			foreach (var tcv in thumb_compare_all)
 				tcv.MouseDown += (o, e) =>

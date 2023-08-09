@@ -21,11 +21,12 @@ namespace Dashboard
 		{
 			public const int NewerKillsOlder = 1;
 			public const int GimmiThumb = 2;
+			public const int LoadCompare = 3;
 		}
 
 		private readonly Dictionary<int, Action<Stream>> command_handlers = new()
 		{
-			{ Commands.NewerKillsOlder, str=>App.Current.Dispatcher.Invoke(App.Current.Shutdown) }
+			{ Commands.NewerKillsOlder, _=>App.Current.Dispatcher.Invoke(App.Current.Shutdown) },
 		};
 		public void AddThumbGen(ThumbGenerator thumb_gen) =>
 			command_handlers.Add(Commands.GimmiThumb, str =>
@@ -37,6 +38,16 @@ namespace Dashboard
 				var cfi = thumb_gen.Generate(fname, _ => { }, false);
 				bw.Write(cfi.CurrentThumbPath);
 
+			});
+		public void AddLoadCompareHandler(Action<string[]> handler) =>
+			command_handlers.Add(Commands.LoadCompare, str =>
+			{
+				var br = new BinaryReader(str);
+				var c = br.ReadInt32();
+				var res = new string[c];
+				for (var i = 0; i < res.Length; ++i)
+					res[i] = br.ReadString();
+				handler(res);
 			});
 
 		public CommandsPipe()
