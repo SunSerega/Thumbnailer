@@ -34,8 +34,6 @@ namespace Dashboard
 
 				SetUpJobCount(main_thr_pool);
 
-				SetUpAllowedExt();
-
 				LoadThumbGenerator(main_thr_pool, thumb_gen =>
 				{
 					App.Current.Exit += (o, e) => thumb_gen.Shutdown();
@@ -44,6 +42,8 @@ namespace Dashboard
 					pipe.StartAccepting();
 
 					SetUpCacheInfo(thumb_gen, main_thr_pool);
+
+					SetUpAllowedExt(thumb_gen);
 
 					SetUpThumbCompare(thumb_gen);
 
@@ -120,7 +120,7 @@ namespace Dashboard
 				new JobList(main_thr_pool).Show();
 		}
 
-		private void SetUpAllowedExt()
+		private void SetUpAllowedExt(ThumbGenerator thumb_gen)
 		{
 			AllowedExt.Changed += any_change =>
 				b_check_n_commit.IsEnabled = any_change;
@@ -177,6 +177,8 @@ namespace Dashboard
 
 				if (CustomMessageBox.ShowYesNo("Confirm changes", sb.ToString(), this))
 				{
+					var gen_type = !add.Any() ? null : CustomMessageBox.Show("What to do with files of added extensions?", "Press Escape to do nothing", "Reset", "Generate");
+
 					var reg_ext_args = new List<string>();
 					if (add.Any()) reg_ext_args.Add("add:"+string.Join(';', add));
 					if (rem.Any()) reg_ext_args.Add("rem:"+string.Join(';', rem));
@@ -201,6 +203,25 @@ namespace Dashboard
 					
 					COMManip.NotifyRegExtChange();
 					AllowedExt.CommitChanges();
+
+					if (gen_type != null)
+						System.Threading.Tasks.Task.Run(() => Utils.HandleException(() =>
+						{
+							var only_reset = gen_type switch
+							{
+								"Reset" => true,
+								"Generate" => false,
+								_ => throw new NotImplementedException(gen_type),
+							};
+							var q = new ESQuary("ext:"+string.Join(';',add));
+							if (only_reset)
+							{
+								foreach (var fname in q)
+									COMManip.ResetThumbFor(fname);
+							}
+							else
+								thumb_gen.MassGenerate(q, true);
+						}));
 				}
 				else
 				{
@@ -269,10 +290,6 @@ namespace Dashboard
 
 			b_cache_clear.Click += (o, e) => main_thr_pool.AddJob("Clearing cache", thumb_gen.ClearAll);
 
-			b_cache_rebuild.Click += (o, e) =>
-			{
-				throw new NotImplementedException();
-			};
 		}
 
 		private void SetUpThumbCompare(ThumbGenerator thumb_gen)

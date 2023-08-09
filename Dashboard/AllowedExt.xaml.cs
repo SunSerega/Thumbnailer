@@ -12,9 +12,9 @@ namespace Dashboard
 		private static readonly FileExtList temp_ext_list = new();
 
 		public static event Action<bool>? Changed;
-		public static (IEnumerable<string> add, IEnumerable<string> rem) GetChanges() => (
-			temp_ext_list.Where(ext => !Settings.Root.AllowedExts.Contains(ext)),
-			Settings.Root.AllowedExts.Where(ext => !temp_ext_list.Contains(ext))
+		public static (string[] add, string[] rem) GetChanges() => (
+			temp_ext_list.Where(ext => !Settings.Root.AllowedExts.Contains(ext)).ToArray(),
+			Settings.Root.AllowedExts.Where(ext => !temp_ext_list.Contains(ext)).ToArray()
 		);
 		public static void CommitChanges() =>
 			Settings.Root.AllowedExts = new(temp_ext_list);

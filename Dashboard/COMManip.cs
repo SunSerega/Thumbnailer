@@ -49,6 +49,10 @@ namespace Dashboard
 				if (0!=MakeLocalTC().GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out shared_bmp, out _, out _))
 					throw new Win32Exception();
 			}
+			catch when (GetShellItem(fname) is null)
+			{
+				return default;
+			}
 			catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
 			{
 				return default;
@@ -72,6 +76,10 @@ namespace Dashboard
 				if (0!=MakeLocalTC().GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out _, out _, out id))
 					throw new Win32Exception();
 			}
+			catch when (GetShellItem(path) is null)
+			{
+				return false;
+			}
 			catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
 			{
 				return false;
@@ -87,6 +95,10 @@ namespace Dashboard
 			{
 				if (0!=MakePrivateTC().DeleteThumbnail(id))
 					throw new Win32Exception();
+			}
+			catch when (GetShellItem(path) is null)
+			{
+				return false;
 			}
 			catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
 			{
@@ -119,6 +131,10 @@ namespace Dashboard
 			{
 				if (0!=MakeLocalTC().GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_EXTRACT, out shared_bmp, out _, out _))
 					throw new Win32Exception();
+			}
+			catch when (GetShellItem(fname) is null)
+			{
+				return default;
 			}
 			catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
 			{

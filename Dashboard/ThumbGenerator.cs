@@ -70,7 +70,7 @@ namespace Dashboard
 
 			var res = (otp: await t_otp, err: await t_err);
 			if (!verify_res())
-				throw new InvalidOperationException($"[{p.StartInfo.FileName} {p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
+				throw new InvalidOperationException($"{execute_in}> [{p.StartInfo.FileName} {p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
 			return res;
 		}
 
