@@ -30,7 +30,7 @@ namespace Dashboard
 				: base(message) { }
 		}
 
-		private static async System.Threading.Tasks.Task<(string otp, string err)> RunFFmpeg(string args, string? execute_in = null, string exe = "mpeg")
+		private static async System.Threading.Tasks.Task<(string otp, string err)> RunFFmpeg(string args, Func<bool> verify_res, string? execute_in = null, string exe = "mpeg")
 		{
 
 			var p = new System.Diagnostics.Process
@@ -68,7 +68,10 @@ namespace Dashboard
 				Name = $"RunFFmpeg: {p.StartInfo.FileName} {p.StartInfo.ArgumentList}",
 			}.Start();
 
-			return (await t_otp, await t_err);
+			var res = (otp: await t_otp, err: await t_err);
+			if (!verify_res())
+				throw new InvalidOperationException($"[{p.StartInfo.FileName} {p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
+			return res;
 		}
 
 		#region ThumbSource
@@ -571,7 +574,7 @@ namespace Dashboard
 						var sources = new List<ThumbSource>();
 
 						change_subjob("getting metadata");
-						var metadata_s = RunFFmpeg($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -print_format xml", exe: "probe").Result.otp;
+						var metadata_s = RunFFmpeg($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -print_format xml", ()=>true, exe: "probe").Result.otp;
 						change_subjob(null);
 
 						try
@@ -671,134 +674,143 @@ namespace Dashboard
 									sources.Add(new(source_name, l_dur, (pos, change_subjob) =>
 									{
 										lock (this)
-										{
-											using var l_temps = new LocalTempsList(this);
-											var args = new List<string>();
-
-											_=temps.TryRemove(otp_temp_name);
-											var otp_temp = l_temps.AddFile(otp_temp_name, "thump.png");
-											var otp_fname = otp_temp.Path;
-
-											if (l_dur != TimeSpan.Zero)
-												args.Add($"-ss {pos*l_dur.TotalSeconds}");
-
-											//TODO https://trac.ffmpeg.org/ticket/10506
-											var attachments_dir_temp_name = "attachments dir";
-											if (is_attachment)
+											try
 											{
-												change_subjob("dump attachment");
+												using var l_temps = new LocalTempsList(this);
+												var args = new List<string>();
+
+												_=temps.TryRemove(otp_temp_name);
+												var otp_temp = l_temps.AddFile(otp_temp_name, "thump.png");
+												var otp_fname = otp_temp.Path;
+
 												if (l_dur != TimeSpan.Zero)
-													throw new NotImplementedException();
+													args.Add($"-ss {pos*l_dur.TotalSeconds}");
 
-												var attachments_dir = l_temps.AddDir(attachments_dir_temp_name, "attachments").Path;
-												Directory.CreateDirectory(attachments_dir);
+												//TODO https://trac.ffmpeg.org/ticket/10512
+												// - Need to cd into input folder for conversion to work
+												string ffmpeg_path;
 
-												var arg_dump_attachments = $"-nostdin -dump_attachment:t \"\" -i \"{inp_fname}\"";
-												var t_dump_attachments = RunFFmpeg(arg_dump_attachments, execute_in: attachments_dir);
-												t_dump_attachments.Wait();
-												InvokeCacheSizeChanged(+DirSize(attachments_dir));
-												var attachment_fname = Path.Combine(attachments_dir, tag_filename!);
-												if (!File.Exists(attachment_fname)) throw new InvalidOperationException($"[{arg_dump_attachments}]:\n{t_dump_attachments.Result.otp}\n===\n{t_dump_attachments.Result.err}");
-
-												args.Add($"-i \"{attachment_fname}\"");
-												change_subjob(null);
-											}
-											else
-											{
-												args.Add($"-i \"{inp_fname}\"");
-												args.Add($"-map 0:{ind}");
-											}
-
-											args.Add($"-vframes 1");
-											args.Add($"-vf scale=256:256:force_original_aspect_ratio=decrease");
-											args.Add($"\"{otp_fname}\"");
-											args.Add($"-y");
-											args.Add($"-nostdin");
-
-											change_subjob("extract thumb");
-											var (extract_otp, extract_err) = RunFFmpeg(string.Join(' ', args)).Result;
-											if (!File.Exists(otp_fname))
-												throw new InvalidOperationException($"\n{extract_otp}\n\n===\n\n{extract_err}");
-											InvokeCacheSizeChanged(+FileSize(otp_fname));
-											if (is_attachment)
-												if (l_temps.TryRemove(attachments_dir_temp_name) is null)
-													throw new InvalidOperationException();
-											change_subjob(null);
-
-											if (dur_s!="")
-											{
-												change_subjob("load bg image");
-												Size sz;
-												var bg_im = new Image();
+												//TODO https://trac.ffmpeg.org/ticket/10506
+												// - Need to first extract the attachments, before they can be used as input
+												var attachments_dir_temp_name = "attachments dir";
+												if (is_attachment)
 												{
-													var bg_im_source = Utils.LoadUncachedBitmap(otp_fname);
-													sz = new(bg_im_source.Width, bg_im_source.Height);
-													if (sz.Width>256 || sz.Height>256)
-														throw new InvalidOperationException();
-													bg_im.Source = bg_im_source;
+													change_subjob("dump attachment");
+													if (l_dur != TimeSpan.Zero)
+														throw new NotImplementedException();
+
+													var attachments_dir = l_temps.AddDir(attachments_dir_temp_name, "attachments").Path;
+													Directory.CreateDirectory(attachments_dir);
+
+													var arg_dump_attachments = $"-nostdin -dump_attachment:t \"\" -i \"{inp_fname}\"";
+													var attachment_fname = Path.Combine(attachments_dir, tag_filename!);
+													RunFFmpeg(arg_dump_attachments, ()=>File.Exists(attachment_fname), execute_in: attachments_dir).Wait();
+													InvokeCacheSizeChanged(+DirSize(attachments_dir));
+
+													ffmpeg_path = Path.GetDirectoryName(attachment_fname)!;
+													args.Add($"-i \"{Path.GetFileName(attachment_fname)}\"");
+													change_subjob(null);
 												}
-												otp_temp.Dispose();
-												change_subjob(null);
-
-												change_subjob("compose output");
-												var res_c = new Grid();
-												res_c.Children.Add(bg_im);
-												res_c.Children.Add(new Viewbox
+												else
 												{
-													Opacity = 0.6,
-													Width = sz.Width,
-													Height = sz.Height*0.2,
-													HorizontalAlignment = HorizontalAlignment.Right,
-													VerticalAlignment = VerticalAlignment.Center,
-													Child = new Image
-													{
-														Source = new DrawingImage
-														{
-															Drawing = new GeometryDrawing
-															{
-																Brush = Brushes.Black,
-																Pen = new Pen(Brushes.White, 0.08),
-																Geometry = new FormattedText(
-															dur_s,
-															System.Globalization.CultureInfo.InvariantCulture,
-															FlowDirection.LeftToRight,
-															new Typeface(
-																new TextBlock().FontFamily,
-																FontStyles.Normal,
-																FontWeights.ExtraBold,
-																FontStretches.Normal
-															),
-															1,
-															Brushes.Black,
-															96
-														).BuildGeometry(default)
-															}
-														}
-													},
-												});
-												change_subjob(null);
+													ffmpeg_path = Path.GetDirectoryName(inp_fname)!;
+													args.Add($"-i \"{Path.GetFileName(inp_fname)}\"");
+													args.Add($"-map 0:{ind}");
+												}
 
-												change_subjob("render output");
-												var bitmap = new RenderTargetBitmap((int)sz.Width, (int)sz.Height, 96, 96, PixelFormats.Pbgra32);
-												res_c.Measure(sz);
-												res_c.Arrange(new(sz));
-												bitmap.Render(res_c);
-												change_subjob(null);
+												args.Add($"-vframes 1");
+												args.Add($"-vf scale=256:256:force_original_aspect_ratio=decrease");
+												args.Add($"\"{otp_fname}\"");
+												args.Add($"-y");
+												args.Add($"-nostdin");
 
-												change_subjob("save output");
-												var enc = new PngBitmapEncoder();
-												enc.Frames.Add(BitmapFrame.Create(bitmap));
-												using (Stream fs = File.Create(otp_fname))
-													enc.Save(fs);
+												change_subjob("extract thumb");
+												RunFFmpeg(string.Join(' ', args), ()=>File.Exists(otp_fname), execute_in: ffmpeg_path).Wait();
 												InvokeCacheSizeChanged(+FileSize(otp_fname));
+												if (is_attachment)
+													if (l_temps.TryRemove(attachments_dir_temp_name) is null)
+														throw new InvalidOperationException();
 												change_subjob(null);
 
-											}
+												if (dur_s!="")
+												{
+													change_subjob("load bg image");
+													Size sz;
+													var bg_im = new Image();
+													{
+														var bg_im_source = Utils.LoadUncachedBitmap(otp_fname);
+														sz = new(bg_im_source.Width, bg_im_source.Height);
+														if (sz.Width>256 || sz.Height>256)
+															throw new InvalidOperationException();
+														bg_im.Source = bg_im_source;
+													}
+													otp_temp.Dispose();
+													change_subjob(null);
 
-											l_temps.GiveToCFI(otp_temp_name);
-											l_temps.VerifyEmpty();
-											return otp_fname;
-										}
+													change_subjob("compose output");
+													var res_c = new Grid();
+													res_c.Children.Add(bg_im);
+													res_c.Children.Add(new Viewbox
+													{
+														Opacity = 0.6,
+														Width = sz.Width,
+														Height = sz.Height*0.2,
+														HorizontalAlignment = HorizontalAlignment.Right,
+														VerticalAlignment = VerticalAlignment.Center,
+														Child = new Image
+														{
+															Source = new DrawingImage
+															{
+																Drawing = new GeometryDrawing
+																{
+																	Brush = Brushes.Black,
+																	Pen = new Pen(Brushes.White, 0.08),
+																	Geometry = new FormattedText(
+																		dur_s,
+																		System.Globalization.CultureInfo.InvariantCulture,
+																		FlowDirection.LeftToRight,
+																		new Typeface(
+																			new TextBlock().FontFamily,
+																			FontStyles.Normal,
+																			FontWeights.ExtraBold,
+																			FontStretches.Normal
+																		),
+																		1,
+																		Brushes.Black,
+																		96
+																	).BuildGeometry(default)
+																}
+															}
+														},
+													});
+													change_subjob(null);
+
+													change_subjob("render output");
+													var bitmap = new RenderTargetBitmap((int)sz.Width, (int)sz.Height, 96, 96, PixelFormats.Pbgra32);
+													res_c.Measure(sz);
+													res_c.Arrange(new(sz));
+													bitmap.Render(res_c);
+													change_subjob(null);
+
+													change_subjob("save output");
+													var enc = new PngBitmapEncoder();
+													enc.Frames.Add(BitmapFrame.Create(bitmap));
+													using (Stream fs = File.Create(otp_fname))
+														enc.Save(fs);
+													InvokeCacheSizeChanged(+FileSize(otp_fname));
+													change_subjob(null);
+
+												}
+
+												l_temps.GiveToCFI(otp_temp_name);
+												l_temps.VerifyEmpty();
+												return otp_fname;
+											}
+											catch (Exception e)
+											{
+												Utils.HandleException(e);
+												return CommonThumbSources.Broken.Extract(0, null!);
+											}
 									}));
 
 									change_subjob(null);
