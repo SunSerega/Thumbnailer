@@ -4,6 +4,7 @@ using System.IO;
 
 using System.Linq;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 
 namespace Dashboard
 {
@@ -79,6 +80,12 @@ namespace Dashboard
 			set => SetSetting(nameof(CurrentThumb), value);
 		}
 
+		public bool CurrentThumbIsFinal
+		{
+			get => GetSetting(nameof(CurrentThumbIsFinal), false);
+			set => SetSetting(nameof(CurrentThumbIsFinal), value);
+		}
+
 		public sealed class ChosenStreamPositionsInfo
 		{
 			private readonly double[] pos;
@@ -128,7 +135,6 @@ namespace Dashboard
 		private static readonly System.Text.UTF8Encoding enc = new(true);
 
 		private readonly string main_save_fname, back_save_fname;
-		private readonly DelayedUpdater resaver;
 
 		private bool is_shut_down = false;
 		public Settings(string path)
@@ -211,33 +217,84 @@ namespace Dashboard
 					}
 					settings[key] = o_val;
 				}
+			// at the end, so settings are fully loaded
+			if (need_resave) RequestResave(default);
 
-			resaver = new(() =>
+		}
+
+		private static readonly ConcurrentDictionary<Settings, DateTime> req_resave_times = new();
+		private static readonly System.Threading.ManualResetEventSlim resave_wh = new(false);
+		private void ResaveAll()
+		{
+			lock (settings)
 			{
-				lock (settings)
+				if (is_shut_down) return;
+				File.Copy(main_save_fname, back_save_fname, false);
+				var sw = new StreamWriter(main_save_fname, false, enc);
+				foreach (var prop in this.GetType().GetProperties())
 				{
-					if (is_shut_down) return;
-					File.Copy(main_save_fname, back_save_fname, false);
-					var sw = new StreamWriter(main_save_fname, false, enc);
-					foreach (var prop in this.GetType().GetProperties())
-					{
-						var t = prop.PropertyType;
-						t = Nullable.GetUnderlyingType(t) ?? t;
+					var t = prop.PropertyType;
+					t = Nullable.GetUnderlyingType(t) ?? t;
 
-						if (!settings.TryGetValue(prop.Name, out var val)) continue;
-						if (!setting_type_converter.TryGetValue(t, out var conv))
-							throw new NotImplementedException(t.ToString());
+					if (!settings.TryGetValue(prop.Name, out var val)) continue;
+					if (!setting_type_converter.TryGetValue(t, out var conv))
+						throw new NotImplementedException(t.ToString());
 
-						var s = conv.save(val);
-						sw.WriteLine($"{prop.Name}={s}");
-					}
-					sw.Close();
-					File.Delete(back_save_fname);
+					var s = conv.save(val);
+					sw.WriteLine($"{prop.Name}={s}");
 				}
-			}, $"settings resave for {SettingsDescription()}");
-			if (need_resave) resaver.Trigger(default, false);
-			//resaver.Shutdown(); // for debug, to minimize number of bg threads
+				sw.Close();
+				File.Delete(back_save_fname);
+			}
+		}
+		static Settings()
+		{
+			var base_name = "Settings resaving";
+			new System.Threading.Thread(() =>
+			{
+				var thr = System.Threading.Thread.CurrentThread;
+				while (true)
+					try
+					{
+						if (req_resave_times.IsEmpty)
+						{
+							resave_wh.Wait();
+							resave_wh.Reset();
+							continue;
+						}
 
+						var kvp = req_resave_times.MinBy(kvp => kvp.Value);
+						{
+							var wait = kvp.Value - DateTime.UtcNow;
+							if (wait > TimeSpan.Zero)
+								System.Threading.Thread.Sleep(wait);
+						}
+						if (!req_resave_times.TryRemove(kvp))
+							continue;
+
+						thr.IsBackground = false;
+						thr.Name = $"{base_name}: {kvp.Key.main_save_fname}";
+						kvp.Key.ResaveAll();
+					}
+					catch (Exception e)
+					{
+						Utils.HandleException(e);
+					}
+					finally
+					{
+						thr.IsBackground = true;
+						System.Threading.Thread.CurrentThread.Name = base_name;
+					}
+			})
+			{
+				IsBackground = true,
+				Name = base_name,
+			}.Start();
+		}
+		private void RequestResave(TimeSpan delay)
+		{
+			req_resave_times[this] = DateTime.UtcNow+delay;
+			resave_wh.Set();
 		}
 
 		protected static (T1, T2) ParseSep<T1,T2>(string s, Func<string, T1> parse1, Func<string, T2> parse2, char sep = ':')
@@ -250,6 +307,7 @@ namespace Dashboard
 		protected abstract string SettingsDescription();
 
 		public string GetSettingsFile() => main_save_fname;
+		public string GetSettingsBackupFile() => back_save_fname;
 		public string GetSettingsDir() => Path.GetDirectoryName(main_save_fname)!;
 
 		private static KeyValuePair<Type, (Func<object, string> save, Func<string, object> load)> MakeSettingTypeConverter<T>(Func<T, string> save, Func<string, T> load) where T : notnull =>
@@ -257,6 +315,7 @@ namespace Dashboard
 		private static readonly Dictionary<Type, (Func<object, string> save, Func<string, object> load)> setting_type_converter = new[]
 		{
 			MakeSettingTypeConverter(x => x,					s => s),
+			MakeSettingTypeConverter(x => x?"1":"0",			s => s!="0"),
 			MakeSettingTypeConverter(x => x.ToString(),         Convert.ToInt32),
 			MakeSettingTypeConverter(x => x.Ticks.ToString(),   s => new DateTime(Convert.ToInt64(s))),
 			MakeSettingTypeConverter(x => x.Ticks.ToString(),   s => new TimeSpan(Convert.ToInt64(s))),
@@ -284,7 +343,7 @@ namespace Dashboard
 				throw new FormatException(key);
 			lock (settings)
 			{
-				if (is_shut_down) throw new InvalidOperationException();
+				if (is_shut_down) throw new System.Threading.Tasks.TaskCanceledException();
 #pragma warning disable CS8620 // settings value type is "object" instead of "object?"
 				var old_value = settings.GetValueOrDefault(key, null);
 #pragma warning restore CS8620
@@ -310,7 +369,7 @@ namespace Dashboard
 				File.AppendAllLines(main_save_fname, new[] { file_line });
 				File.Delete(back_save_fname);
 
-				resaver.Trigger(TimeSpan.FromSeconds(10), true);
+				RequestResave(TimeSpan.FromSeconds(10));
 			}
 		}
 
@@ -319,7 +378,6 @@ namespace Dashboard
 		public void Shutdown()
 		{
 			lock (settings) is_shut_down = true;
-			resaver.Shutdown();
 		}
 
 	}

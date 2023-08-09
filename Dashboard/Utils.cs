@@ -251,6 +251,71 @@ namespace Dashboard
 		}
 	}
 
+	public sealed class ESQuary : IEnumerable<string>
+	{
+		private readonly string args;
+
+		public ESQuary(string args) => this.args = args;
+		public ESQuary(string path, string arg)
+		{
+			if (!System.IO.Directory.Exists(path))
+				throw new InvalidOperationException();
+			args = $"\"{path}\" {arg}";
+		}
+
+		private sealed class ESProcess : IEnumerator<string>
+		{
+			private static readonly string es_path = System.IO.Path.GetFullPath("Dashboard-es.exe");
+			private readonly System.Diagnostics.Process p;
+			private readonly System.Threading.Tasks.Task<string> t_err;
+
+			public ESProcess(string args)
+			{
+				var psi = new System.Diagnostics.ProcessStartInfo(es_path, args)
+				{
+					CreateNoWindow = true,
+					UseShellExecute = false,
+					RedirectStandardOutput = true,
+					RedirectStandardError = true,
+				};
+				p = System.Diagnostics.Process.Start(psi) ?? throw new InvalidOperationException();
+				t_err = p.StandardError.ReadToEndAsync();
+			}
+
+			private string? l;
+			public string Current => l ?? throw new InvalidOperationException();
+			object IEnumerator.Current => Current;
+
+			public sealed class ESException : Exception
+			{
+				public ESException(string message) : base(message) { }
+			}
+
+			public bool MoveNext()
+			{
+				l = p.StandardOutput.ReadLine();
+				if (l is null && p.ExitCode!=0)
+					throw new ESException($"ES[{p.ExitCode}]: {t_err.Result.Trim()}");
+				return l != null;
+			}
+
+			public void Reset() => throw new NotImplementedException();
+
+			public void Dispose()
+			{
+				p?.Kill();
+				GC.SuppressFinalize(this);
+			}
+
+			~ESProcess() => Dispose();
+
+		}
+
+		public IEnumerator<string> GetEnumerator() => new ESProcess(args);
+		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+	}
+
 	public static class Log
 	{
 		private const string log_fname = "Dashboard.log";

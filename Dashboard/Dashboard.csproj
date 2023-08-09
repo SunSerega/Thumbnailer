@@ -43,6 +43,10 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<TargetPath>$(ProjectName)-Default.SoundOnly.bmp</TargetPath>
 		</ContentWithTargetPath>
+		<ContentWithTargetPath Include="Assets\Default.Broken.bmp">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<TargetPath>$(ProjectName)-Default.Broken.bmp</TargetPath>
+		</ContentWithTargetPath>
 		<ContentWithTargetPath Include="ES\es.exe">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<TargetPath>$(ProjectName)-es.exe</TargetPath>

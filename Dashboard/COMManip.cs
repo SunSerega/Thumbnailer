@@ -136,6 +136,9 @@ namespace Dashboard
 			return ConvertHBitmap(bmp);
 		}
 
+		public static void NotifyRegExtChange() =>
+			SHChangeNotify(HChangeNotifyEventID.SHCNE_ASSOCCHANGED, HChangeNotifyFlags.SHCNF_IDLIST, default, default);
+
 		private const int STG_E_FILENOTFOUND			= unchecked((int)0x80030002);
 		private const int WTS_E_FAILEDEXTRACTION		= unchecked((int)0x8004B200);
 		private const int CoreHostIncompatibleConfig	= unchecked((int)0x800080a5);
@@ -152,7 +155,7 @@ namespace Dashboard
 		private static partial void SHChangeNotify(
 			HChangeNotifyEventID wEventId,
 			HChangeNotifyFlags uFlags,
-			[MarshalAs(UnmanagedType.LPWStr)] string dwItem1,
+			[MarshalAs(UnmanagedType.LPWStr)] string? dwItem1,
 			IntPtr dwItem2
 		);
 

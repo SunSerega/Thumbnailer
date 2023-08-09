@@ -83,10 +83,7 @@ namespace Dashboard
 						mb.ShowDialog();
 
 						p.Kill();
-						if (p.WaitForExit(TimeSpan.FromSeconds(1)))
-							continue;
-
-						throw new InvalidOperationException();
+						p.WaitForExit();
 					}
 
 					//CustomMessageBox.Show(sw.Elapsed.ToString());

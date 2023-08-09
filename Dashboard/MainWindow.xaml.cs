@@ -198,7 +198,8 @@ namespace Dashboard
 					if (p.ExitCode != 0)
 						//throw new Exception($"ExitCode={p.ExitCode}; err:\n{err}");
 						throw new Exception($"ExitCode={p.ExitCode}");
-
+					
+					COMManip.NotifyRegExtChange();
 					AllowedExt.CommitChanges();
 				}
 				else
@@ -374,16 +375,94 @@ namespace Dashboard
 				curr_compare_fname = fname;
 				b_reload_compare.IsEnabled = true;
 			});
-			//TODO Use everything search
-			string[] extract_file_lst(IEnumerable<string> inp) =>
-				inp.SelectMany(path =>
+			string[] extract_file_lst(IEnumerable<string> inp)
+			{
+				static T execute_any<T>(string descr, params Func<Action, T>[] funcs)
+				{
+					var wh = new System.Threading.ManualResetEventSlim(false);
+					var excs = new List<Exception>();
+					var left = funcs.Length;
+
+					T? res = default;
+					bool res_set = false;
+
+					for (int i=0; i<funcs.Length; ++i)
+					{
+						var f = funcs[i];
+						new System.Threading.Thread(()=>
+						{
+							try
+							{
+								res = f(() => {
+									if (wh.IsSet)
+										throw new System.Threading.Tasks.TaskCanceledException();
+								});
+								res_set = true;
+								wh.Set();
+							}
+							catch (Exception e)
+							{
+								lock (excs)
+								{
+									excs.Add(e);
+									left -= 1;
+									if (left == 0) wh.Set();
+								}
+							}
+						})
+						{
+							IsBackground = true,
+							Name = $"{descr} #{i}",
+						}.Start();
+					}
+
+					wh.Wait();
+					if (!res_set)
+						throw new AggregateException(excs);
+
+					return res!;
+				}
+
+				var exts = Settings.Root.AllowedExts;
+				var es_arg = "ext:" + string.Join(';', exts);
+
+				return inp.AsParallel().SelectMany(path =>
 				{
 					if (File.Exists(path))
-						return Enumerable.Repeat(path, 1);
+						return Enumerable.Repeat(path, exts.MatchesFile(path)?1:0);
 					if (Directory.Exists(path))
-						return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories);
+						return execute_any($"get files in [{path}]",
+							try_cancel =>
+							{
+								var res = new List<string>();
+								void on_dir(string dir)
+								{
+									foreach (var subdir in Directory.EnumerateDirectories(dir))
+										on_dir(subdir);
+									foreach (var fname in Directory.EnumerateFiles(dir))
+									{
+										try_cancel();
+										if (!exts.MatchesFile(fname)) continue;
+										res.Add(fname);
+									}
+								}
+								on_dir(path);
+								return res.AsEnumerable();
+							},
+							try_cancel =>
+							{
+								var res = new List<string>();
+								foreach (var fname in new ESQuary(path, es_arg))
+								{
+									try_cancel();
+									res.Add(fname);
+								}
+								return res.AsEnumerable();
+							}
+						);
 					return Enumerable.Empty<string>();
-				}).Where(Settings.Root.AllowedExts.MatchesFile).ToArray();
+				}).ToArray();
+			}
 			void apply_file_lst(string[] lst)
 			{
 				if (lst.Length==1)
@@ -392,8 +471,9 @@ namespace Dashboard
 					return;
 				}
 
-				foreach (var fname in lst)
-					_ = thumb_gen.Generate(fname, _ => { }, true);
+				System.Threading.Tasks.Task.Run(() => Utils.HandleException(() =>
+					thumb_gen.MassGenerate(lst, true)
+				));
 
 			}
 
@@ -444,7 +524,7 @@ namespace Dashboard
 				var inp = (string[])e.Data.GetData(DataFormats.FileDrop);
 				if (inp is null) return;
 
-				var lst = (inp==drag_cache?.inp ? drag_cache :
+				var lst = (drag_cache.HasValue && inp.SequenceEqual(drag_cache.Value.inp) ? drag_cache :
 					(drag_cache = (inp, extract_file_lst(inp)))
 				).Value.lst;
 				if (lst.Length==0) return;

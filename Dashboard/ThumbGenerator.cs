@@ -21,7 +21,6 @@ namespace Dashboard
 		private readonly CustomThreadPool thr_pool;
 		private readonly DirectoryInfo cache_dir;
 		private readonly FileStream lock_file;
-		private readonly System.Timers.Timer cleanup_timer;
 
 		private readonly ConcurrentDictionary<string, CachedFileInfo> files = new();
 
@@ -54,7 +53,7 @@ namespace Dashboard
 			var t_otp = p.StandardOutput.ReadToEndAsync();
 			var t_err = p.StandardError.ReadToEndAsync();
 
-			_=System.Threading.Tasks.Task.Run(() => Utils.HandleException(() =>
+			new System.Threading.Thread(() => Utils.HandleException(() =>
 			{
 				if (p.WaitForExit(TimeSpan.FromSeconds(10)))
 					return;
@@ -63,7 +62,11 @@ namespace Dashboard
 					$"[{p.StartInfo.FileName} {p.StartInfo.Arguments}] hanged. Output:",
 					t_otp.Result + "\n\n===================\n\n" + t_err.Result
 				);
-			}));
+			}))
+			{
+				IsBackground = true,
+				Name = $"RunFFmpeg: {p.StartInfo.FileName} {p.StartInfo.ArgumentList}",
+			}.Start();
 
 			return (await t_otp, await t_err);
 		}
@@ -157,7 +160,7 @@ namespace Dashboard
 			);
 			public int ChosenThumbOptionInd => settings.ChosenThumbOptionInd ??
 				throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb");
-			public bool IsDeletable => !File.Exists(InpPath);
+			public bool IsDeletable => !File.Exists(InpPath) || !Settings.Root.AllowedExts.MatchesFile(InpPath);
 
 			#region ThumbSources
 
@@ -206,9 +209,9 @@ namespace Dashboard
 						settings.ChosenStreamPositions = poss;
 					}
 					var base_path = settings.GetSettingsDir() + @"\";
-					if (!res.StartsWith(base_path))
-						throw new InvalidOperationException();
-					settings.CurrentThumb = res.Remove(0, base_path.Length);
+					if (res.StartsWith(base_path))
+						res = res.Remove(0, base_path.Length);
+					settings.CurrentThumb = res;
 					COMManip.ResetThumbFor(InpPath);
 
 				}
@@ -334,6 +337,7 @@ namespace Dashboard
 					if (!IsRoot) throw new InvalidOperationException();
 					if (d.Count!=0) throw new InvalidOperationException();
 					d.Add("settings", new GenerationTemp(cfi.settings.GetSettingsFile(), null));
+					d.Add("settings backup", new GenerationTemp(cfi.settings.GetSettingsBackupFile(), null));
 					var tls = cfi.settings.TempsListStr;
 					if (tls is null) return;
 					foreach (var tle in tls.Split(';'))
@@ -477,12 +481,13 @@ namespace Dashboard
 
 				public static ThumbSource Ungenerated { get; } = Make("Ungenerated");
 				public static ThumbSource Waiting { get; } = Make("Waiting");
-				public static ThumbSource Locked { get; } = Make("Locked");
+				//public static ThumbSource Locked { get; } = Make("Locked");
 				public static ThumbSource SoundOnly { get; } = Make("SoundOnly");
+				public static ThumbSource Broken { get; } = Make("Broken");
 
 			}
 
-			public void GenerateThumb(Action<CustomThreadPool.JobWork> add_job, Action<ICachedFileInfo> on_regenerated, bool force_regen)
+			public void GenerateThumb(Action<string, CustomThreadPool.JobWork> add_job, Action<ICachedFileInfo> on_regenerated, bool force_regen)
 			{
 				lock (this)
 				{
@@ -516,16 +521,16 @@ namespace Dashboard
 				var otp_temp_name = "thumb file";
 				lock (this)
 				{
-					if (!force_regen && settings.LastInpChangeTime == write_time)
+					if (!force_regen && settings.LastInpChangeTime == write_time && settings.CurrentThumbIsFinal)
 						return;
 
-					_=temps.TryRemove(otp_temp_name);
-					//_=temps.TryRemove("embeds dir");
+					temps.TryRemove(otp_temp_name);
 					temps.VerifyEmpty();
 					SetTempSource(CommonThumbSources.Ungenerated);
+					settings.CurrentThumbIsFinal = false;
 				}
 
-				add_job(change_subjob =>
+				add_job($"Generating thumb for: {inp_fname}", change_subjob =>
 				{
 					//change_subjob("copy");
 					//var temp_fname = state.AddFile("inp").Path;
@@ -572,229 +577,238 @@ namespace Dashboard
 							var metadata_xml = XDocument.Parse(metadata_s).Root!;
 							change_subjob(null);
 
-							var format_xml = metadata_xml.Descendants("format").Single();
-
 							var dur_s = "";
 							var max_frame_len = double.NaN;
-							foreach (var stream_xml in metadata_xml.Descendants("streams").Single().Descendants("stream"))
-							{
-								var ind = int.Parse(stream_xml.Attribute("index")!.Value);
-								change_subjob($"checking stream#{ind}");
-
-								string? get_tag(string key) =>
-									stream_xml.Descendants("tag").SingleOrDefault(n => n.Attribute("key")!.Value == key)?.Attribute("value")!.Value;
-
-								var tag_filename = get_tag("filename");
-								var tag_mimetype = get_tag("mimetype");
-
-								var stream_is_image = tag_mimetype!=null && tag_mimetype.StartsWith("image/");
-
-								var frame_rate_spl = stream_xml.Attribute("r_frame_rate")!.Value.Split(new[] { '/' }, 2);
-								var frame_len = int.Parse(frame_rate_spl[0]) / (double)int.Parse(frame_rate_spl[1]);
-								if (!(max_frame_len > frame_len))
-									max_frame_len = frame_len;
-
-								var l_dur_s1 = stream_xml.Attribute("duration")?.Value;
-								var l_dur_s2 = get_tag("DURATION") ?? get_tag("DURATION-eng");
-								// torrent subs stream can have boths
-								//if ((l_dur_s1 != null) && (l_dur_s2 != null))
-								//	throw new NotImplementedException($"[{inp_fname}]: [{metadata_s}]");
-
-								var codec_type_s = stream_xml.Attribute("codec_type")!.Value;
-
-								var is_attachment = codec_type_s == "attachment";
-								if (is_attachment)
+							if (metadata_xml.Descendants("streams").SingleOrDefault() is XElement streams_xml)
+								foreach (var stream_xml in streams_xml.Descendants("stream"))
 								{
-									if (tag_filename == null)
-										throw new InvalidOperationException();
-									if (tag_mimetype == null)
-										throw new InvalidOperationException();
-								}
-								else // !is_attachment
-								{
-									if (stream_is_image)
-										// Should work, but throw to find such file
-										throw new NotImplementedException();
-								}
+									var ind = int.Parse(stream_xml.Attribute("index")!.Value);
+									change_subjob($"checking stream#{ind}");
 
-								if (codec_type_s switch // skip if
-								{
-									"video" => false,
-									"audio" => true,
-									"subtitle" => true,
-									"attachment" => !stream_is_image,
-									_ => throw new FormatException(codec_type_s),
-								}) continue;
+									string? get_tag(string key) =>
+										stream_xml.Descendants("tag").SingleOrDefault(n => n.Attribute("key")!.Value == key)?.Attribute("value")!.Value;
 
-								string source_name;
-								TimeSpan l_dur;
-								if (stream_is_image)
-								{
-									source_name = $"Image:{ind}";
-									l_dur = TimeSpan.Zero;
-								}
-								else if (l_dur_s1 != null)
-								{
-									source_name = $"FStream:{ind}";
-									l_dur = TimeSpan.FromSeconds(double.Parse(l_dur_s1));
-								}
-								else if (l_dur_s2 != null)
-								{
-									source_name = $"TStream:{ind}";
-									if (!l_dur_s2.Contains('.'))
-										throw new FormatException();
-									l_dur_s2 = l_dur_s2.TrimEnd('0').TrimEnd('.'); // Otherwise TimeSpan.Parse breaks
-									l_dur = TimeSpan.Parse(l_dur_s2);
-								}
-								else
-								{
-									source_name = $"?:{ind}";
-									l_dur = TimeSpan.Zero;
-								}
+									var tag_filename = get_tag("filename");
+									var tag_mimetype = get_tag("mimetype");
 
-								if (!double.IsNaN(frame_len))
-								{
-									l_dur -= TimeSpan.FromSeconds(frame_len);
-									if (l_dur < TimeSpan.Zero) l_dur = TimeSpan.Zero;
-								}
-								else if (l_dur != TimeSpan.Zero)
-									throw new NotImplementedException();
+									var stream_is_image = tag_mimetype!=null && tag_mimetype.StartsWith("image/");
 
-								sources.Add(new(source_name, l_dur, (pos, change_subjob) =>
-								{
-									lock (this)
+									var frame_rate_spl = stream_xml.Attribute("r_frame_rate")!.Value.Split(new[] { '/' }, 2);
+									var frame_len = int.Parse(frame_rate_spl[0]) / (double)int.Parse(frame_rate_spl[1]);
+									if (!(max_frame_len > frame_len))
+										max_frame_len = frame_len;
+
+									var l_dur_s1 = stream_xml.Attribute("duration")?.Value;
+									var l_dur_s2 = get_tag("DURATION") ?? get_tag("DURATION-eng");
+									// torrent subs stream can have boths
+									//if ((l_dur_s1 != null) && (l_dur_s2 != null))
+									//	throw new NotImplementedException($"[{inp_fname}]: [{metadata_s}]");
+
+									var codec_type_s = stream_xml.Attribute("codec_type")!.Value;
+
+									var is_attachment = codec_type_s == "attachment";
+									if (is_attachment)
 									{
-										using var l_temps = new LocalTempsList(this);
-										var args = new List<string>();
-
-										_=temps.TryRemove(otp_temp_name);
-										var otp_temp = l_temps.AddFile(otp_temp_name, "thump.png");
-										var otp_fname = otp_temp.Path;
-
-										if (l_dur != TimeSpan.Zero)
-											args.Add($"-ss {pos*l_dur.TotalSeconds}");
-
-										//TODO https://trac.ffmpeg.org/ticket/10506
-										var attachments_dir_temp_name = "attachments dir";
-										if (is_attachment)
-										{
-											change_subjob("dump attachment");
-											if (l_dur != TimeSpan.Zero)
-												throw new NotImplementedException();
-
-											var attachments_dir = l_temps.AddDir(attachments_dir_temp_name, "attachments").Path;
-											Directory.CreateDirectory(attachments_dir);
-
-											RunFFmpeg($"-nostdin -dump_attachment:t \"\" -i \"{inp_fname}\"", execute_in: attachments_dir).Wait();
-											InvokeCacheSizeChanged(+DirSize(attachments_dir));
-											var attachment_fname = Path.Combine(attachments_dir, tag_filename!);
-											if (!File.Exists(attachment_fname)) throw new InvalidOperationException();
-
-											args.Add($"-i \"{attachment_fname}\"");
-											change_subjob(null);
-										}
-										else
-										{
-											args.Add($"-i \"{inp_fname}\"");
-											args.Add($"-map 0:{ind}");
-										}
-
-										args.Add($"-vframes 1");
-										args.Add($"-vf scale=256:256:force_original_aspect_ratio=decrease");
-										args.Add($"\"{otp_fname}\"");
-										args.Add($"-y");
-										args.Add($"-nostdin");
-
-										change_subjob("extract thumb");
-										var (extract_otp, extract_err) = RunFFmpeg(string.Join(' ', args)).Result;
-										if (!File.Exists(otp_fname))
-											throw new InvalidOperationException($"\n{extract_otp}\n\n===\n\n{extract_err}");
-										InvokeCacheSizeChanged(+FileSize(otp_fname));
-										if (is_attachment)
-											if (l_temps.TryRemove(attachments_dir_temp_name) is null)
-												throw new InvalidOperationException();
-										change_subjob(null);
-
-										if (dur_s!="")
-										{
-											change_subjob("load bg image");
-											Size sz;
-											var bg_im = new Image();
-											{
-												var bg_im_source = Utils.LoadUncachedBitmap(otp_fname);
-												sz = new(bg_im_source.Width, bg_im_source.Height);
-												if (sz.Width>256 || sz.Height>256)
-													throw new InvalidOperationException();
-												bg_im.Source = bg_im_source;
-											}
-											otp_temp.Dispose();
-											change_subjob(null);
-
-											change_subjob("compose output");
-											var res_c = new Grid();
-											res_c.Children.Add(bg_im);
-											res_c.Children.Add(new Viewbox
-											{
-												Opacity = 0.6,
-												Width = sz.Width,
-												Height = sz.Height*0.2,
-												HorizontalAlignment = HorizontalAlignment.Right,
-												VerticalAlignment = VerticalAlignment.Center,
-												Child = new Image
-												{
-													Source = new DrawingImage
-													{
-														Drawing = new GeometryDrawing
-														{
-															Brush = Brushes.Black,
-															Pen = new Pen(Brushes.White, 0.08),
-															Geometry = new FormattedText(
-														dur_s,
-														System.Globalization.CultureInfo.InvariantCulture,
-														FlowDirection.LeftToRight,
-														new Typeface(
-															new TextBlock().FontFamily,
-															FontStyles.Normal,
-															FontWeights.ExtraBold,
-															FontStretches.Normal
-														),
-														1,
-														Brushes.Black,
-														96
-													).BuildGeometry(default)
-														}
-													}
-												},
-											});
-											change_subjob(null);
-
-											change_subjob("render output");
-											var bitmap = new RenderTargetBitmap((int)sz.Width, (int)sz.Height, 96, 96, PixelFormats.Pbgra32);
-											res_c.Measure(sz);
-											res_c.Arrange(new(sz));
-											bitmap.Render(res_c);
-											change_subjob(null);
-
-											change_subjob("save output");
-											var enc = new PngBitmapEncoder();
-											enc.Frames.Add(BitmapFrame.Create(bitmap));
-											using (Stream fs = File.Create(otp_fname))
-												enc.Save(fs);
-											InvokeCacheSizeChanged(+FileSize(otp_fname));
-											change_subjob(null);
-
-										}
-
-										l_temps.GiveToCFI(otp_temp_name);
-										l_temps.VerifyEmpty();
-										return otp_fname;
+										if (tag_filename == null)
+											throw new InvalidOperationException();
+										if (tag_mimetype == null)
+											throw new InvalidOperationException();
 									}
-								}));
+									else // !is_attachment
+									{
+										// G:\0Music\3Sort\!fix\Selulance (soundcloud)\[20150103] Selulance - What.mkv
+										//if (stream_is_image)
+										//	// Should work, but throw to find such file
+										//	throw new NotImplementedException(inp_fname);
+									}
 
-								change_subjob(null);
+									if (codec_type_s switch // skip if
+									{
+										"video" => false,
+										"audio" => true,
+										"subtitle" => true,
+										"attachment" => !stream_is_image,
+										_ => throw new FormatException(codec_type_s),
+									}) continue;
+
+									string source_name;
+									TimeSpan l_dur;
+									if (stream_is_image)
+									{
+										source_name = $"Image:{ind}";
+										l_dur = TimeSpan.Zero;
+									}
+									else if (l_dur_s1 != null)
+									{
+										source_name = $"FStream:{ind}";
+										l_dur = TimeSpan.FromSeconds(double.Parse(l_dur_s1));
+									}
+									else if (l_dur_s2 != null)
+									{
+										source_name = $"TStream:{ind}";
+										if (!l_dur_s2.Contains('.'))
+											throw new FormatException();
+										l_dur_s2 = l_dur_s2.TrimEnd('0').TrimEnd('.'); // Otherwise TimeSpan.Parse breaks
+										l_dur = TimeSpan.Parse(l_dur_s2);
+									}
+									else
+									{
+										source_name = $"?:{ind}";
+										l_dur = TimeSpan.Zero;
+									}
+
+									if (!double.IsNaN(frame_len))
+									{
+										l_dur -= TimeSpan.FromSeconds(frame_len);
+										if (l_dur < TimeSpan.Zero) l_dur = TimeSpan.Zero;
+									}
+									else if (l_dur != TimeSpan.Zero)
+										throw new NotImplementedException();
+
+									sources.Add(new(source_name, l_dur, (pos, change_subjob) =>
+									{
+										lock (this)
+										{
+											using var l_temps = new LocalTempsList(this);
+											var args = new List<string>();
+
+											_=temps.TryRemove(otp_temp_name);
+											var otp_temp = l_temps.AddFile(otp_temp_name, "thump.png");
+											var otp_fname = otp_temp.Path;
+
+											if (l_dur != TimeSpan.Zero)
+												args.Add($"-ss {pos*l_dur.TotalSeconds}");
+
+											//TODO https://trac.ffmpeg.org/ticket/10506
+											var attachments_dir_temp_name = "attachments dir";
+											if (is_attachment)
+											{
+												change_subjob("dump attachment");
+												if (l_dur != TimeSpan.Zero)
+													throw new NotImplementedException();
+
+												var attachments_dir = l_temps.AddDir(attachments_dir_temp_name, "attachments").Path;
+												Directory.CreateDirectory(attachments_dir);
+
+												var arg_dump_attachments = $"-nostdin -dump_attachment:t \"\" -i \"{inp_fname}\"";
+												var t_dump_attachments = RunFFmpeg(arg_dump_attachments, execute_in: attachments_dir);
+												t_dump_attachments.Wait();
+												InvokeCacheSizeChanged(+DirSize(attachments_dir));
+												var attachment_fname = Path.Combine(attachments_dir, tag_filename!);
+												if (!File.Exists(attachment_fname)) throw new InvalidOperationException($"[{arg_dump_attachments}]:\n{t_dump_attachments.Result.otp}\n===\n{t_dump_attachments.Result.err}");
+
+												args.Add($"-i \"{attachment_fname}\"");
+												change_subjob(null);
+											}
+											else
+											{
+												args.Add($"-i \"{inp_fname}\"");
+												args.Add($"-map 0:{ind}");
+											}
+
+											args.Add($"-vframes 1");
+											args.Add($"-vf scale=256:256:force_original_aspect_ratio=decrease");
+											args.Add($"\"{otp_fname}\"");
+											args.Add($"-y");
+											args.Add($"-nostdin");
+
+											change_subjob("extract thumb");
+											var (extract_otp, extract_err) = RunFFmpeg(string.Join(' ', args)).Result;
+											if (!File.Exists(otp_fname))
+												throw new InvalidOperationException($"\n{extract_otp}\n\n===\n\n{extract_err}");
+											InvokeCacheSizeChanged(+FileSize(otp_fname));
+											if (is_attachment)
+												if (l_temps.TryRemove(attachments_dir_temp_name) is null)
+													throw new InvalidOperationException();
+											change_subjob(null);
+
+											if (dur_s!="")
+											{
+												change_subjob("load bg image");
+												Size sz;
+												var bg_im = new Image();
+												{
+													var bg_im_source = Utils.LoadUncachedBitmap(otp_fname);
+													sz = new(bg_im_source.Width, bg_im_source.Height);
+													if (sz.Width>256 || sz.Height>256)
+														throw new InvalidOperationException();
+													bg_im.Source = bg_im_source;
+												}
+												otp_temp.Dispose();
+												change_subjob(null);
+
+												change_subjob("compose output");
+												var res_c = new Grid();
+												res_c.Children.Add(bg_im);
+												res_c.Children.Add(new Viewbox
+												{
+													Opacity = 0.6,
+													Width = sz.Width,
+													Height = sz.Height*0.2,
+													HorizontalAlignment = HorizontalAlignment.Right,
+													VerticalAlignment = VerticalAlignment.Center,
+													Child = new Image
+													{
+														Source = new DrawingImage
+														{
+															Drawing = new GeometryDrawing
+															{
+																Brush = Brushes.Black,
+																Pen = new Pen(Brushes.White, 0.08),
+																Geometry = new FormattedText(
+															dur_s,
+															System.Globalization.CultureInfo.InvariantCulture,
+															FlowDirection.LeftToRight,
+															new Typeface(
+																new TextBlock().FontFamily,
+																FontStyles.Normal,
+																FontWeights.ExtraBold,
+																FontStretches.Normal
+															),
+															1,
+															Brushes.Black,
+															96
+														).BuildGeometry(default)
+															}
+														}
+													},
+												});
+												change_subjob(null);
+
+												change_subjob("render output");
+												var bitmap = new RenderTargetBitmap((int)sz.Width, (int)sz.Height, 96, 96, PixelFormats.Pbgra32);
+												res_c.Measure(sz);
+												res_c.Arrange(new(sz));
+												bitmap.Render(res_c);
+												change_subjob(null);
+
+												change_subjob("save output");
+												var enc = new PngBitmapEncoder();
+												enc.Frames.Add(BitmapFrame.Create(bitmap));
+												using (Stream fs = File.Create(otp_fname))
+													enc.Save(fs);
+												InvokeCacheSizeChanged(+FileSize(otp_fname));
+												change_subjob(null);
+
+											}
+
+											l_temps.GiveToCFI(otp_temp_name);
+											l_temps.VerifyEmpty();
+											return otp_fname;
+										}
+									}));
+
+									change_subjob(null);
+								}
+
+							var format_xml = metadata_xml.Descendants("format").SingleOrDefault();
+							if (format_xml is null)
+							{
+								if (sources.Count != 0)
+									throw new NotImplementedException(inp_fname);
+								sources.Add(CommonThumbSources.Broken);
 							}
-
-							if (format_xml.Attribute("duration") is XAttribute global_dur_xml)
+							else if (format_xml.Attribute("duration") is XAttribute global_dur_xml)
 							{
 								change_subjob("make dur string");
 								var global_dur = TimeSpan.FromSeconds(double.Parse(global_dur_xml.Value));
@@ -839,6 +853,7 @@ namespace Dashboard
 
 						settings.LastInpChangeTime = write_time;
 						SetSources(change_subjob, sources.ToArray());
+						settings.CurrentThumbIsFinal = true;
 						on_regenerated(this);
 					}
 
@@ -905,8 +920,9 @@ namespace Dashboard
 					purge_act = cfi.Erase;
 					var path = cfi.InpPath ?? 
 						throw new CacheFileLoadCanceledException($"2!No file is assigned");
-					if (!File.Exists(path))
-						throw new CacheFileLoadCanceledException($"3!File [{path}] does not exist");
+					// will be deleted by cleanup
+					//if (!File.Exists(path))
+					//	throw new CacheFileLoadCanceledException($"3!File [{path}] does not exist");
 					if (!all_file_paths.Add(path))
 					{
 						if (!conflicting_caches.TryGetValue(path, out var l))
@@ -975,14 +991,24 @@ namespace Dashboard
 
 			}
 
-			//TODO Change delay, when there is more of a cache
-			cleanup_timer = new System.Timers.Timer(TimeSpan.FromSeconds(1));
-			cleanup_timer.Elapsed += (_, _) => Utils.HandleException(() =>
+			new System.Threading.Thread(() =>
 			{
-				ClearInvalid();
-				ClearExtraFiles();
-			});
-			cleanup_timer.Start();
+				while (true)
+					try
+					{
+						System.Threading.Thread.Sleep(TimeSpan.FromMinutes(1));
+						ClearInvalid();
+						ClearExtraFiles();
+					}
+					catch (Exception e)
+					{
+						Utils.HandleException(e);
+					}
+			})
+			{
+				IsBackground = true,
+				Name = $"Cleanup of [{cache_dir}]",
+			}.Start();
 
 		}
 
@@ -993,30 +1019,40 @@ namespace Dashboard
 		private readonly OneToManyLock purge_lock = new();
 
 		private volatile uint last_used_id = 0;
+		private CachedFileInfo GetCFI(string fname)
+		{
+			if (files.TryGetValue(fname, out var cfi))
+				return cfi;
+			// Cannot add concurently, because .GetOrAdd can create
+			// multiple instances of cfi for the same fname in different threads
+			lock (files)
+			{
+				if (files.TryGetValue(fname, out cfi))
+					return cfi;
+				while (true)
+				{
+					var id = System.Threading.Interlocked.Increment(ref last_used_id);
+					var cache_file_dir = cache_dir.CreateSubdirectory(id.ToString());
+					if (cache_file_dir.EnumerateFileSystemInfos().Any()) continue;
+					cfi = new(id, cache_file_dir.FullName, InvokeCacheSizeChanged, fname);
+					if (!files.TryAdd(fname, cfi))
+						throw new InvalidOperationException();
+					return cfi;
+				}
+			}
+		}
+
 		public ICachedFileInfo Generate(string fname, Action<ICachedFileInfo> on_regenerated, bool force_regen) => purge_lock.ManyLocked(() =>
 		{
-
-			if (!files.TryGetValue(fname, out var cfi))
-				// Cannot add concurently, because .GetOrAdd can create
-				// multiple instances of cfi for the same fname in different threads
-				lock (files)
-				{
-					if (!files.TryGetValue(fname, out cfi))
-						while (true)
-						{
-							var id = System.Threading.Interlocked.Increment(ref last_used_id);
-							var cache_file_dir = cache_dir.CreateSubdirectory(id.ToString());
-							if (cache_file_dir.EnumerateFileSystemInfos().Any()) continue;
-							cfi = new(id, cache_file_dir.FullName, InvokeCacheSizeChanged, fname);
-							if (!files.TryAdd(fname, cfi))
-								throw new InvalidOperationException();
-							break;
-						}
-				}
-
-			lock (cfi) cfi.GenerateThumb(w => thr_pool.AddJob($"Generating thumb for: {fname}", w), on_regenerated, force_regen);
-
+			var cfi = GetCFI(fname);
+			cfi.GenerateThumb(thr_pool.AddJob, on_regenerated, force_regen);
 			return cfi;
+		});
+
+		public void MassGenerate(IEnumerable<string> fnames, bool force_regen) => purge_lock.ManyLocked(() =>
+		{
+			foreach (var fname in fnames)
+				GetCFI(fname).GenerateThumb(thr_pool.AddJob, _ => { }, force_regen);
 		});
 
 		public int ClearInvalid() {
@@ -1041,9 +1077,9 @@ namespace Dashboard
 				}
 
 				return to_remove.Count;
-			}, false);
+			}, with_priority: false);
 			// this... may get annoying
-			if (c!=0) TTS.Speak($"ThumbDashboard: Invalid entries: {c}");
+			//if (c!=0) TTS.Speak($"ThumbDashboard: Invalid entries: {c}");
 			return c;
 		}
 
@@ -1055,7 +1091,7 @@ namespace Dashboard
 				foreach (var cfi in files.Values)
 					c += cfi.DeleteExtraFiles();
 				return c;
-			});
+			}, with_priority: false);
 			if (c!=0) TTS.Speak($"ThumbDashboard: Extra files: {c}");
 			return c;
 		}
@@ -1065,7 +1101,7 @@ namespace Dashboard
 			if (files.IsEmpty) return;
 			var cfi = files.Values.Where(cfi=>cfi.CanClearTemps).MinBy(cfi => cfi.LastCacheUseTime);
 			cfi?.ClearTemps();
-		}, false);
+		}, with_priority: false);
 
 		public void ClearAll(Action<string?> change_subjob) => purge_lock.OneLocked(() =>
 		{
@@ -1087,7 +1123,7 @@ namespace Dashboard
 			//App.Current.Dispatcher.Invoke(() =>
 			//	CustomMessageBox.Show("Done clearing cache!", App.Current.MainWindow)
 			//);
-		});
+		}, with_priority: true);
 
 		public void Shutdown()
 		{
