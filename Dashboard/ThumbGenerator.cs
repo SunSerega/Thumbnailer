@@ -494,6 +494,7 @@ namespace Dashboard
 					if (is_erased)
 						return;
 				}
+				var otp_temp_name = "thumb file";
 
 				settings.LastCacheUseTime = DateTime.UtcNow;
 				var inp_fname = settings.InpPath ?? throw new InvalidOperationException();
@@ -509,6 +510,9 @@ namespace Dashboard
 					if (waited < total_wait)
 						lock (this)
 						{
+							temps.TryRemove(otp_temp_name);
+							temps.VerifyEmpty();
+							settings.CurrentThumbIsFinal = false;
 							SetTempSource(CommonThumbSources.Waiting);
 							System.Threading.Tasks.Task.Delay(total_wait-waited)
 								.ContinueWith(t => Utils.HandleException(
@@ -518,7 +522,6 @@ namespace Dashboard
 						}
 				}
 
-				var otp_temp_name = "thumb file";
 				lock (this)
 				{
 					if (!force_regen && settings.LastInpChangeTime == write_time && settings.CurrentThumbIsFinal)
@@ -526,8 +529,8 @@ namespace Dashboard
 
 					temps.TryRemove(otp_temp_name);
 					temps.VerifyEmpty();
-					SetTempSource(CommonThumbSources.Ungenerated);
 					settings.CurrentThumbIsFinal = false;
+					SetTempSource(CommonThumbSources.Ungenerated);
 				}
 
 				add_job($"Generating thumb for: {inp_fname}", change_subjob =>

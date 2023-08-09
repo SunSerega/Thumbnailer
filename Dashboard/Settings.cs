@@ -343,7 +343,8 @@ namespace Dashboard
 				throw new FormatException(key);
 			lock (settings)
 			{
-				if (is_shut_down) throw new System.Threading.Tasks.TaskCanceledException();
+				// Allow generation to finish after shutdown
+				//if (is_shut_down) throw new System.Threading.Tasks.TaskCanceledException();
 #pragma warning disable CS8620 // settings value type is "object" instead of "object?"
 				var old_value = settings.GetValueOrDefault(key, null);
 #pragma warning restore CS8620

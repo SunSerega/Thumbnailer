@@ -335,6 +335,9 @@ namespace Dashboard
 						}
 						root.InvokePendingJobCountChanged();
 
+						if (App.Current.IsShuttingDown)
+							break;
+
 						ChangeState(job);
 						try
 						{
