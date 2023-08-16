@@ -185,7 +185,7 @@ namespace Dashboard
 					if (prop is null)
 					{
 						if (!CustomMessageBox.ShowYesNo($"Settings property [{key}] not found", "Continue without it?"))
-							App.Current.Shutdown();
+							App.Current!.Shutdown();
 						continue;
 					}
 
@@ -212,7 +212,7 @@ namespace Dashboard
 					{
 						if (CustomMessageBox.ShowYesNo($"Key=[{key}], val=[{s_val}] could not be loaded as [{t}]", $"Continue anyway?"))
 							continue;
-						App.Current.Shutdown();
+						App.Current!.Shutdown();
 						throw new LoadCanceledException();
 					}
 					settings[key] = o_val;
@@ -226,26 +226,26 @@ namespace Dashboard
 		private static readonly System.Threading.ManualResetEventSlim resave_wh = new(false);
 		private void ResaveAll()
 		{
-			lock (settings)
+			using var _ = new ObjectLock(settings);
+			if (is_shut_down) return;
+			File.Copy(main_save_fname, back_save_fname, false);
+
+			var sw = new StreamWriter(main_save_fname, false, enc);
+			foreach (var prop in this.GetType().GetProperties())
 			{
-				if (is_shut_down) return;
-				File.Copy(main_save_fname, back_save_fname, false);
-				var sw = new StreamWriter(main_save_fname, false, enc);
-				foreach (var prop in this.GetType().GetProperties())
-				{
-					var t = prop.PropertyType;
-					t = Nullable.GetUnderlyingType(t) ?? t;
+				var t = prop.PropertyType;
+				t = Nullable.GetUnderlyingType(t) ?? t;
 
-					if (!settings.TryGetValue(prop.Name, out var val)) continue;
-					if (!setting_type_converter.TryGetValue(t, out var conv))
-						throw new NotImplementedException(t.ToString());
+				if (!settings.TryGetValue(prop.Name, out var val)) continue;
+				if (!setting_type_converter.TryGetValue(t, out var conv))
+					throw new NotImplementedException(t.ToString());
 
-					var s = conv.save(val);
-					sw.WriteLine($"{prop.Name}={s}");
-				}
-				sw.Close();
-				File.Delete(back_save_fname);
+				var s = conv.save(val);
+				sw.WriteLine($"{prop.Name}={s}");
 			}
+			sw.Close();
+
+			File.Delete(back_save_fname);
 		}
 		static Settings()
 		{
@@ -327,58 +327,60 @@ namespace Dashboard
 		private readonly Dictionary<string, object> settings = new(StringComparer.OrdinalIgnoreCase);
 		protected T? GetSetting<T>(string key, T? missing_value = default)
 		{
-			lock (settings)
-				if (settings.TryGetValue(key, out var value))
-					return (T)value;
-				else
-				{
-					if (missing_value != null)
-						SetSetting(key, missing_value);
-					return missing_value;
-				}
+			using var _ = new ObjectLock(settings);
+			if (settings.TryGetValue(key, out var value))
+				return (T)value;
+			else
+			{
+				if (missing_value != null)
+					SetSetting(key, missing_value);
+				return missing_value;
+			}
 		}
 		protected void SetSetting<T>(string key, T? value)
 		{
 			if (key.Contains('='))
 				throw new FormatException(key);
-			lock (settings)
-			{
-				// Allow generation to finish after shutdown
-				//if (is_shut_down) throw new System.Threading.Tasks.TaskCanceledException();
+			using var _ = new ObjectLock(settings);
+
+			// Allow generation to finish after shutdown
+			//if (is_shut_down) throw new System.Threading.Tasks.TaskCanceledException();
+
 #pragma warning disable CS8620 // settings value type is "object" instead of "object?"
-				var old_value = settings.GetValueOrDefault(key, null);
+			var old_value = settings.GetValueOrDefault(key, null);
 #pragma warning restore CS8620
-				if (old_value is null ? value is null : EqualityComparer<T>.Default.Equals((T)old_value, value))
-					return;
-				string file_line;
-				if (value is null)
-				{
-					settings.Remove(key);
-					file_line = $"{key}!=";
-				}
-				else
-				{
-					settings[key] = value;
-					var t = typeof(T);
-					var s = setting_type_converter[Nullable.GetUnderlyingType(t)??t].save(value);
-					file_line = $"{key}={s}";
-				}
+			if (old_value is null ? value is null : EqualityComparer<T>.Default.Equals((T)old_value, value))
+				return;
 
-				if (!File.Exists(main_save_fname))
-					File.WriteAllText(main_save_fname, "", enc);
-				File.Copy(main_save_fname, back_save_fname, false);
-				File.AppendAllLines(main_save_fname, new[] { file_line });
-				File.Delete(back_save_fname);
-
-				RequestResave(TimeSpan.FromSeconds(10));
+			string file_line;
+			if (value is null)
+			{
+				settings.Remove(key);
+				file_line = $"{key}!=";
 			}
+			else
+			{
+				settings[key] = value;
+				var t = typeof(T);
+				var s = setting_type_converter[Nullable.GetUnderlyingType(t)??t].save(value);
+				file_line = $"{key}={s}";
+			}
+
+			if (!File.Exists(main_save_fname))
+				File.WriteAllText(main_save_fname, "", enc);
+			File.Copy(main_save_fname, back_save_fname, false);
+			File.AppendAllLines(main_save_fname, new[] { file_line });
+			File.Delete(back_save_fname);
+
+			RequestResave(TimeSpan.FromSeconds(10));
 		}
 
 		public static RootSettings Root { get; } = new();
 
 		public void Shutdown()
 		{
-			lock (settings) is_shut_down = true;
+			//using var _ = new ObjectLock(settings);
+			is_shut_down = true;
 		}
 
 	}

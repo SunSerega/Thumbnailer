@@ -13,7 +13,7 @@ namespace Dashboard
 		{
 			private readonly Window? owner;
 
-			public OwnerWindowContainer() => owner = App.Current.MainWindow.IsVisible ? App.Current.MainWindow : null;
+			public OwnerWindowContainer() => owner = App.Current?.MainWindow.IsVisible??false ? App.Current.MainWindow : null;
 			public OwnerWindowContainer(Window? owner) => this.owner = owner;
 
 			public static implicit operator OwnerWindowContainer(Window? owner) => new(owner);
@@ -28,7 +28,7 @@ namespace Dashboard
 			{
 				InitializeComponent();
 			}
-			catch when (App.Current.IsShuttingDown)
+			catch when (App.Current?.IsShuttingDown??true)
 			{
 				MessageBox.Show(content??"", title);
 				return;

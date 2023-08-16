@@ -3,120 +3,161 @@
 
 using Dashboard;
 using System;
+using System.Collections;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows.Forms;
+using System.Xml.Linq;
 
 partial class Test
 {
+	record struct RawData(string Source, string? Info) { }
+
 	static void Main()
 	{
+		var thr_pool = new CustomThreadPool(6);
+		thr_pool.SetJobCount(3);
 
-
-
-		/**
-		var psi = new ProcessStartInfo(@"ffmpeg", @"-y -i ""C:\Users\SunMachine\Desktop\0.mkv""  -f ffmetadata -");
-		psi.UseShellExecute = false;
-		psi.RedirectStandardOutput = true;
-		psi.RedirectStandardError = true;
-		psi.RedirectStandardInput = true;
-		var p = Process.Start(psi)!;
-
-		p.OutputDataReceived += (o, e) =>
+		var raw_data = new ConcurrentDictionary<string, ConcurrentBag<RawData>>();
+		var errors = new ConcurrentDictionary<string, Exception>();
+		void add_xml_node(string key, XElement n, string source)
 		{
-			Console.WriteLine($"Otp: {e.Data}");
-		};
-		//p.ErrorDataReceived += (o, e) =>
-		//{
-		//    Console.WriteLine($"Err: {e.Data}");
-		//};
 
-		p.EnableRaisingEvents = true;
-		p.BeginOutputReadLine();
-		p.BeginErrorReadLine();
-		p.WaitForExit();
+			raw_data.GetOrAdd(key, _ => new()).Add(new(source, null));
 
-		return;
-		/**/
-		/**
-		var tp = new ThumbnailProvider();
+			foreach (var attrib in n.Attributes())
+				raw_data.GetOrAdd($"{key}::{attrib.Name}", _ => new()).Add(new(source, attrib.Value));
 
-		tp.SetFile(@"G:\0Music\2Special\0 Legendary\GHOST DATA\[20220207] 🍁 Blanke - The Fall [GHOST DATA Remix] 🍁.mp4");
-		tp.GetThumbnail(1, out _, out _);
-		/**/
+			foreach (var sub_n in n.Descendants())
+				add_xml_node($"{key}.{sub_n.Name}", sub_n, source);
 
+		}
 
-		//try
-		//{
-		//	ReplaceThumbnail(@"G:\0Music\3Sort\!temp\Geoxor\!good\[20230714] Geoxor - Apathy.mkv", @"G:\0Prog\Thumbnailer\Test\0.bmp");
-		//}
-		//catch (Exception e)
-		//{
-		//	Console.WriteLine(e);
-		//}
-		//ReplaceThumbnail(@"C:\Users\SunMachine\Desktop\Thumbnailer broken files\kevin macleod merry go.mp3", new Bitmap(@"G:\0Prog\Thumbnailer\Test\0.bmp"));
+		var found_c = 0;
+		var done_c = 0;
+		var sw1 = Stopwatch.StartNew();
+		var sw2 = new Stopwatch();
 
-		//var w = 256;
-		//var r = w/2d;
-		//var bmp = new Bitmap(w, w);
-
-		//for (var y = 0; y < w; y++)
-		//	for (var x = 0; x < w; x++)
-		//	{
-		//		var dx = x - r;
-		//		var dy = y - r;
-		//		var d = Math.Sqrt(dx*dx + dy*dy)/r;
-		//		if (d>1) continue;
-		//		var c = ColorExtensions.FromAhsb(255, h:Math.Atan2(dy, dx)/(2*Math.PI)+0.5, s:d, b:1);
-		//		bmp.SetPixel(x, y, Color.FromArgb(255, c.R, c.G, c.B));
-		//	}
-
-		//var res = @"temp.bmp";
-		//bmp.Save(res);
-		//Console.WriteLine(res);
-
-		var thr = new System.Threading.Thread(() =>
+		var otp_wh = new ManualResetEventSlim(false);
+		var finished_enmr = false;
+		var otp_thr = new Thread(() =>
 		{
-			var s = new Shell32.Shell();
+			while (true)
+			{
+				otp_wh.Wait();
+				otp_wh.Reset();
+				var l_done_c = done_c;
+				var l_found_c = found_c;
 
-			var sw = Stopwatch.StartNew();
-			var lnks = new ESQuary("ext:lnk").ToArray();
-			Console.WriteLine(sw.Elapsed);
+				Console.SetCursorPosition(0, 0);
+				
+				static void Print(string s)
+				{
+					foreach (var l in s.Replace("\r","").Split('\n'))
+					{
+						var buff_w = Console.BufferWidth;
+						var need_w = (l.Length+buff_w-1)/buff_w*buff_w;
+						Console.Write(l.PadRight(need_w));
+					}
+				}
 
-			sw.Restart();
-			var targets = Array.ConvertAll(lnks, lnk =>
+				Print($"{l_done_c}/{l_found_c} ({l_done_c/(double)l_found_c:P2})");
+
+				{
+					string done_time(Stopwatch sw)
+					{
+						string res = "?";
+						try
+						{
+							var done_in_sec = sw.Elapsed.TotalSeconds * (l_found_c/(double)l_done_c - 1);
+							res = done_in_sec.ToString();
+							res = TimeSpan.FromSeconds((long)done_in_sec).ToString();
+						}
+						catch (OverflowException) { }
+						return res;
+					}
+					Print($"Done in {done_time(sw2)} ~ {done_time(sw1)}");
+				}
+
+				if (!errors.IsEmpty)
+				{
+					Print($"Errors:");
+					foreach (var g in errors.GroupBy(kvp => kvp.Value.ToString()))
+					{
+						Print($"In {g.Count()} files, like: {g.First().Key}");
+						Print(g.Key);
+					}
+				}
+				
+				if (finished_enmr && l_done_c == l_found_c) break;
+				Thread.Sleep(100);
+			}
+		});
+		otp_thr.Start();
+
+		foreach (var fname in new ESQuary("")/**.Take(1000)/**/)
+		{
+			if (fname.Contains("$RECYCLE.BIN")) continue;
+			found_c += 1;
+			thr_pool.AddJob(fname, change_subjob =>
 			{
 				try
 				{
-					//Console.WriteLine(lnk);
-					var d = s.NameSpace(Path.GetDirectoryName(lnk));
-					if (d is null)
-						return (lnk, null);
-					var f = d.Items().Item(Path.GetFileName(lnk));
-					var l = (Shell32.ShellLinkObject)f.GetLink;
-					return (lnk, (object?)l.Path);
+
+					//change_subjob("getting metadata");
+					var metadata_s = ThumbGenerator.RunFFmpeg($"-i \"{fname}\" -hide_banner -show_format -show_streams -print_format xml", () => true, exe: "probe").Result.otp;
+					//change_subjob(null);
+
+					//change_subjob("parsing metadata XML");
+					var metadata_xml = XDocument.Parse(metadata_s).Root ?? throw new InvalidOperationException("No xml root");
+					//change_subjob(null);
+
+					add_xml_node(metadata_xml.Name.LocalName, metadata_xml, fname);
+
 				}
 				catch (Exception e)
 				{
-					return (lnk, e);
+					if (!errors.TryAdd(fname, e))
+						throw null!;
+				}
+				finally
+				{
+					Interlocked.Increment(ref done_c);
+					otp_wh.Set();
 				}
 			});
-			sw.Stop();
+		}
+		finished_enmr = true;
+		otp_wh.Set();
+		thr_pool.SetJobCount(thr_pool.MaxJobCount);
+		sw2.Start();
 
-			Console.WriteLine(sw.Elapsed);
-			//Console.WriteLine(targets);
+		otp_thr.Join();
+		Console.WriteLine("Done running ffmpeg");
 
-			foreach (var g in targets.Select(t=>t.Item2).OfType<Exception>().GroupBy(e=>e.ToString()))
-			{
-				Console.WriteLine(g.First());
-			}
+		//var tw = Console.Out;
+		TextWriter tw = new StreamWriter(File.Create("otp.txt"), new System.Text.UTF8Encoding(true));
 
-		});
-		thr.SetApartmentState(System.Threading.ApartmentState.STA);
-		thr.Start();
+		foreach (var (key, bag) in raw_data.OrderBy(kvp=>kvp.Key))
+		{
+			tw.WriteLine(new string('=', 30));
+			var lu = bag.ToLookup(d => d.Info, d => d.Source);
+			tw.WriteLine($"{key}: {lu.Count}");
+			foreach (var g in lu/**.Take(10)/**/)
+				tw.WriteLine($"[{g.Key??"<null>"}] in {g.Count()} files like [{g.First()}]");
+			//if (lu.Count>10)
+			//	tw.WriteLine("...");
+		}
+
+		tw.Close();
+		//Console.ReadLine();
 	}
 
 	public static unsafe void ReplaceThumbnail(string filePath, string newThumbnailPath)

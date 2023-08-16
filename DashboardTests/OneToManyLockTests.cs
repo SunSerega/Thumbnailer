@@ -124,21 +124,19 @@ namespace Dashboard.Tests
 
 				new DispatcherTimer(TimeSpan.FromSeconds(1/60d), DispatcherPriority.Normal, (o, e) =>
 				{
-					lock (counter_lock)
-					{
-						if (one_counter!=0 && many_counter!=0)
-							throw new InvalidOperationException();
-						if (one_counter>1)
-							throw new InvalidOperationException();
-						if (many_counter>many_thr_c)
-							throw new InvalidOperationException();
+					using var _ = new ObjectLock(counter_lock);
 
-						tb_tested_one.Text = $"{done_one} / {one_thr_c*one_rep_c}";
-						tb_tested_many.Text = $"{done_many} / {many_thr_c*many_rep_c}";
-						tb_one.Text = one_counter.ToString();
-						tb_many.Text = many_counter.ToString();
+					if (one_counter!=0 && many_counter!=0)
+						throw new InvalidOperationException();
+					if (one_counter>1)
+						throw new InvalidOperationException();
+					if (many_counter>many_thr_c)
+						throw new InvalidOperationException();
 
-					}
+					tb_tested_one.Text = $"{done_one} / {one_thr_c*one_rep_c}";
+					tb_tested_many.Text = $"{done_many} / {many_thr_c*many_rep_c}";
+					tb_one.Text = one_counter.ToString();
+					tb_many.Text = many_counter.ToString();
 
 				}, w.Dispatcher).Start();
 

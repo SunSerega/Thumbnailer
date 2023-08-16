@@ -1,4 +1,6 @@
-﻿using System.Windows;
+﻿using System;
+
+using System.Windows;
 
 namespace Dashboard
 {
@@ -8,8 +10,7 @@ namespace Dashboard
 
 		public bool IsShuttingDown { get; private set; } = false;
 
-		private static App? inst;
-		public static new App Current => inst!;
+		public static new App? Current { get; private set; }
 
 		public new void Shutdown(int ec)
 		{
@@ -20,7 +21,9 @@ namespace Dashboard
 
 		public App()
 		{
-			inst = this;
+			if (Current != null)
+				throw new InvalidOperationException();
+			Current = this;
 			SessionEnding += (o, e) =>
 			{
 				if (IsShuttingDown) return;

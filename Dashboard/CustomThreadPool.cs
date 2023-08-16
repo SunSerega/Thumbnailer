@@ -335,7 +335,7 @@ namespace Dashboard
 						}
 						root.InvokePendingJobCountChanged();
 
-						if (App.Current.IsShuttingDown)
+						if (App.Current?.IsShuttingDown??false)
 							break;
 
 						ChangeState(job);
@@ -372,18 +372,16 @@ namespace Dashboard
 		public void SetJobCount(int c)
 		{
 			if (want_job_count == c) return;
-			lock (job_count_lock)
-			{
-				if (want_job_count == c) return;
+			using var _ = new ObjectLock(job_count_lock);
+			if (want_job_count == c) return;
 
-				for (int i = want_job_count; i < c; i++)
-					items[i].suspended_wh.Set();
-				for (int i = c; i < want_job_count; i++)
-					items[i].suspended_wh.Reset();
+			for (int i = want_job_count; i < c; i++)
+				items[i].suspended_wh.Set();
+			for (int i = c; i < want_job_count; i++)
+				items[i].suspended_wh.Reset();
 
-				Settings.Root.MaxJobCount = c;
-				want_job_count = c;
-			}
+			Settings.Root.MaxJobCount = c;
+			want_job_count = c;
 		}
 
 		private volatile int active_job_count = 0;

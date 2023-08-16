@@ -316,6 +316,20 @@ namespace Dashboard
 
 	}
 
+	public readonly struct ObjectLock : IDisposable
+	{
+		private readonly object o;
+
+		public ObjectLock(object o)
+		{
+			this.o = o;
+			Monitor.Enter(o);
+		}
+
+		public void Dispose() => Monitor.Exit(o);
+
+	}
+
 	public static class Log
 	{
 		private const string log_fname = "Dashboard.log";
@@ -324,7 +338,8 @@ namespace Dashboard
 		
 		public static void Append(string l)
 		{
-			lock (log_lock) System.IO.File.AppendAllLines(log_fname, new[] { l }, enc);
+			using var _ = new ObjectLock(log_lock);
+			System.IO.File.AppendAllLines(log_fname, new[] { l }, enc);
 		}
 
 	}

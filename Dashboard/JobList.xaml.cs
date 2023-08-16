@@ -122,7 +122,7 @@ namespace Dashboard
 							}
 						));
 					}
-					catch when (App.Current.IsShuttingDown)
+					catch when (App.Current!.IsShuttingDown)
 					{
 						return;
 					}

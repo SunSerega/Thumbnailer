@@ -17,7 +17,7 @@ namespace Dashboard
 		public FileChooser(Action<IEnumerable<string>> on_confirm)
 		{
 			InitializeComponent();
-			Owner = App.Current.MainWindow;
+			Owner = App.Current!.MainWindow;
 
 			void reset_dialog_location()
 			{

@@ -29,7 +29,7 @@ namespace Dashboard
 				{
 					Header = "Shutdown",
 				};
-				mi.Click += (o, e) => { App.Current.Shutdown(); };
+				mi.Click += (o, e) => App.Current!.Shutdown();
 				ContextMenu.Items.Add(mi);
 			}
 
@@ -41,13 +41,13 @@ namespace Dashboard
 			{
 				if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
 				{
-					App.Current.Shutdown();
+					App.Current!.Shutdown();
 					return;
 				}
 				ShowIco();
 				e.Cancel = true;
 			};
-			App.Current.Exit += (o, e) => Dispose();
+			App.Current!.Exit += (o, e) => Dispose();
 
 			NoLeftClickDelay = true;
 			LeftClickCommand = new DummyCommand(ShowWin);

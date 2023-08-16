@@ -24,15 +24,29 @@
 	
 	
 	
+	$cache_files = Get-ChildItem -Path "C:\Users\$env:USERNAME\AppData\Local\Microsoft\Windows\Explorer" -Filter "*.db"
 	while ($true) {
-		$cache_files = Get-ChildItem -Path "C:\Users\$env:USERNAME\AppData\Local\Microsoft\Windows\Explorer" -Filter "*.db"
 		if ($cache_files.Count -eq 0) { break }
 		Write-Host "Trying to clear cache items: "$cache_files.Count
+		$next_cache_files = @()
 		foreach ($cache_file in $cache_files) {
 			$fullName = $cache_file.FullName
+			Write-Host $fullName
 			#Start-Process "C:\Program Files (x86)\IObit\IObit Unlocker\IObitUnlocker.exe" -ArgumentList '/Delete "$fullName"'
-			Remove-Item -Path $cache_file.FullName -Force -ErrorAction SilentlyContinue
+			try {
+				$need_del = Test-Path $fullName -ErrorAction Stop
+			} catch {
+				$need_del = $false
+			}
+			if ($need_del) {
+				try {
+					Remove-Item -Path $cache_file.FullName -Force -ErrorAction Stop
+				} catch {
+					$next_cache_files += $cache_file
+				}
+			}
 		}
+		$cache_file = $next_cache_files
 		Start-Sleep -Milliseconds 100
 		Kill-Procs "explorer"
 		Kill-Procs "rundll32"

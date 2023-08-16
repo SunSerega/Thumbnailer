@@ -53,6 +53,8 @@ namespace Dashboard
 			var t_otp = p.StandardOutput.ReadToEndAsync();
 			var t_err = p.StandardError.ReadToEndAsync();
 
+			//TODO Maybe use common thread?
+			// - Separate RunFFmpeg to a different class
 			new System.Threading.Thread(() => Utils.HandleException(() =>
 			{
 				if (p.WaitForExit(TimeSpan.FromSeconds(10)))
@@ -110,9 +112,10 @@ namespace Dashboard
 
 			public string CurrentThumbPath { get; }
 			public BitmapImage CurrentThumbBmp {
-				get {
-					lock (this)
-						return Utils.LoadUncachedBitmap(CurrentThumbPath);
+				get
+				{
+					using var _ = new ObjectLock(this);
+					return Utils.LoadUncachedBitmap(CurrentThumbPath);
 				}
 			}
 
@@ -191,10 +194,9 @@ namespace Dashboard
 
 			public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos)
 			{
-				lock (this)
-				{
-					if (settings.ChosenStreamPositions is null)
-						throw new InvalidOperationException();
+				using var _ = new ObjectLock(this);
+				if (settings.ChosenStreamPositions is null)
+					throw new InvalidOperationException();
 					var source = ThumbSources[ind];
 
 					double pos = in_pos ?? settings.ChosenStreamPositions[ind];
@@ -217,9 +219,8 @@ namespace Dashboard
 					if (res.StartsWith(base_path))
 						res = res.Remove(0, base_path.Length);
 
-					settings.CurrentThumb = res;
-					COMManip.ResetThumbFor(InpPath);
-				}
+				settings.CurrentThumb = res;
+				COMManip.ResetThumbFor(InpPath);
 			}
 
 			#endregion
@@ -272,14 +273,12 @@ namespace Dashboard
 			{
 				if (!fname.StartsWith(settings.GetSettingsDir()))
 					throw new InvalidOperationException(fname);
-				lock (this)
-				{
-					if (!File.Exists(fname))
-						return false;
-					var sz = FileSize(fname);
-					File.Delete(fname);
-					InvokeCacheSizeChanged(-sz);
-				}
+				using var _ = new ObjectLock(this);
+				if (!File.Exists(fname))
+					return false;
+				var sz = FileSize(fname);
+				File.Delete(fname);
+				InvokeCacheSizeChanged(-sz);
 				return true;
 			}
 
@@ -288,14 +287,12 @@ namespace Dashboard
 			{
 				if (!dir.StartsWith(settings.GetSettingsDir()))
 					throw new InvalidOperationException(dir);
-				lock (this)
-				{
-					if (!Directory.Exists(dir))
-						return false;
-					var sz = DirSize(dir);
-					Directory.Delete(dir, true);
-					InvokeCacheSizeChanged(-sz);
-				}
+				using var _ = new ObjectLock(this);
+				if (!Directory.Exists(dir))
+					return false;
+				var sz = DirSize(dir);
+				Directory.Delete(dir, true);
+				InvokeCacheSizeChanged(-sz);
 				return true;
 			}
 
@@ -458,7 +455,7 @@ namespace Dashboard
 						Utils.HandleException(e);
 						// unrecoverable, but also unimaginable
 						Console.Beep(); Console.Beep(); Console.Beep();
-						App.Current.Dispatcher.Invoke(() => App.Current.Shutdown(-1));
+						App.Current!.Dispatcher.Invoke(() => App.Current.Shutdown(-1));
 					}
 				}
 
@@ -467,8 +464,8 @@ namespace Dashboard
 
 			public int DeleteExtraFiles()
 			{
-				lock (this)
-					return temps.DeleteExtraFiles();
+				using var _ = new ObjectLock(this);
+				return temps.DeleteExtraFiles();
 			}
 
 			#endregion
@@ -494,11 +491,11 @@ namespace Dashboard
 
 			public void GenerateThumb(Action<string, CustomThreadPool.JobWork> add_job, Action<ICachedFileInfo> on_regenerated, bool force_regen)
 			{
-				lock (this)
-				{
-					if (is_erased)
-						return;
-				}
+				using var _ = new ObjectLock(this);
+
+				if (is_erased)
+					return;
+
 				var inp_fname = settings.InpPath ?? throw new InvalidOperationException();
 				var otp_temp_name = "thumb file";
 
@@ -520,33 +517,31 @@ namespace Dashboard
 					var total_wait = TimeSpan.FromSeconds(5);
 					var waited = DateTime.UtcNow-write_time;
 					if (waited < total_wait)
-						lock (this)
-						{
-							temps.TryRemove(otp_temp_name);
-							temps.VerifyEmpty();
-							settings.CurrentThumbIsFinal = false;
-							SetTempSource(CommonThumbSources.Waiting);
-							System.Threading.Tasks.Task.Delay(total_wait-waited)
-								.ContinueWith(t => Utils.HandleException(
-									() => GenerateThumb(add_job, on_regenerated, force_regen)
-								));
-							return;
-						}
-				}
-
-				lock (this)
-				{
-					if (!force_regen && settings.LastInpChangeTime == write_time && settings.CurrentThumbIsFinal)
+					{
+						temps.TryRemove(otp_temp_name);
+						temps.VerifyEmpty();
+						settings.CurrentThumbIsFinal = false;
+						SetTempSource(CommonThumbSources.Waiting);
+						System.Threading.Tasks.Task.Delay(total_wait-waited)
+							.ContinueWith(t => Utils.HandleException(
+								() => GenerateThumb(add_job, on_regenerated, force_regen)
+							));
 						return;
-
-					temps.TryRemove(otp_temp_name);
-					temps.VerifyEmpty();
-					settings.CurrentThumbIsFinal = false;
-					SetTempSource(CommonThumbSources.Ungenerated);
+					}
 				}
+
+				if (!force_regen && settings.LastInpChangeTime == write_time && settings.CurrentThumbIsFinal)
+					return;
+
+				temps.TryRemove(otp_temp_name);
+				temps.VerifyEmpty();
+				settings.CurrentThumbIsFinal = false;
+				SetTempSource(CommonThumbSources.Ungenerated);
 
 				add_job($"Generating thumb for: {inp_fname}", change_subjob =>
 				{
+					using var _ = new ObjectLock(this);
+
 					//change_subjob("copy");
 					//var temp_fname = state.AddFile("inp").Path;
 					//try
@@ -575,14 +570,12 @@ namespace Dashboard
 					//	return;
 					//}
 
-					lock (this)
-					{
-						// For now have removed the setting for this
-						//var sw = System.Diagnostics.Stopwatch.StartNew();
+					// For now have removed the setting for this
+					//var sw = System.Diagnostics.Stopwatch.StartNew();
 
-						var sources = new List<ThumbSource>();
+					var sources = new List<ThumbSource>();
 
-						change_subjob("getting metadata");
+					change_subjob("getting metadata");
 						var metadata_s = RunFFmpeg($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -print_format xml", ()=>true, exe: "probe").Result.otp;
 						change_subjob(null);
 
@@ -598,47 +591,48 @@ namespace Dashboard
 								foreach (var stream_xml in streams_xml.Descendants("stream"))
 								{
 									var ind = int.Parse(stream_xml.Attribute("index")!.Value);
-									change_subjob($"checking stream#{ind}");
+								change_subjob($"checking stream#{ind}");
 
-									string? get_tag(string key) =>
-										stream_xml.Descendants("tag").SingleOrDefault(n => n.Attribute("key")!.Value == key)?.Attribute("value")!.Value;
+								var codec_type_s = stream_xml.Attribute("codec_type")!.Value;
 
-									var tag_filename = get_tag("filename");
-									var tag_mimetype = get_tag("mimetype");
+								string? get_tag(string key) =>
+									stream_xml.Descendants("tag").SingleOrDefault(n => n.Attribute("key")!.Value == key)?.Attribute("value")!.Value;
 
-									var stream_is_image = tag_mimetype!=null && tag_mimetype.StartsWith("image/");
+								var tag_filename = get_tag("filename");
+								var tag_mimetype = get_tag("mimetype");
 
-									var frame_rate_spl = stream_xml.Attribute("r_frame_rate")!.Value.Split(new[] { '/' }, 2);
-									var frame_len = int.Parse(frame_rate_spl[0]) / (double)int.Parse(frame_rate_spl[1]);
-									if (!(max_frame_len > frame_len))
-										max_frame_len = frame_len;
+								var stream_is_image = tag_mimetype!=null && tag_mimetype.StartsWith("image/");
 
-									var l_dur_s1 = stream_xml.Attribute("duration")?.Value;
-									var l_dur_s2 = get_tag("DURATION") ?? get_tag("DURATION-eng");
-									// torrent subs stream can have boths
-									//if ((l_dur_s1 != null) && (l_dur_s2 != null))
-									//	throw new NotImplementedException($"[{inp_fname}]: [{metadata_s}]");
+								var is_attachment = codec_type_s == "attachment";
+								if (is_attachment)
+								{
+									if (tag_filename == null)
+										throw new InvalidOperationException();
+									if (tag_mimetype == null)
+										throw new InvalidOperationException();
+								}
+								else // !is_attachment
+								{
+									// G:\0Music\3Sort\!fix\Selulance (soundcloud)\[20150103] Selulance - What.mkv
+									//if (stream_is_image)
+									//	// Should work, but throw to find such file
+									//	throw new NotImplementedException(inp_fname);
+								}
 
-									var codec_type_s = stream_xml.Attribute("codec_type")!.Value;
+								var frame_rate_spl = stream_xml.Attribute("r_frame_rate")!.Value.Split(new[] { '/' }, 2);
+								var frame_len = stream_is_image || is_attachment ? double.NaN :
+									int.Parse(frame_rate_spl[0]) / (double)int.Parse(frame_rate_spl[1]);
+								if (double.IsNaN(max_frame_len) || max_frame_len < frame_len)
+									max_frame_len = frame_len;
 
-									var is_attachment = codec_type_s == "attachment";
-									if (is_attachment)
-									{
-										if (tag_filename == null)
-											throw new InvalidOperationException();
-										if (tag_mimetype == null)
-											throw new InvalidOperationException();
-									}
-									else // !is_attachment
-									{
-										// G:\0Music\3Sort\!fix\Selulance (soundcloud)\[20150103] Selulance - What.mkv
-										//if (stream_is_image)
-										//	// Should work, but throw to find such file
-										//	throw new NotImplementedException(inp_fname);
-									}
+								var l_dur_s1 = stream_xml.Attribute("duration")?.Value;
+								var l_dur_s2 = get_tag("DURATION") ?? get_tag("DURATION-eng");
+								// torrent subs stream can have boths
+								//if ((l_dur_s1 != null) && (l_dur_s2 != null))
+								//	throw new NotImplementedException($"[{inp_fname}]: [{metadata_s}]");
 
-									if (codec_type_s switch // skip if
-									{
+								if (codec_type_s switch // skip if
+								{
 										"video" => false,
 										"audio" => true,
 										"subtitle" => true,
@@ -680,20 +674,20 @@ namespace Dashboard
 									else if (l_dur != TimeSpan.Zero)
 										throw new NotImplementedException();
 
-									sources.Add(new(source_name, l_dur, (pos, change_subjob) =>
+								sources.Add(new(source_name, l_dur, (pos, change_subjob) =>
+								{
+									using var _ = new ObjectLock(this);
+									try
 									{
-										lock (this)
-											try
-											{
-												using var l_temps = new LocalTempsList(this);
-												var args = new List<string>();
+										using var l_temps = new LocalTempsList(this);
+										var args = new List<string>();
 
-												_=temps.TryRemove(otp_temp_name);
-												var otp_temp = l_temps.AddFile(otp_temp_name, "thump.png");
-												var otp_fname = otp_temp.Path;
+										temps.TryRemove(otp_temp_name);
+										var otp_temp = l_temps.AddFile(otp_temp_name, "thump.png");
+										var otp_fname = otp_temp.Path;
 
-												if (l_dur != TimeSpan.Zero)
-													args.Add($"-ss {pos*l_dur.TotalSeconds}");
+										if (l_dur != TimeSpan.Zero)
+											args.Add($"-ss {pos*l_dur.TotalSeconds}");
 
 												//TODO https://trac.ffmpeg.org/ticket/10512
 												// - Need to cd into input folder for conversion to work
@@ -836,18 +830,15 @@ namespace Dashboard
 							}
 							else if (format_xml.Attribute("duration") is XAttribute global_dur_xml)
 							{
-								change_subjob("make dur string");
-								var global_dur = TimeSpan.FromSeconds(double.Parse(global_dur_xml.Value));
-								if (!double.IsNaN(max_frame_len))
-								{
-									global_dur -= TimeSpan.FromSeconds(max_frame_len);
-									if (global_dur < TimeSpan.Zero) global_dur = TimeSpan.Zero;
-								}
+							change_subjob("make dur string");
+							var global_dur = TimeSpan.FromSeconds(double.Parse(global_dur_xml.Value));
+							if (!double.IsNaN(max_frame_len) && global_dur < TimeSpan.FromSeconds(max_frame_len))
+								global_dur = TimeSpan.Zero;
 
-								if (dur_s!="" || global_dur.TotalHours>=1)
-									dur_s += Math.Truncate(global_dur.TotalHours).ToString() + ':';
-								if (dur_s!="" || global_dur.Minutes!=0)
-									dur_s += global_dur.Minutes.ToString("00") + ':';
+							if (dur_s!="" || global_dur.TotalHours>=1)
+								dur_s += Math.Truncate(global_dur.TotalHours).ToString() + ':';
+							if (dur_s!="" || global_dur.Minutes!=0)
+								dur_s += global_dur.Minutes.ToString("00") + ':';
 								if (dur_s!="" || global_dur.Seconds!=0)
 									dur_s += global_dur.Seconds.ToString("00");
 								if (dur_s.Length<5)
@@ -877,11 +868,10 @@ namespace Dashboard
 						if (sources.Count==0)
 							sources.Add(CommonThumbSources.SoundOnly);
 
-						settings.LastInpChangeTime = write_time;
-						SetSources(change_subjob, sources.ToArray());
-						settings.CurrentThumbIsFinal = true;
-						on_regenerated(this);
-					}
+					settings.LastInpChangeTime = write_time;
+					SetSources(change_subjob, sources.ToArray());
+					settings.CurrentThumbIsFinal = true;
+					on_regenerated(this);
 
 				});
 			}
@@ -890,27 +880,23 @@ namespace Dashboard
 
 			public void ClearTemps()
 			{
-				lock (this)
-				{
-					settings.LastInpChangeTime = DateTime.MinValue;
-					settings.LastCacheUseTime = DateTime.MinValue;
-					settings.CurrentThumb = null;
-					temps.Clear();
-				}
+				using var _ = new ObjectLock(this);
+				settings.LastInpChangeTime = DateTime.MinValue;
+				settings.LastCacheUseTime = DateTime.MinValue;
+				settings.CurrentThumb = null;
+				temps.Clear();
 			}
 
 			private bool is_erased = false;
 			public void Erase()
 			{
-				lock (this)
-				{
-					if (is_erased)
-						throw new InvalidOperationException();
-					is_erased = true;
-					Shutdown();
-					DeleteDir(settings.GetSettingsDir());
-					COMManip.ResetThumbFor(InpPath);
-				}
+				using var _ = new ObjectLock(this);
+				if (is_erased)
+					throw new InvalidOperationException();
+				is_erased = true;
+				Shutdown();
+				DeleteDir(settings.GetSettingsDir());
+				COMManip.ResetThumbFor(InpPath);
 			}
 
 			// Shutdown without erasing (when exiting)
@@ -1013,7 +999,7 @@ namespace Dashboard
 				))
 					foreach (var purge_act in purge_acts) purge_act();
 				else
-					App.Current.Dispatcher.Invoke(()=>App.Current.Shutdown(-1));
+					App.Current!.Dispatcher.Invoke(()=>App.Current.Shutdown(-1));
 
 			}
 
@@ -1047,24 +1033,20 @@ namespace Dashboard
 		private volatile uint last_used_id = 0;
 		private CachedFileInfo GetCFI(string fname)
 		{
-			if (files.TryGetValue(fname, out var cfi))
-				return cfi;
 			// Cannot add concurently, because .GetOrAdd can create
 			// multiple instances of cfi for the same fname in different threads
-			lock (files)
+			if (files.TryGetValue(fname, out var cfi)) return cfi;
+			using var _ = new ObjectLock(files);
+			if (files.TryGetValue(fname, out cfi)) return cfi;
+			while (true)
 			{
-				if (files.TryGetValue(fname, out cfi))
-					return cfi;
-				while (true)
-				{
-					var id = System.Threading.Interlocked.Increment(ref last_used_id);
-					var cache_file_dir = cache_dir.CreateSubdirectory(id.ToString());
-					if (cache_file_dir.EnumerateFileSystemInfos().Any()) continue;
-					cfi = new(id, cache_file_dir.FullName, InvokeCacheSizeChanged, fname);
-					if (!files.TryAdd(fname, cfi))
-						throw new InvalidOperationException();
-					return cfi;
-				}
+				var id = System.Threading.Interlocked.Increment(ref last_used_id);
+				var cache_file_dir = cache_dir.CreateSubdirectory(id.ToString());
+				if (cache_file_dir.EnumerateFileSystemInfos().Any()) continue;
+				cfi = new(id, cache_file_dir.FullName, InvokeCacheSizeChanged, fname);
+				if (!files.TryAdd(fname, cfi))
+					throw new InvalidOperationException();
+				return cfi;
 			}
 		}
 
