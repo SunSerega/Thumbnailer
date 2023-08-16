@@ -30,52 +30,6 @@ namespace Dashboard
 				: base(message) { }
 		}
 
-		private static async System.Threading.Tasks.Task<(string otp, string err)> RunFFmpeg(string args, Func<bool> verify_res, string? execute_in = null, string exe = "mpeg")
-		{
-
-			var p = new System.Diagnostics.Process
-			{
-				StartInfo = new("ff"+exe, args)
-				{
-					UseShellExecute = false,
-					RedirectStandardInput = true,
-					RedirectStandardOutput = true,
-					RedirectStandardError = true,
-					CreateNoWindow = true,
-				}
-			};
-
-			if (execute_in != null)
-				p.StartInfo.WorkingDirectory = execute_in;
-
-			p.Start();
-
-			var t_otp = p.StandardOutput.ReadToEndAsync();
-			var t_err = p.StandardError.ReadToEndAsync();
-
-			//TODO Maybe use common thread?
-			// - Separate RunFFmpeg to a different class
-			new System.Threading.Thread(() => Utils.HandleException(() =>
-			{
-				if (p.WaitForExit(TimeSpan.FromSeconds(10)))
-					return;
-				p.Kill();
-				CustomMessageBox.Show(
-					$"[{p.StartInfo.FileName} {p.StartInfo.Arguments}] hanged. Output:",
-					t_otp.Result + "\n\n===================\n\n" + t_err.Result
-				);
-			}))
-			{
-				IsBackground = true,
-				Name = $"RunFFmpeg: {p.StartInfo.FileName} {p.StartInfo.ArgumentList}",
-			}.Start();
-
-			var res = (otp: await t_otp, err: await t_err);
-			if (!verify_res())
-				throw new InvalidOperationException($"{execute_in}> [{p.StartInfo.FileName} {p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
-			return res;
-		}
-
 		#region ThumbSource
 
 		public sealed class ThumbSource
@@ -197,27 +151,27 @@ namespace Dashboard
 				using var _ = new ObjectLock(this);
 				if (settings.ChosenStreamPositions is null)
 					throw new InvalidOperationException();
-					var source = ThumbSources[ind];
+				var source = ThumbSources[ind];
 
-					double pos = in_pos ?? settings.ChosenStreamPositions[ind];
-					out_pos = pos;
-					if (!force_regen && ind == settings.ChosenThumbOptionInd && pos == settings.ChosenStreamPositions[ind])
-						return;
+				double pos = in_pos ?? settings.ChosenStreamPositions[ind];
+				out_pos = pos;
+				if (!force_regen && ind == settings.ChosenThumbOptionInd && pos == settings.ChosenStreamPositions[ind])
+					return;
 
-					var res = source.Extract(pos, change_subjob);
+				var res = source.Extract(pos, change_subjob);
 
-					settings.ChosenThumbOptionInd = ind;
-					if (settings.ChosenStreamPositions[ind] != pos)
-					{
-						var poss = settings.ChosenStreamPositions;
-						poss[ind] = pos;
-						settings.ChosenStreamPositions = null;
-						settings.ChosenStreamPositions = poss;
-					}
+				settings.ChosenThumbOptionInd = ind;
+				if (settings.ChosenStreamPositions[ind] != pos)
+				{
+					var poss = settings.ChosenStreamPositions;
+					poss[ind] = pos;
+					settings.ChosenStreamPositions = null;
+					settings.ChosenStreamPositions = poss;
+				}
 
-					var base_path = settings.GetSettingsDir() + @"\";
-					if (res.StartsWith(base_path))
-						res = res.Remove(0, base_path.Length);
+				var base_path = settings.GetSettingsDir() + @"\";
+				if (res.StartsWith(base_path))
+					res = res.Remove(0, base_path.Length);
 
 				settings.CurrentThumb = res;
 				COMManip.ResetThumbFor(InpPath);
@@ -576,21 +530,21 @@ namespace Dashboard
 					var sources = new List<ThumbSource>();
 
 					change_subjob("getting metadata");
-						var metadata_s = RunFFmpeg($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -print_format xml", ()=>true, exe: "probe").Result.otp;
+					var metadata_s = FFmpeg.Invoke($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -print_format xml", ()=>true, exe: "probe").Result.otp;
+					change_subjob(null);
+
+					try
+					{
+						change_subjob("parsing metadata XML");
+						var metadata_xml = XDocument.Parse(metadata_s).Root!;
 						change_subjob(null);
 
-						try
-						{
-							change_subjob("parsing metadata XML");
-							var metadata_xml = XDocument.Parse(metadata_s).Root!;
-							change_subjob(null);
-
-							var dur_s = "";
-							var max_frame_len = double.NaN;
-							if (metadata_xml.Descendants("streams").SingleOrDefault() is XElement streams_xml)
-								foreach (var stream_xml in streams_xml.Descendants("stream"))
-								{
-									var ind = int.Parse(stream_xml.Attribute("index")!.Value);
+						var dur_s = "";
+						var max_frame_len = double.NaN;
+						if (metadata_xml.Descendants("streams").SingleOrDefault() is XElement streams_xml)
+							foreach (var stream_xml in streams_xml.Descendants("stream"))
+							{
+								var ind = int.Parse(stream_xml.Attribute("index")!.Value);
 								change_subjob($"checking stream#{ind}");
 
 								var codec_type_s = stream_xml.Attribute("codec_type")!.Value;
@@ -633,46 +587,46 @@ namespace Dashboard
 
 								if (codec_type_s switch // skip if
 								{
-										"video" => false,
-										"audio" => true,
-										"subtitle" => true,
-										"attachment" => !stream_is_image,
-										_ => throw new FormatException(codec_type_s),
-									}) continue;
+									"video" => false,
+									"audio" => true,
+									"subtitle" => true,
+									"attachment" => !stream_is_image,
+									_ => throw new FormatException(codec_type_s),
+								}) continue;
 
-									string source_name;
-									TimeSpan l_dur;
-									if (stream_is_image)
-									{
-										source_name = $"Image:{ind}";
-										l_dur = TimeSpan.Zero;
-									}
-									else if (l_dur_s1 != null)
-									{
-										source_name = $"FStream:{ind}";
-										l_dur = TimeSpan.FromSeconds(double.Parse(l_dur_s1));
-									}
-									else if (l_dur_s2 != null)
-									{
-										source_name = $"TStream:{ind}";
-										if (!l_dur_s2.Contains('.'))
-											throw new FormatException();
-										l_dur_s2 = l_dur_s2.TrimEnd('0').TrimEnd('.'); // Otherwise TimeSpan.Parse breaks
-										l_dur = TimeSpan.Parse(l_dur_s2);
-									}
-									else
-									{
-										source_name = $"?:{ind}";
-										l_dur = TimeSpan.Zero;
-									}
+								string source_name;
+								TimeSpan l_dur;
+								if (stream_is_image)
+								{
+									source_name = $"Image:{ind}";
+									l_dur = TimeSpan.Zero;
+								}
+								else if (l_dur_s1 != null)
+								{
+									source_name = $"FStream:{ind}";
+									l_dur = TimeSpan.FromSeconds(double.Parse(l_dur_s1));
+								}
+								else if (l_dur_s2 != null)
+								{
+									source_name = $"TStream:{ind}";
+									if (!l_dur_s2.Contains('.'))
+										throw new FormatException();
+									l_dur_s2 = l_dur_s2.TrimEnd('0').TrimEnd('.'); // Otherwise TimeSpan.Parse breaks
+									l_dur = TimeSpan.Parse(l_dur_s2);
+								}
+								else
+								{
+									source_name = $"?:{ind}";
+									l_dur = TimeSpan.Zero;
+								}
 
-									if (!double.IsNaN(frame_len))
-									{
-										l_dur -= TimeSpan.FromSeconds(frame_len);
-										if (l_dur < TimeSpan.Zero) l_dur = TimeSpan.Zero;
-									}
-									else if (l_dur != TimeSpan.Zero)
-										throw new NotImplementedException();
+								if (!double.IsNaN(frame_len))
+								{
+									l_dur -= TimeSpan.FromSeconds(frame_len);
+									if (l_dur < TimeSpan.Zero) l_dur = TimeSpan.Zero;
+								}
+								else if (l_dur != TimeSpan.Zero)
+									throw new NotImplementedException();
 
 								sources.Add(new(source_name, l_dur, (pos, change_subjob) =>
 								{
@@ -689,147 +643,147 @@ namespace Dashboard
 										if (l_dur != TimeSpan.Zero)
 											args.Add($"-ss {pos*l_dur.TotalSeconds}");
 
-												//TODO https://trac.ffmpeg.org/ticket/10512
-												// - Need to cd into input folder for conversion to work
-												string ffmpeg_path;
+										//TODO https://trac.ffmpeg.org/ticket/10512
+										// - Need to cd into input folder for conversion to work
+										string ffmpeg_path;
 
-												//TODO https://trac.ffmpeg.org/ticket/10506
-												// - Need to first extract the attachments, before they can be used as input
-												var attachments_dir_temp_name = "attachments dir";
-												if (is_attachment)
-												{
-													change_subjob("dump attachment");
-													if (l_dur != TimeSpan.Zero)
-														throw new NotImplementedException();
+										//TODO https://trac.ffmpeg.org/ticket/10506
+										// - Need to first extract the attachments, before they can be used as input
+										var attachments_dir_temp_name = "attachments dir";
+										if (is_attachment)
+										{
+											change_subjob("dump attachment");
+											if (l_dur != TimeSpan.Zero)
+												throw new NotImplementedException();
 
-													var attachments_dir = l_temps.AddDir(attachments_dir_temp_name, "attachments").Path;
-													Directory.CreateDirectory(attachments_dir);
+											var attachments_dir = l_temps.AddDir(attachments_dir_temp_name, "attachments").Path;
+											Directory.CreateDirectory(attachments_dir);
 
-													var arg_dump_attachments = $"-nostdin -dump_attachment:t \"\" -i \"{inp_fname}\"";
-													var attachment_fname = Path.Combine(attachments_dir, tag_filename!);
-													RunFFmpeg(arg_dump_attachments, ()=>File.Exists(attachment_fname), execute_in: attachments_dir).Wait();
-													InvokeCacheSizeChanged(+DirSize(attachments_dir));
+											var arg_dump_attachments = $"-nostdin -dump_attachment:t \"\" -i \"{inp_fname}\"";
+											var attachment_fname = Path.Combine(attachments_dir, tag_filename!);
+											FFmpeg.Invoke(arg_dump_attachments, ()=>File.Exists(attachment_fname), execute_in: attachments_dir).Wait();
+											InvokeCacheSizeChanged(+DirSize(attachments_dir));
 
-													ffmpeg_path = Path.GetDirectoryName(attachment_fname)!;
-													args.Add($"-i \"{Path.GetFileName(attachment_fname)}\"");
-													change_subjob(null);
-												}
-												else
-												{
-													ffmpeg_path = Path.GetDirectoryName(inp_fname)!;
-													args.Add($"-i \"{Path.GetFileName(inp_fname)}\"");
-													args.Add($"-map 0:{ind}");
-												}
+											ffmpeg_path = Path.GetDirectoryName(attachment_fname)!;
+											args.Add($"-i \"{Path.GetFileName(attachment_fname)}\"");
+											change_subjob(null);
+										}
+										else
+										{
+											ffmpeg_path = Path.GetDirectoryName(inp_fname)!;
+											args.Add($"-i \"{Path.GetFileName(inp_fname)}\"");
+											args.Add($"-map 0:{ind}");
+										}
 
-												args.Add($"-vframes 1");
-												args.Add($"-vf scale=256:256:force_original_aspect_ratio=decrease");
-												args.Add($"\"{otp_fname}\"");
-												args.Add($"-y");
-												args.Add($"-nostdin");
+										args.Add($"-vframes 1");
+										args.Add($"-vf scale=256:256:force_original_aspect_ratio=decrease");
+										args.Add($"\"{otp_fname}\"");
+										args.Add($"-y");
+										args.Add($"-nostdin");
 
-												change_subjob("extract thumb");
-												RunFFmpeg(string.Join(' ', args), ()=>File.Exists(otp_fname), execute_in: ffmpeg_path).Wait();
-												InvokeCacheSizeChanged(+FileSize(otp_fname));
-												if (is_attachment)
-													if (l_temps.TryRemove(attachments_dir_temp_name) is null)
-														throw new InvalidOperationException();
-												change_subjob(null);
+										change_subjob("extract thumb");
+										FFmpeg.Invoke(string.Join(' ', args), ()=>File.Exists(otp_fname), execute_in: ffmpeg_path).Wait();
+										InvokeCacheSizeChanged(+FileSize(otp_fname));
+										if (is_attachment)
+											if (l_temps.TryRemove(attachments_dir_temp_name) is null)
+												throw new InvalidOperationException();
+										change_subjob(null);
 
-												if (dur_s!="")
-												{
-													change_subjob("load bg image");
-													Size sz;
-													var bg_im = new Image();
-													{
-														var bg_im_source = Utils.LoadUncachedBitmap(otp_fname);
-														sz = new(bg_im_source.Width, bg_im_source.Height);
-														if (sz.Width>256 || sz.Height>256)
-															throw new InvalidOperationException();
-														bg_im.Source = bg_im_source;
-													}
-													otp_temp.Dispose();
-													change_subjob(null);
-
-													change_subjob("compose output");
-													var res_c = new Grid();
-													res_c.Children.Add(bg_im);
-													res_c.Children.Add(new Viewbox
-													{
-														Opacity = 0.6,
-														Width = sz.Width,
-														Height = sz.Height*0.2,
-														HorizontalAlignment = HorizontalAlignment.Right,
-														VerticalAlignment = VerticalAlignment.Center,
-														Child = new Image
-														{
-															Source = new DrawingImage
-															{
-																Drawing = new GeometryDrawing
-																{
-																	Brush = Brushes.Black,
-																	Pen = new Pen(Brushes.White, 0.08),
-																	Geometry = new FormattedText(
-																		dur_s,
-																		System.Globalization.CultureInfo.InvariantCulture,
-																		FlowDirection.LeftToRight,
-																		new Typeface(
-																			new TextBlock().FontFamily,
-																			FontStyles.Normal,
-																			FontWeights.ExtraBold,
-																			FontStretches.Normal
-																		),
-																		1,
-																		Brushes.Black,
-																		96
-																	).BuildGeometry(default)
-																}
-															}
-														},
-													});
-													change_subjob(null);
-
-													change_subjob("render output");
-													var bitmap = new RenderTargetBitmap((int)sz.Width, (int)sz.Height, 96, 96, PixelFormats.Pbgra32);
-													res_c.Measure(sz);
-													res_c.Arrange(new(sz));
-													bitmap.Render(res_c);
-													change_subjob(null);
-
-													change_subjob("save output");
-													var enc = new PngBitmapEncoder();
-													enc.Frames.Add(BitmapFrame.Create(bitmap));
-													using (Stream fs = File.Create(otp_fname))
-														enc.Save(fs);
-													InvokeCacheSizeChanged(+FileSize(otp_fname));
-													change_subjob(null);
-
-												}
-
-												l_temps.GiveToCFI(otp_temp_name);
-												l_temps.VerifyEmpty();
-												return otp_fname;
-											}
-											catch (Exception e)
+										if (dur_s!="")
+										{
+											change_subjob("load bg image");
+											Size sz;
+											var bg_im = new Image();
 											{
-												Log.Append($"Error making thumb for [{inp_fname}]: {e}");
-												//Utils.HandleException(e);
-												return CommonThumbSources.Broken.Extract(0, null!);
+												var bg_im_source = Utils.LoadUncachedBitmap(otp_fname);
+												sz = new(bg_im_source.Width, bg_im_source.Height);
+												if (sz.Width>256 || sz.Height>256)
+													throw new InvalidOperationException();
+												bg_im.Source = bg_im_source;
 											}
-									}));
+											otp_temp.Dispose();
+											change_subjob(null);
 
-									change_subjob(null);
-								}
+											change_subjob("compose output");
+											var res_c = new Grid();
+											res_c.Children.Add(bg_im);
+											res_c.Children.Add(new Viewbox
+											{
+												Opacity = 0.6,
+												Width = sz.Width,
+												Height = sz.Height*0.2,
+												HorizontalAlignment = HorizontalAlignment.Right,
+												VerticalAlignment = VerticalAlignment.Center,
+												Child = new Image
+												{
+													Source = new DrawingImage
+													{
+														Drawing = new GeometryDrawing
+														{
+															Brush = Brushes.Black,
+															Pen = new Pen(Brushes.White, 0.08),
+															Geometry = new FormattedText(
+																dur_s,
+																System.Globalization.CultureInfo.InvariantCulture,
+																FlowDirection.LeftToRight,
+																new Typeface(
+																	new TextBlock().FontFamily,
+																	FontStyles.Normal,
+																	FontWeights.ExtraBold,
+																	FontStretches.Normal
+																),
+																1,
+																Brushes.Black,
+																96
+															).BuildGeometry(default)
+														}
+													}
+												},
+											});
+											change_subjob(null);
 
-							var format_xml = metadata_xml.Descendants("format").SingleOrDefault();
-							if (format_xml is null)
-							{
-								if (sources.Count != 0)
-									throw new NotImplementedException(inp_fname);
-								Log.Append($"No format data for [{inp_fname}]: {metadata_s}");
-								sources.Add(CommonThumbSources.Broken);
+											change_subjob("render output");
+											var bitmap = new RenderTargetBitmap((int)sz.Width, (int)sz.Height, 96, 96, PixelFormats.Pbgra32);
+											res_c.Measure(sz);
+											res_c.Arrange(new(sz));
+											bitmap.Render(res_c);
+											change_subjob(null);
+
+											change_subjob("save output");
+											var enc = new PngBitmapEncoder();
+											enc.Frames.Add(BitmapFrame.Create(bitmap));
+											using (Stream fs = File.Create(otp_fname))
+												enc.Save(fs);
+											InvokeCacheSizeChanged(+FileSize(otp_fname));
+											change_subjob(null);
+
+										}
+
+										l_temps.GiveToCFI(otp_temp_name);
+										l_temps.VerifyEmpty();
+										return otp_fname;
+									}
+									catch (Exception e)
+									{
+										Log.Append($"Error making thumb for [{inp_fname}]: {e}");
+										//Utils.HandleException(e);
+										return CommonThumbSources.Broken.Extract(0, null!);
+									}
+								}));
+
+								change_subjob(null);
 							}
-							else if (format_xml.Attribute("duration") is XAttribute global_dur_xml)
-							{
+
+						var format_xml = metadata_xml.Descendants("format").SingleOrDefault();
+						if (format_xml is null)
+						{
+							if (sources.Count != 0)
+								throw new NotImplementedException(inp_fname);
+							Log.Append($"No format data for [{inp_fname}]: {metadata_s}");
+							sources.Add(CommonThumbSources.Broken);
+						}
+						else if (format_xml.Attribute("duration") is XAttribute global_dur_xml)
+						{
 							change_subjob("make dur string");
 							var global_dur = TimeSpan.FromSeconds(double.Parse(global_dur_xml.Value));
 							if (!double.IsNaN(max_frame_len) && global_dur < TimeSpan.FromSeconds(max_frame_len))
@@ -839,34 +793,34 @@ namespace Dashboard
 								dur_s += Math.Truncate(global_dur.TotalHours).ToString() + ':';
 							if (dur_s!="" || global_dur.Minutes!=0)
 								dur_s += global_dur.Minutes.ToString("00") + ':';
-								if (dur_s!="" || global_dur.Seconds!=0)
-									dur_s += global_dur.Seconds.ToString("00");
-								if (dur_s.Length<5)
-								{
-									var s = global_dur.TotalSeconds;
-									s -= Math.Truncate(s);
-									var frac_s = s.ToString("N"+(5-dur_s.Length))[2..].TrimEnd('0');
-									if (frac_s!="") dur_s += '_'+frac_s;
-								}
-								change_subjob(null);
+							if (dur_s!="" || global_dur.Seconds!=0)
+								dur_s += global_dur.Seconds.ToString("00");
+							if (dur_s.Length<5)
+							{
+								var s = global_dur.TotalSeconds;
+								s -= Math.Truncate(s);
+								var frac_s = s.ToString("N"+(5-dur_s.Length))[2..].TrimEnd('0');
+								if (frac_s!="") dur_s += '_'+frac_s;
 							}
-
-						}
-						catch (InvalidOperationException e)
-						{
-							throw new FormatException(metadata_s, e);
-						}
-						catch (NullReferenceException e)
-						{
-							throw new FormatException(metadata_s, e);
-						}
-						catch (FormatException e)
-						{
-							throw new FormatException(metadata_s, e);
+							change_subjob(null);
 						}
 
-						if (sources.Count==0)
-							sources.Add(CommonThumbSources.SoundOnly);
+					}
+					catch (InvalidOperationException e)
+					{
+						throw new FormatException(metadata_s, e);
+					}
+					catch (NullReferenceException e)
+					{
+						throw new FormatException(metadata_s, e);
+					}
+					catch (FormatException e)
+					{
+						throw new FormatException(metadata_s, e);
+					}
+
+					if (sources.Count==0)
+						sources.Add(CommonThumbSources.SoundOnly);
 
 					settings.LastInpChangeTime = write_time;
 					SetSources(change_subjob, sources.ToArray());

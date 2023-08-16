@@ -22,8 +22,8 @@ partial class Test
 
 	static void Main()
 	{
-		var thr_pool = new CustomThreadPool(6);
-		thr_pool.SetJobCount(3);
+		var thr_pool = new CustomThreadPool(10);
+		thr_pool.SetJobCount(6);
 
 		var raw_data = new ConcurrentDictionary<string, ConcurrentBag<RawData>>();
 		var errors = new ConcurrentDictionary<string, Exception>();
@@ -42,6 +42,7 @@ partial class Test
 
 		var found_c = 0;
 		var done_c = 0;
+		var pre_done_c = 0;
 		var sw1 = Stopwatch.StartNew();
 		var sw2 = new Stopwatch();
 
@@ -60,7 +61,7 @@ partial class Test
 				
 				static void Print(string s)
 				{
-					foreach (var l in s.Replace("\r","").Split('\n'))
+					foreach (var l in s.Replace("\r", "").Split('\n'))
 					{
 						var buff_w = Console.BufferWidth;
 						var need_w = (l.Length+buff_w-1)/buff_w*buff_w;
@@ -71,19 +72,19 @@ partial class Test
 				Print($"{l_done_c}/{l_found_c} ({l_done_c/(double)l_found_c:P2})");
 
 				{
-					string done_time(Stopwatch sw)
+					static string done_time(Stopwatch sw, int done, int total)
 					{
 						string res = "?";
 						try
 						{
-							var done_in_sec = sw.Elapsed.TotalSeconds * (l_found_c/(double)l_done_c - 1);
+							var done_in_sec = sw.Elapsed.TotalSeconds * (total/(double)done - 1);
 							res = done_in_sec.ToString();
 							res = TimeSpan.FromSeconds((long)done_in_sec).ToString();
 						}
 						catch (OverflowException) { }
 						return res;
 					}
-					Print($"Done in {done_time(sw2)} ~ {done_time(sw1)}");
+					Print($"Done in {done_time(sw2, l_done_c, l_found_c)} ~ {done_time(sw2, l_done_c-pre_done_c, l_found_c-pre_done_c)} ~ {done_time(sw1, l_done_c, l_found_c)}");
 				}
 
 				if (!errors.IsEmpty)
@@ -95,11 +96,14 @@ partial class Test
 						Print(g.Key);
 					}
 				}
-				
+
 				if (finished_enmr && l_done_c == l_found_c) break;
 				Thread.Sleep(100);
 			}
-		});
+		})
+		{
+			Name = "Output"
+		};
 		otp_thr.Start();
 
 		foreach (var fname in new ESQuary("")/**.Take(1000)/**/)
@@ -112,7 +116,7 @@ partial class Test
 				{
 
 					//change_subjob("getting metadata");
-					var metadata_s = ThumbGenerator.RunFFmpeg($"-i \"{fname}\" -hide_banner -show_format -show_streams -print_format xml", () => true, exe: "probe").Result.otp;
+					var metadata_s = FFmpeg.Invoke($"-i \"{fname}\" -hide_banner -show_format -show_streams -print_format xml", () => true, exe: "probe").Result.otp;
 					//change_subjob(null);
 
 					//change_subjob("parsing metadata XML");
@@ -133,6 +137,7 @@ partial class Test
 					otp_wh.Set();
 				}
 			});
+			pre_done_c = done_c;
 		}
 		finished_enmr = true;
 		otp_wh.Set();

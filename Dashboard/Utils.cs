@@ -1,9 +1,12 @@
 ﻿using System;
 
 using System.Threading;
+using System.Threading.Tasks;
 
+using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 
 using System.Runtime.CompilerServices;
 
@@ -251,6 +254,83 @@ namespace Dashboard
 		}
 	}
 
+	public static class FFmpeg
+	{
+
+		private static readonly ConcurrentDictionary<System.Diagnostics.Process, Task<(string otp,string err)>> running = new();
+		private static readonly ManualResetEventSlim new_proc_wh = new(false);
+
+		static FFmpeg()
+		{
+			new Thread(() =>
+			{
+				while (true)
+					try
+					{
+						var p = running.Keys.MinBy(p => p.StartTime);
+						if (p is null)
+						{
+							Thread.CurrentThread.IsBackground = true;
+							new_proc_wh.Wait();
+							new_proc_wh.Reset();
+							continue;
+						}
+						if (!running.TryRemove(p, out var t))
+							throw new InvalidOperationException();
+
+						if (p.HasExited) continue;
+						var sleep_span = p.StartTime - DateTime.Now + TimeSpan.FromSeconds(10);
+						if (sleep_span > TimeSpan.Zero) Thread.Sleep(sleep_span);
+						if (p.HasExited) continue;
+						p.Kill();
+						var (otp, err) = t.Result;
+						CustomMessageBox.Show(
+							$"[{p.StartInfo.FileName} {p.StartInfo.Arguments}] hanged. Output:",
+							otp + "\n\n===================\n\n" + err
+						);
+					}
+					catch (Exception e)
+					{
+						Utils.HandleException(e);
+					}
+			})
+			{
+				IsBackground = true,
+				Name = "FFmpeg kill switch",
+			}.Start();
+		}
+
+		public static async Task<(string otp, string err)> Invoke(string args, Func<bool> verify_res, string? execute_in = null, string exe = "mpeg")
+		{
+
+			var p = new System.Diagnostics.Process
+			{
+				StartInfo = new("ff"+exe, args)
+				{
+					UseShellExecute = false,
+					RedirectStandardInput = true,
+					RedirectStandardOutput = true,
+					RedirectStandardError = true,
+					CreateNoWindow = true,
+				}
+			};
+
+			if (execute_in != null)
+				p.StartInfo.WorkingDirectory = execute_in;
+
+			p.Start();
+
+			var t_otp = p.StandardOutput.ReadToEndAsync();
+			var t_err = p.StandardError.ReadToEndAsync();
+
+			var res = (otp: await t_otp, err: await t_err);
+			if (!verify_res())
+				throw new InvalidOperationException($"{execute_in}> [{p.StartInfo.FileName} {p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
+			return res;
+		}
+
+	}
+
 	public sealed class ESQuary : IEnumerable<string>
 	{
 		private readonly string args;
@@ -267,7 +347,7 @@ namespace Dashboard
 		{
 			private static readonly string es_path = System.IO.Path.GetFullPath("Dashboard-es.exe");
 			private readonly System.Diagnostics.Process p;
-			private readonly System.Threading.Tasks.Task<string> t_err;
+			private readonly Task<string> t_err;
 
 			public ESProcess(string args)
 			{
