@@ -24,11 +24,133 @@ namespace Dashboard
 
 		private readonly ConcurrentDictionary<string, CachedFileInfo> files = new();
 
+		#region Load
+
 		private sealed class CacheFileLoadCanceledException : Exception
 		{
 			public CacheFileLoadCanceledException(string? message)
 				: base(message) { }
 		}
+
+		public ThumbGenerator(CustomThreadPool thr_pool, string cache_dir, Action<string?> change_subjob)
+		{
+			this.thr_pool = thr_pool;
+			this.cache_dir = Directory.CreateDirectory(cache_dir);
+			this.lock_file = File.Create(Path.Combine(this.cache_dir.FullName, ".lock"));
+
+			var dirs = this.cache_dir.GetDirectories();
+
+			var all_file_paths = new HashSet<string>();
+			var purge_acts = new List<Action>();
+			var failed_load = new List<(string id, string message)>();
+			var conflicting_caches = new Dictionary<string, List<uint>>();
+
+			for (var i = 0; i < dirs.Length; ++i)
+			{
+				change_subjob($"Loaded {i}/{dirs.Length}");
+				var dir = dirs[i];
+				Action? purge_act = () => dir.Delete(true);
+				try
+				{
+					if (!uint.TryParse(dir.Name, out var id))
+						throw new CacheFileLoadCanceledException($"1!Invalid ID");
+					var cfi = new CachedFileInfo(id, dir.FullName, InvokeCacheSizeChanged);
+					purge_act = cfi.Erase;
+					var path = cfi.InpPath ??
+						throw new CacheFileLoadCanceledException($"2!No file is assigned");
+					// will be deleted by cleanup
+					//if (!File.Exists(path))
+					//	throw new CacheFileLoadCanceledException($"3!File [{path}] does not exist");
+					if (!all_file_paths.Add(path))
+					{
+						if (!conflicting_caches.TryGetValue(path, out var l))
+						{
+							if (!files.TryRemove(path, out var old_cfi))
+								throw new InvalidOperationException();
+							purge_acts.Add(old_cfi.Erase);
+							l = new() { old_cfi.Id };
+							conflicting_caches[path] = l;
+						}
+						l.Add(id);
+						throw new CacheFileLoadCanceledException("");
+					}
+					if (!files.TryAdd(path, cfi))
+						throw new InvalidOperationException();
+					purge_act = null;
+				}
+				catch (CacheFileLoadCanceledException e)
+				{
+					if (purge_act is null)
+						throw new InvalidOperationException();
+					purge_acts.Add(purge_act);
+					if (!string.IsNullOrEmpty(e.Message))
+						failed_load.Add((dir.Name, e.Message));
+				}
+			}
+
+			if (purge_acts.Count!=0)
+			{
+				var lns = new List<string>();
+				void header(string h)
+				{
+					if (lns.Count!=0)
+						lns.Add("");
+					lns.Add(h);
+				}
+
+				if (failed_load.Count!=0)
+				{
+					header("Id-s failed to load");
+					foreach (var g in failed_load.GroupBy(t => t.message).OrderBy(g => g.Key))
+					{
+						var message = g.Key;
+						var ids = g.Select(t => t.id).Order();
+						lns.Add($"{string.Join(',', ids)}: {message}");
+					}
+					lns.Add(new string('=', 30));
+				}
+
+				if (conflicting_caches.Count!=0)
+				{
+					header("Id-s referred to the same file");
+					foreach (var (path, ids) in conflicting_caches)
+						lns.Add($"[{path}]: {string.Join(',', ids)}");
+					lns.Add(new string('=', 30));
+				}
+
+				header("Purge all the deviants?");
+
+				if (CustomMessageBox.ShowYesNo("Settings load failed",
+					string.Join(Environment.NewLine, lns)
+				))
+					foreach (var purge_act in purge_acts) purge_act();
+				else
+					App.Current!.Dispatcher.Invoke(() => App.Current.Shutdown(-1));
+
+			}
+
+			new System.Threading.Thread(() =>
+			{
+				while (true)
+					try
+					{
+						System.Threading.Thread.Sleep(TimeSpan.FromMinutes(1));
+						ClearInvalid();
+						ClearExtraFiles();
+					}
+					catch (Exception e)
+					{
+						Utils.HandleException(e);
+					}
+			})
+			{
+				IsBackground = true,
+				Name = $"Cleanup of [{cache_dir}]",
+			}.Start();
+
+		}
+
+		#endregion
 
 		#region ThumbSource
 
@@ -86,9 +208,7 @@ namespace Dashboard
 			private readonly uint id;
 			private readonly FileSettings settings;
 
-			public event Action<long>? CacheSizeChanged;
-			private void InvokeCacheSizeChanged(long change) =>
-				CacheSizeChanged?.Invoke(change);
+			#region Constructors
 
 			public CachedFileInfo(uint id, string cache_path, Action<long> on_cache_changed)
 			{
@@ -111,9 +231,13 @@ namespace Dashboard
 				settings.InpPath = target_fname;
 			}
 
+			#endregion
+
+			#region Properties
+
 			public uint Id => id;
 			public string? InpPath => settings.InpPath;
-			public bool CanClearTemps => temps.CanClear;
+			public bool CanClearTemps => temps.CanClear && TryEmptyUseList();
 			public DateTime LastCacheUseTime => settings.LastCacheUseTime;
 			public string CurrentThumbPath => Path.Combine(settings.GetSettingsDir(), settings.CurrentThumb ??
 				throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb")
@@ -121,6 +245,8 @@ namespace Dashboard
 			public int ChosenThumbOptionInd => settings.ChosenThumbOptionInd ??
 				throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb");
 			public bool IsDeletable => !File.Exists(InpPath) || !Settings.Root.AllowedExts.MatchesFile(InpPath);
+
+			#endregion
 
 			#region ThumbSources
 
@@ -180,6 +306,10 @@ namespace Dashboard
 			#endregion
 
 			#region Temps
+
+			public event Action<long>? CacheSizeChanged;
+			private void InvokeCacheSizeChanged(long change) =>
+				CacheSizeChanged?.Invoke(change);
 
 			private sealed class GenerationTemp : IDisposable
 			{
@@ -420,6 +550,24 @@ namespace Dashboard
 			{
 				using var this_locker = new ObjectLocker(this);
 				return temps.DeleteExtraFiles();
+			}
+
+			public void ClearTemps()
+			{
+				using var this_locker = new ObjectLocker(this);
+				settings.LastInpChangeTime = DateTime.MinValue;
+				settings.LastCacheUseTime = DateTime.MinValue;
+				settings.CurrentThumb = null;
+				temps.Clear();
+			}
+
+			#endregion
+
+			#region UseList
+
+			private bool TryEmptyUseList()
+			{
+				return true; //TODO
 			}
 
 			#endregion
@@ -834,14 +982,7 @@ namespace Dashboard
 
 			#endregion
 
-			public void ClearTemps()
-			{
-				using var this_locker = new ObjectLocker(this);
-				settings.LastInpChangeTime = DateTime.MinValue;
-				settings.LastCacheUseTime = DateTime.MinValue;
-				settings.CurrentThumb = null;
-				temps.Clear();
-			}
+			#region Shutdown
 
 			private bool is_erased = false;
 			public void Erase()
@@ -858,133 +999,19 @@ namespace Dashboard
 			// Shutdown without erasing (when exiting)
 			public void Shutdown() => settings.Shutdown();
 
+			#endregion
+
 		}
 
 		#endregion
-
-		public ThumbGenerator(CustomThreadPool thr_pool, string cache_dir, Action<string?> change_subjob)
-		{
-			this.thr_pool = thr_pool;
-			this.cache_dir = Directory.CreateDirectory(cache_dir);
-			this.lock_file = File.Create(Path.Combine(this.cache_dir.FullName, ".lock"));
-
-			var dirs = this.cache_dir.GetDirectories();
-
-			var all_file_paths = new HashSet<string>();
-			var purge_acts = new List<Action>();
-			var failed_load = new List<(string id, string message)>();
-			var conflicting_caches = new Dictionary<string, List<uint>>();
-
-			for (var i = 0; i < dirs.Length; ++i)
-			{
-				change_subjob($"Loaded {i}/{dirs.Length}");
-				var dir = dirs[i];
-				Action? purge_act = () => dir.Delete(true);
-				try
-				{
-					if (!uint.TryParse(dir.Name, out var id))
-						throw new CacheFileLoadCanceledException($"1!Invalid ID");
-					var cfi = new CachedFileInfo(id, dir.FullName, InvokeCacheSizeChanged);
-					purge_act = cfi.Erase;
-					var path = cfi.InpPath ?? 
-						throw new CacheFileLoadCanceledException($"2!No file is assigned");
-					// will be deleted by cleanup
-					//if (!File.Exists(path))
-					//	throw new CacheFileLoadCanceledException($"3!File [{path}] does not exist");
-					if (!all_file_paths.Add(path))
-					{
-						if (!conflicting_caches.TryGetValue(path, out var l))
-						{
-							if (!files.TryRemove(path, out var old_cfi))
-								throw new InvalidOperationException();
-							purge_acts.Add(old_cfi.Erase);
-							l = new() { old_cfi.Id };
-							conflicting_caches[path] = l;
-						}
-						l.Add(id);
-						throw new CacheFileLoadCanceledException("");
-					}
-					if (!files.TryAdd(path, cfi))
-						throw new InvalidOperationException();
-					purge_act = null;
-				}
-				catch (CacheFileLoadCanceledException e)
-				{
-					if (purge_act is null)
-						throw new InvalidOperationException();
-					purge_acts.Add(purge_act);
-					if (!string.IsNullOrEmpty(e.Message))
-						failed_load.Add((dir.Name, e.Message));
-				}
-			}
-
-			if (purge_acts.Count!=0)
-			{
-				var lns = new List<string>();
-				void header(string h)
-				{
-					if (lns.Count!=0)
-						lns.Add("");
-					lns.Add(h);
-				}
-
-				if (failed_load.Count!=0)
-				{
-					header("Id-s failed to load");
-					foreach (var g in failed_load.GroupBy(t=>t.message).OrderBy(g=>g.Key))
-					{
-						var message = g.Key;
-						var ids = g.Select(t => t.id).Order();
-						lns.Add($"{string.Join(',',ids)}: {message}");
-					}
-					lns.Add(new string('=', 30));
-				}
-
-				if (conflicting_caches.Count!=0)
-				{
-					header("Id-s referred to the same file");
-					foreach (var (path, ids) in conflicting_caches)
-						lns.Add($"[{path}]: {string.Join(',', ids)}");
-					lns.Add(new string('=', 30));
-				}
-
-				header("Purge all the deviants?");
-
-				if (CustomMessageBox.ShowYesNo("Settings load failed",
-					string.Join(Environment.NewLine, lns)
-				))
-					foreach (var purge_act in purge_acts) purge_act();
-				else
-					App.Current!.Dispatcher.Invoke(()=>App.Current.Shutdown(-1));
-
-			}
-
-			new System.Threading.Thread(() =>
-			{
-				while (true)
-					try
-					{
-						System.Threading.Thread.Sleep(TimeSpan.FromMinutes(1));
-						ClearInvalid();
-						ClearExtraFiles();
-					}
-					catch (Exception e)
-					{
-						Utils.HandleException(e);
-					}
-			})
-			{
-				IsBackground = true,
-				Name = $"Cleanup of [{cache_dir}]",
-			}.Start();
-
-		}
 
 		public event Action<long>? CacheSizeChanged;
 		private void InvokeCacheSizeChanged(long byte_change) =>
 			CacheSizeChanged?.Invoke(byte_change);
 
 		private readonly OneToManyLock purge_lock = new();
+
+		#region Generate
 
 		private volatile uint last_used_id = 0;
 		private CachedFileInfo GetCFI(string fname)
@@ -1018,6 +1045,10 @@ namespace Dashboard
 			foreach (var fname in fnames)
 				GetCFI(fname).GenerateThumb(thr_pool.AddJob, _ => { }, force_regen);
 		});
+
+		#endregion
+
+		#region Clear
 
 		public int ClearInvalid() {
 			var c = purge_lock.OneLocked(() =>
@@ -1060,7 +1091,7 @@ namespace Dashboard
 			return c;
 		}
 
-		public void ClearOne() => purge_lock.OneLocked(() =>
+		public void ClearOneOldest() => purge_lock.OneLocked(() =>
 		{
 			if (files.IsEmpty) return;
 			var cfi = files.Values.Where(cfi=>cfi.CanClearTemps).MinBy(cfi => cfi.LastCacheUseTime);
@@ -1088,6 +1119,8 @@ namespace Dashboard
 			//	CustomMessageBox.Show("Done clearing cache!", App.Current.MainWindow)
 			//);
 		}, with_priority: true);
+
+		#endregion
 
 		public void Shutdown()
 		{

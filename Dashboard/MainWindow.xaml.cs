@@ -155,7 +155,7 @@ namespace Dashboard
 				{
 					if (thumb_gen.ClearInvalid()!=0) return;
 					if (thumb_gen.ClearExtraFiles()!=0) return;
-					thumb_gen.ClearOne();
+					thumb_gen.ClearOneOldest();
 				}
 
 			}, $"cache size recalculation");
