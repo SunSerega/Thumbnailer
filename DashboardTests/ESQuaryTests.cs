@@ -31,8 +31,9 @@ namespace Dashboard.Tests
 		[TestMethod()]
 		public void ESQuaryStressTest()
 		{
-			foreach (var _ in new ESQuary("ext:avi;flac;gif;m4a;mkv;mov;mp3;mp4;ogg;webm;webp;psd;png;jpg"))
-				;
+			using var enmr = new ESQuary("ext:avi;flac;gif;m4a;mkv;mov;mp3;mp4;ogg;webm;webp;psd;png;jpg").GetEnumerator();
+			while (enmr.MoveNext())
+				_ = enmr.Current;
 		}
 
 	}

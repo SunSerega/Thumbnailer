@@ -226,7 +226,7 @@ namespace Dashboard
 		private static readonly System.Threading.ManualResetEventSlim resave_wh = new(false);
 		private void ResaveAll()
 		{
-			using var _ = new ObjectLock(settings);
+			using var settings_locker = new ObjectLocker(settings);
 			if (is_shut_down) return;
 			File.Copy(main_save_fname, back_save_fname, false);
 
@@ -327,7 +327,7 @@ namespace Dashboard
 		private readonly Dictionary<string, object> settings = new(StringComparer.OrdinalIgnoreCase);
 		protected T? GetSetting<T>(string key, T? missing_value = default)
 		{
-			using var _ = new ObjectLock(settings);
+			using var settings_locker = new ObjectLocker(settings);
 			if (settings.TryGetValue(key, out var value))
 				return (T)value;
 			else
@@ -341,7 +341,7 @@ namespace Dashboard
 		{
 			if (key.Contains('='))
 				throw new FormatException(key);
-			using var _ = new ObjectLock(settings);
+			using var settings_locker = new ObjectLocker(settings);
 
 			// Allow generation to finish after shutdown
 			//if (is_shut_down) throw new System.Threading.Tasks.TaskCanceledException();
@@ -379,7 +379,7 @@ namespace Dashboard
 
 		public void Shutdown()
 		{
-			//using var _ = new ObjectLock(settings);
+			//using var settings_locker = new ObjectLocker(settings);
 			is_shut_down = true;
 		}
 

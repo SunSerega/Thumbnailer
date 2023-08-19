@@ -419,7 +419,7 @@ namespace Dashboard
 							}
 							catch (Exception e)
 							{
-								using var _ = new ObjectLock(excs);
+								using var excs_locker = new ObjectLocker(excs);
 								excs.Add(e);
 								left -= 1;
 								if (left == 0) wh.Set();

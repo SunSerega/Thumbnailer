@@ -68,7 +68,7 @@ namespace Dashboard
 			public BitmapImage CurrentThumbBmp {
 				get
 				{
-					using var _ = new ObjectLock(this);
+					using var this_locker = new ObjectLocker(this);
 					return Utils.LoadUncachedBitmap(CurrentThumbPath);
 				}
 			}
@@ -148,7 +148,7 @@ namespace Dashboard
 
 			public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos)
 			{
-				using var _ = new ObjectLock(this);
+				using var this_locker = new ObjectLocker(this);
 				if (settings.ChosenStreamPositions is null)
 					throw new InvalidOperationException();
 				var source = ThumbSources[ind];
@@ -227,7 +227,7 @@ namespace Dashboard
 			{
 				if (!fname.StartsWith(settings.GetSettingsDir()))
 					throw new InvalidOperationException(fname);
-				using var _ = new ObjectLock(this);
+				using var this_locker = new ObjectLocker(this);
 				if (!File.Exists(fname))
 					return false;
 				var sz = FileSize(fname);
@@ -241,7 +241,7 @@ namespace Dashboard
 			{
 				if (!dir.StartsWith(settings.GetSettingsDir()))
 					throw new InvalidOperationException(dir);
-				using var _ = new ObjectLock(this);
+				using var this_locker = new ObjectLocker(this);
 				if (!Directory.Exists(dir))
 					return false;
 				var sz = DirSize(dir);
@@ -418,7 +418,7 @@ namespace Dashboard
 
 			public int DeleteExtraFiles()
 			{
-				using var _ = new ObjectLock(this);
+				using var this_locker = new ObjectLocker(this);
 				return temps.DeleteExtraFiles();
 			}
 
@@ -445,7 +445,7 @@ namespace Dashboard
 
 			public void GenerateThumb(Action<string, CustomThreadPool.JobWork> add_job, Action<ICachedFileInfo> on_regenerated, bool force_regen)
 			{
-				using var _ = new ObjectLock(this);
+				using var this_locker = new ObjectLocker(this);
 
 				if (is_erased)
 					return;
@@ -496,7 +496,7 @@ namespace Dashboard
 
 				add_job($"Generating thumb for: {inp_fname}", change_subjob =>
 				{
-					using var _ = new ObjectLock(this);
+					using var this_locker = new ObjectLocker(this);
 
 					//change_subjob("copy");
 					//var temp_fname = state.AddFile("inp").Path;
@@ -632,7 +632,7 @@ namespace Dashboard
 
 								sources.Add(new(source_name, l_dur, (pos, change_subjob) =>
 								{
-									using var _ = new ObjectLock(this);
+									using var this_locker = new ObjectLocker(this);
 									try
 									{
 										using var l_temps = new LocalTempsList(this);
@@ -836,7 +836,7 @@ namespace Dashboard
 
 			public void ClearTemps()
 			{
-				using var _ = new ObjectLock(this);
+				using var this_locker = new ObjectLocker(this);
 				settings.LastInpChangeTime = DateTime.MinValue;
 				settings.LastCacheUseTime = DateTime.MinValue;
 				settings.CurrentThumb = null;
@@ -846,7 +846,7 @@ namespace Dashboard
 			private bool is_erased = false;
 			public void Erase()
 			{
-				using var _ = new ObjectLock(this);
+				using var this_locker = new ObjectLocker(this);
 				if (is_erased)
 					throw new InvalidOperationException();
 				is_erased = true;
@@ -992,7 +992,7 @@ namespace Dashboard
 			// Cannot add concurently, because .GetOrAdd can create
 			// multiple instances of cfi for the same fname in different threads
 			if (files.TryGetValue(fname, out var cfi)) return cfi;
-			using var _ = new ObjectLock(files);
+			using var files_locker = new ObjectLocker(files);
 			if (files.TryGetValue(fname, out cfi)) return cfi;
 			while (true)
 			{

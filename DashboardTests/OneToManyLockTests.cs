@@ -124,7 +124,7 @@ namespace Dashboard.Tests
 
 				new DispatcherTimer(TimeSpan.FromSeconds(1/60d), DispatcherPriority.Normal, (o, e) =>
 				{
-					using var _ = new ObjectLock(counter_lock);
+					using var counter_locker = new ObjectLocker(counter_lock);
 
 					if (one_counter!=0 && many_counter!=0)
 						throw new InvalidOperationException();

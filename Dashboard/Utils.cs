@@ -396,11 +396,11 @@ namespace Dashboard
 
 	}
 
-	public readonly struct ObjectLock : IDisposable
+	public readonly struct ObjectLocker : IDisposable
 	{
 		private readonly object o;
 
-		public ObjectLock(object o)
+		public ObjectLocker(object o)
 		{
 			this.o = o;
 			Monitor.Enter(o);
@@ -418,7 +418,7 @@ namespace Dashboard
 		
 		public static void Append(string l)
 		{
-			using var _ = new ObjectLock(log_lock);
+			using var log_locker = new ObjectLocker(log_lock);
 			System.IO.File.AppendAllLines(log_fname, new[] { l }, enc);
 		}
 

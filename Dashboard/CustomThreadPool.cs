@@ -372,7 +372,7 @@ namespace Dashboard
 		public void SetJobCount(int c)
 		{
 			if (want_job_count == c) return;
-			using var _ = new ObjectLock(job_count_lock);
+			using var job_count_locker = new ObjectLocker(job_count_lock);
 			if (want_job_count == c) return;
 
 			for (int i = want_job_count; i < c; i++)
