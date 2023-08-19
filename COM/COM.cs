@@ -163,6 +163,8 @@ namespace Thumbnailer
 						}
 						catch (Exception e)
 						{
+							if (!File.Exists(curr_file_name))
+								return;
 							load_exc_lst.Add(e);
 							if (load_exc_lst.Count<100) continue;
 							throw new AggregateException(load_exc_lst.ToArray());

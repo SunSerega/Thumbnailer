@@ -35,8 +35,8 @@ namespace Dashboard
 				var bw = new BinaryWriter(str);
 
 				var fname = br.ReadString();
-				var cfi = thumb_gen.Generate(fname, _ => { }, false);
-				bw.Write(cfi.CurrentThumbPath);
+				using var cfi_use = thumb_gen.Generate(fname, nameof(Commands.GimmiThumb), ()=>false, null, false);
+				if (cfi_use != null) bw.Write(cfi_use.CFI.CurrentThumbPath);
 
 			});
 		public void AddLoadCompareHandler(Action<string[]> handler) =>

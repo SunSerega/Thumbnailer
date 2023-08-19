@@ -308,6 +308,7 @@ namespace Dashboard
 
 			int current_compare_id = 0;
 			string? curr_compare_fname = null;
+			ThumbGenerator.ICachedFileInfo.CacheUse? last_cache_use = null;
 			void clear_thumb_compare_file()
 			{
 				foreach (var tcv in thumb_compare_all)
@@ -315,19 +316,29 @@ namespace Dashboard
 				grid_thumb_compare.HorizontalAlignment = HorizontalAlignment.Stretch;
 				c_thumb_compare_1.VerticalAlignment = VerticalAlignment.Stretch;
 				c_thumb_compare_2.VerticalAlignment = VerticalAlignment.Stretch;
-				curr_compare_fname = null;
 				b_reload_compare.IsEnabled = false;
 				sp_gen_controls.Visibility = Visibility.Hidden;
+
+				++current_compare_id;
+				curr_compare_fname = null;
+				last_cache_use?.Dispose();
+				last_cache_use = null;
 			}
 			void begin_thumb_compare(string fname) => Utils.HandleException(() =>
 			{
 				clear_thumb_compare_file();
-				var compare_id = ++current_compare_id;
+				// Increament in the clear_thumb_compare_file
+				var compare_id = current_compare_id;
 
 				thumb_compare_org.Set(COMManip.GetExistingThumbFor(fname));
-				var cfi = thumb_gen.Generate(fname, cfi => Dispatcher.InvokeAsync(() => Utils.HandleException(() =>
+				using var cfi_use = thumb_gen.Generate(fname, nameof(begin_thumb_compare), ()=>false, cfi => Dispatcher.InvokeAsync(() => Utils.HandleException(() =>
 				{
-					if (compare_id != current_compare_id) return;
+					bool is_outdated() => compare_id != current_compare_id;
+					if (is_outdated()) return;
+
+					if (last_cache_use!=null) throw new InvalidOperationException();
+					last_cache_use = cfi.BeginUse("continuous thumb compare", is_outdated);
+
 					thumb_compare_gen.Set(cfi.CurrentThumbBmp);
 
 					var sources = cfi.ThumbSources;
@@ -384,6 +395,9 @@ namespace Dashboard
 					select_source(cfi.ChosenThumbOptionInd);
 
 				})), true);
+				if (cfi_use is null) return;
+				var cfi = cfi_use.CFI;
+
 				thumb_compare_gen.Set(cfi.CurrentThumbBmp);
 				grid_thumb_compare.HorizontalAlignment = HorizontalAlignment.Center;
 				c_thumb_compare_1.VerticalAlignment = VerticalAlignment.Bottom;

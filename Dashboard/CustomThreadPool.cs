@@ -212,7 +212,7 @@ namespace Dashboard
 				throw new InvalidOperationException();
 			}
 			return res;
-		});
+		}, with_priority: true);
 
 		public void EndObserving(ThreadPoolObserver o) => observers_lock.OneLocked(() =>
 		{

@@ -186,7 +186,9 @@ namespace Dashboard
 		public interface ICachedFileInfo
 		{
 
+			public string? InpPath { get; }
 			public string CurrentThumbPath { get; }
+
 			public BitmapImage CurrentThumbBmp {
 				get
 				{
@@ -196,10 +198,50 @@ namespace Dashboard
 			}
 
 			public IReadOnlyList<ThumbSource> ThumbSources { get; }
-
 			public int ChosenThumbOptionInd { get; }
 
 			public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos);
+
+			public sealed class CacheUse : IDisposable
+			{
+				private readonly ICachedFileInfo cfi;
+				private readonly string cause;
+				private readonly Func<bool> is_freed_check;
+
+				public CacheUse(ICachedFileInfo cfi, string cause, Func<bool> is_freed_check)
+				{
+					this.cfi = cfi;
+					this.cause = cause;
+					this.is_freed_check = is_freed_check;
+				}
+				public CacheUse Dupe() => cfi.BeginUse(cause, is_freed_check);
+
+				public ICachedFileInfo CFI => cfi;
+				public string Cause => cause;
+
+				public bool IsFreed => disposed || is_freed_check();
+
+				private bool disposed = false;
+				public void Dispose() => cfi.EndUse(this, () =>
+				{
+					if (disposed)
+						throw new InvalidOperationException($"{this} was disposed too much");
+					disposed = true;
+				});
+
+				public bool TryLetGoUndisposed()
+				{
+					if (disposed) throw new InvalidOperationException();
+					if (!IsFreed) return false;
+					Log.Append($"{this} was free, but not properly disposed");
+					return true;
+				}
+
+				public override string ToString() => $"CacheUse[{cause}] for [{cfi.InpPath}]";
+
+			}
+			public CacheUse BeginUse(string cause, Func<bool> is_freed_check);
+			public void EndUse(CacheUse use, Action? finish_while_locked);
 
 		}
 
@@ -237,7 +279,7 @@ namespace Dashboard
 
 			public uint Id => id;
 			public string? InpPath => settings.InpPath;
-			public bool CanClearTemps => temps.CanClear && TryEmptyUseList();
+			public bool CanClearTemps => temps.CanClear;
 			public DateTime LastCacheUseTime => settings.LastCacheUseTime;
 			public string CurrentThumbPath => Path.Combine(settings.GetSettingsDir(), settings.CurrentThumb ??
 				throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb")
@@ -284,7 +326,15 @@ namespace Dashboard
 				if (!force_regen && ind == settings.ChosenThumbOptionInd && pos == settings.ChosenStreamPositions[ind])
 					return;
 
-				var res = source.Extract(pos, change_subjob);
+				string res;
+				try
+				{
+					res = source.Extract(pos, change_subjob);
+				}
+				catch when (this.IsDeletable)
+				{
+					return;
+				}
 
 				settings.ChosenThumbOptionInd = ind;
 				if (settings.ChosenStreamPositions[ind] != pos)
@@ -302,6 +352,59 @@ namespace Dashboard
 				settings.CurrentThumb = res;
 				COMManip.ResetThumbFor(InpPath);
 			}
+
+			#endregion
+
+			#region UseList
+
+			private readonly ConcurrentDictionary<ICachedFileInfo.CacheUse, byte> use_list = new();
+			private readonly OneToManyLock use_list_lock = new();
+
+			public ICachedFileInfo.CacheUse BeginUse(string cause, Func<bool> is_freed_check) => use_list_lock.ManyLocked(() =>
+			{
+				var use = new ICachedFileInfo.CacheUse(this, cause, is_freed_check);
+				if (!use_list.TryAdd(use, 0))
+					throw new InvalidOperationException();
+				return use;
+			});
+
+			public void EndUse(ICachedFileInfo.CacheUse use, Action? finish_while_locked) =>
+				use_list_lock.ManyLocked(() =>
+				{
+					if (!use_list.TryRemove(use, out _))
+						throw new InvalidOperationException($"Cache[{Id}] use for [{InpPath}] ({use.Cause}) was already freed");
+					finish_while_locked?.Invoke();
+				});
+
+			private bool TryEmptyUseList(Action act) => use_list_lock.OneLocked(() =>
+			{
+
+				var use_list = new List<ICachedFileInfo.CacheUse>(this.use_list.Count);
+				var undisposed = 0;
+				foreach (var use in this.use_list.Keys)
+				{
+					if (use.TryLetGoUndisposed())
+					{
+						++undisposed;
+						continue;
+					}
+					use_list.Add(use);
+				};
+				if (undisposed != 0)
+					TTS.Speak($"ThumbDashboard: {undisposed} uses of cache were not properly disposed");
+
+				this.use_list.Clear();
+				if (use_list.Count != 0)
+				{
+					foreach (var u in use_list)
+						if (!this.use_list.TryAdd(u, 0))
+							throw new InvalidOperationException();
+					return false;
+				}
+
+				act();
+				return true;
+			}, with_priority: true);
 
 			#endregion
 
@@ -552,22 +655,16 @@ namespace Dashboard
 				return temps.DeleteExtraFiles();
 			}
 
-			public void ClearTemps()
+			public bool TryClearTemps()
 			{
 				using var this_locker = new ObjectLocker(this);
-				settings.LastInpChangeTime = DateTime.MinValue;
-				settings.LastCacheUseTime = DateTime.MinValue;
-				settings.CurrentThumb = null;
-				temps.Clear();
-			}
-
-			#endregion
-
-			#region UseList
-
-			private bool TryEmptyUseList()
-			{
-				return true; //TODO
+				return TryEmptyUseList(() =>
+				{
+					settings.LastInpChangeTime = DateTime.MinValue;
+					settings.LastCacheUseTime = DateTime.MinValue;
+					settings.CurrentThumb = null;
+					temps.Clear();
+				});
 			}
 
 			#endregion
@@ -591,12 +688,18 @@ namespace Dashboard
 
 			}
 
-			public void GenerateThumb(Action<string, CustomThreadPool.JobWork> add_job, Action<ICachedFileInfo> on_regenerated, bool force_regen)
+			public ICachedFileInfo.CacheUse? GenerateThumb(
+				string cause, Func<bool>? is_unused_check,
+				Action<string, CustomThreadPool.JobWork> add_job,
+				Action<ICachedFileInfo>? on_regenerated,
+				bool force_regen)
 			{
 				using var this_locker = new ObjectLocker(this);
 
 				if (is_erased)
-					return;
+					return null;
+				ICachedFileInfo.CacheUse? make_cache_use() =>
+					is_unused_check is null ? null : BeginUse(cause, is_unused_check);
 
 				var inp_fname = settings.InpPath ?? throw new InvalidOperationException();
 				var otp_temp_name = "thumb file";
@@ -605,7 +708,7 @@ namespace Dashboard
 				{
 					Log.Append($"Asked thumb for missing file [{inp_fname}]");
 					SetTempSource(CommonThumbSources.Broken);
-					return;
+					return make_cache_use();
 				}
 
 				settings.LastCacheUseTime = DateTime.UtcNow;
@@ -628,14 +731,14 @@ namespace Dashboard
 						SetTempSource(CommonThumbSources.Waiting);
 						System.Threading.Tasks.Task.Delay(total_wait-waited)
 							.ContinueWith(t => Utils.HandleException(
-								() => GenerateThumb(add_job, on_regenerated, force_regen)
+								() => GenerateThumb($"{cause} (delayed)", null, add_job, on_regenerated, force_regen)
 							));
-						return;
+						return make_cache_use();
 					}
 				}
 
 				if (!force_regen && settings.LastInpChangeTime == write_time && settings.CurrentThumbIsFinal)
-					return;
+					return make_cache_use();
 
 				temps.TryRemove(otp_temp_name);
 				temps.VerifyEmpty();
@@ -644,7 +747,9 @@ namespace Dashboard
 
 				add_job($"Generating thumb for: {inp_fname}", change_subjob =>
 				{
+					if (this.has_shut_down) return;
 					using var this_locker = new ObjectLocker(this);
+					if (this.has_shut_down) return;
 
 					//change_subjob("copy");
 					//var temp_fname = state.AddFile("inp").Path;
@@ -929,7 +1034,8 @@ namespace Dashboard
 						{
 							if (sources.Count != 0)
 								throw new NotImplementedException(inp_fname);
-							Log.Append($"No format data for [{inp_fname}]: {metadata_s}");
+							if (File.Exists(inp_fname))
+								Log.Append($"No format data for [{inp_fname}]: {metadata_s}");
 							sources.Add(CommonThumbSources.Broken);
 						}
 						else if (format_xml.Attribute("duration") is XAttribute global_dur_xml)
@@ -975,9 +1081,11 @@ namespace Dashboard
 					settings.LastInpChangeTime = write_time;
 					SetSources(change_subjob, sources.ToArray());
 					settings.CurrentThumbIsFinal = true;
-					on_regenerated(this);
 
+					on_regenerated?.Invoke(this);
 				});
+
+				return make_cache_use();
 			}
 
 			#endregion
@@ -997,7 +1105,14 @@ namespace Dashboard
 			}
 
 			// Shutdown without erasing (when exiting)
-			public void Shutdown() => settings.Shutdown();
+			private bool has_shut_down = false;
+			public void Shutdown()
+			{
+				using var this_locker = new ObjectLocker(this);
+				if (has_shut_down) throw new InvalidOperationException();
+				has_shut_down = true;
+				settings.Shutdown();
+			}
 
 			#endregion
 
@@ -1033,17 +1148,17 @@ namespace Dashboard
 			}
 		}
 
-		public ICachedFileInfo Generate(string fname, Action<ICachedFileInfo> on_regenerated, bool force_regen) => purge_lock.ManyLocked(() =>
-		{
-			var cfi = GetCFI(fname);
-			cfi.GenerateThumb(thr_pool.AddJob, on_regenerated, force_regen);
-			return cfi;
-		});
+		public ICachedFileInfo.CacheUse? Generate(
+			string fname,
+			string cause, Func<bool> is_unused_check,
+			Action<ICachedFileInfo>? on_regenerated,
+			bool force_regen
+		) => purge_lock.ManyLocked(() => GetCFI(fname).GenerateThumb(cause, is_unused_check, thr_pool.AddJob, on_regenerated, force_regen));
 
 		public void MassGenerate(IEnumerable<string> fnames, bool force_regen) => purge_lock.ManyLocked(() =>
 		{
 			foreach (var fname in fnames)
-				GetCFI(fname).GenerateThumb(thr_pool.AddJob, _ => { }, force_regen);
+				GetCFI(fname).GenerateThumb(nameof(MassGenerate), null, thr_pool.AddJob, null, force_regen);
 		});
 
 		#endregion
@@ -1094,8 +1209,11 @@ namespace Dashboard
 		public void ClearOneOldest() => purge_lock.OneLocked(() =>
 		{
 			if (files.IsEmpty) return;
-			var cfi = files.Values.Where(cfi=>cfi.CanClearTemps).MinBy(cfi => cfi.LastCacheUseTime);
-			cfi?.ClearTemps();
+			foreach (var cfi in files.Values.AsParallel().Where(cfi=>cfi.CanClearTemps).OrderBy(cfi => cfi.LastCacheUseTime))
+			{
+				if (cfi.TryClearTemps())
+					break;
+			}
 		}, with_priority: false);
 
 		public void ClearAll(Action<string?> change_subjob) => purge_lock.OneLocked(() =>

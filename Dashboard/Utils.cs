@@ -83,7 +83,7 @@ namespace Dashboard
 		public OneToManyLock() { }
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public T OneLocked<T>(Func<T> act, bool with_priority = true)
+		public T OneLocked<T>(Func<T> act, bool with_priority)
 		{
 			one_wh.Reset();
 			var need_dec = false;

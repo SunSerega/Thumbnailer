@@ -145,17 +145,21 @@ namespace Dashboard
 
 			if (File.Exists(back_save_fname))
 			{
-				if (!CustomMessageBox.ShowYesNo("Backup settings file exists", "Try meld main and backup settings?"))
-					Environment.Exit(-1);
 
-				System.Diagnostics.Process.Start(
-					"meld", $"\"{Path.GetFullPath(main_save_fname)}\" \"{Path.GetFullPath(back_save_fname)}\""
-				).WaitForExit();
-
-				if (!File.Exists(main_save_fname))
+				if (!File.Exists(main_save_fname) || !File.ReadLines(main_save_fname).SequenceEqual(File.ReadLines(back_save_fname)))
 				{
-					CustomMessageBox.Show("Error!", "Settings file was not created while meld-ing");
-					Environment.Exit(-1);
+					if (!CustomMessageBox.ShowYesNo("Backup settings file exists", $"{GetSettingsDir()}\n\nTry meld main and backup settings?"))
+						Environment.Exit(-1);
+
+					System.Diagnostics.Process.Start(
+						"meld", $"\"{Path.GetFullPath(main_save_fname)}\" \"{Path.GetFullPath(back_save_fname)}\""
+					).WaitForExit();
+
+					if (!File.Exists(main_save_fname))
+					{
+						CustomMessageBox.Show("Error!", "Settings file was not created while meld-ing");
+						Environment.Exit(-1);
+					}
 				}
 
 				File.Delete(back_save_fname);
