@@ -463,9 +463,11 @@ namespace Dashboard
 				settings.LastCacheUseTime = DateTime.UtcNow;
 				var write_time = new[]{
 					File.GetLastWriteTimeUtc(inp_fname),
-					File.GetLastAccessTimeUtc(inp_fname),
+					// this can get stuck accessing input file to make thumb,
+					// then resetting it to make it update - which triggers another regen
+					//File.GetLastAccessTimeUtc(inp_fname),
 					new FileInfo(inp_fname).CreationTimeUtc,
-				}.Min();
+				}.Max();
 
 				{
 					var total_wait = TimeSpan.FromSeconds(5);
