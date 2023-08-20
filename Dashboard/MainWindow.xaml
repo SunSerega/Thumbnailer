@@ -37,6 +37,7 @@
 			<Border BorderBrush="Black" BorderThickness="0,0,0,1" Margin="0,5,0,5" DockPanel.Dock="Top" />
 
 			<DockPanel DockPanel.Dock="Top">
+				<Button x:Name="b_cache_regen" Content="Regen" DockPanel.Dock="Right" Margin="3,0,0,0" />
 				<Button x:Name="b_cache_clear" Content="Clear" DockPanel.Dock="Right" Margin="3,0,0,0" />
 				<TextBlock x:Name="tb_cache_info" d:Text="Cache size: 123.45 KB" Margin="3,0,0,0" />
 			</DockPanel>

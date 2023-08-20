@@ -800,7 +800,7 @@ namespace Dashboard
 					var sources = new List<ThumbSource>();
 
 					change_subjob("getting metadata");
-					var metadata_s = FFmpeg.Invoke($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -print_format xml", ()=>true, exe: "probe").Result.otp;
+					var metadata_s = FFmpeg.Invoke($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -print_format xml", ()=>true, exe: "probe").Result.otp!;
 					change_subjob(null);
 
 					try
@@ -915,28 +915,27 @@ namespace Dashboard
 
 										//TODO https://trac.ffmpeg.org/ticket/10512
 										// - Need to cd into input folder for conversion to work
-										string ffmpeg_path;
+										string? ffmpeg_path = null;
+
+										Func<StreamWriter, System.Threading.Tasks.Task>? handle_inp = null;
 
 										//TODO https://trac.ffmpeg.org/ticket/10506
 										// - Need to first extract the attachments, before they can be used as input
-										var attachments_dir_temp_name = "attachments dir";
 										if (is_attachment)
 										{
-											change_subjob("dump attachment");
 											if (l_dur != TimeSpan.Zero)
 												throw new NotImplementedException();
 
-											var attachments_dir = l_temps.AddDir(attachments_dir_temp_name, "attachments").Path;
-											Directory.CreateDirectory(attachments_dir);
+											FFmpeg.Invoke($"-dump_attachment:{ind} pipe:1 -i \"{inp_fname}\" -nostdin", () => true,
+												handle_otp: sr =>
+												{
+													handle_inp = sw => sr.BaseStream.CopyToAsync(sw.BaseStream);
+													return System.Threading.Tasks.Task.FromResult<string?>(null);
+												}
+											);
+											if (handle_inp is null) throw new InvalidOperationException();
 
-											var arg_dump_attachments = $"-nostdin -dump_attachment:t \"\" -i \"{inp_fname}\"";
-											var attachment_fname = Path.Combine(attachments_dir, tag_filename!);
-											FFmpeg.Invoke(arg_dump_attachments, ()=>File.Exists(attachment_fname), execute_in: attachments_dir).Wait();
-											InvokeCacheSizeChanged(+DirSize(attachments_dir));
-
-											ffmpeg_path = Path.GetDirectoryName(attachment_fname)!;
-											args.Add($"-i \"{Path.GetFileName(attachment_fname)}\"");
-											change_subjob(null);
+											args.Add($"-i -");
 										}
 										else
 										{
@@ -952,11 +951,11 @@ namespace Dashboard
 										args.Add($"-nostdin");
 
 										change_subjob("extract thumb");
-										FFmpeg.Invoke(string.Join(' ', args), ()=>File.Exists(otp_fname), execute_in: ffmpeg_path).Wait();
+										FFmpeg.Invoke(string.Join(' ', args), ()=>File.Exists(otp_fname),
+											execute_in: ffmpeg_path,
+											handle_inp: handle_inp
+										).Wait();
 										InvokeCacheSizeChanged(+FileSize(otp_fname));
-										if (is_attachment)
-											if (l_temps.TryRemove(attachments_dir_temp_name) is null)
-												throw new InvalidOperationException();
 										change_subjob(null);
 
 										if (dur_s!="")
@@ -1192,6 +1191,16 @@ namespace Dashboard
 			foreach (var fname in fnames)
 				InternalGen(fname, nameof(MassGenerate), null, null, force_regen);
 		});
+
+		public void RegenAll(bool force_regen) => thr_pool.AddJob(nameof(RegenAll), change_subjob => purge_lock.ManyLocked(() =>
+		{
+			var cfis = files.Values.ToArray();
+			for (var i = 0; i<cfis.Length; i++)
+			{
+				change_subjob($"{i}/{cfis.Length} ({i/(double)cfis.Length:P2})");
+				cfis[i].GenerateThumb("Regen", null, thr_pool.AddJob, null, force_regen, false);
+			}
+		}));
 
 		#endregion
 

@@ -1,5 +1,7 @@
 ﻿using System;
 
+using System.IO;
+
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -257,7 +259,7 @@ namespace Dashboard
 	public static class FFmpeg
 	{
 
-		private static readonly ConcurrentDictionary<System.Diagnostics.Process, Task<(string otp,string err)>> running = new();
+		private static readonly ConcurrentDictionary<System.Diagnostics.Process, Task<(string? otp, string? err)>> running = new();
 		private static readonly ManualResetEventSlim new_proc_wh = new(false);
 
 		static FFmpeg()
@@ -300,9 +302,13 @@ namespace Dashboard
 			}.Start();
 		}
 
-		public static async Task<(string otp, string err)> Invoke(string args, Func<bool> verify_res, string? execute_in = null, string exe = "mpeg")
+		public static Task<(string? otp, string? err)> Invoke(string args, Func<bool> verify_res,
+			string? execute_in = null, string exe = "mpeg",
+			Func<StreamWriter, Task>? handle_inp = null,
+			Func<StreamReader, Task<string?>>? handle_otp = null,
+			Func<StreamReader, Task<string?>>? handle_err = null
+		)
 		{
-
 			var p = new System.Diagnostics.Process
 			{
 				StartInfo = new("ff"+exe, args)
@@ -320,13 +326,29 @@ namespace Dashboard
 
 			p.Start();
 
-			var t_otp = p.StandardOutput.ReadToEndAsync();
-			var t_err = p.StandardError.ReadToEndAsync();
+			handle_inp ??= sw => Task.CompletedTask;
+#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
+			handle_otp ??= sr => sr.ReadToEndAsync();
+			handle_err ??= sr => sr.ReadToEndAsync();
+#pragma warning restore CS8619 // Nullability of reference types in value doesn't match target type.
 
-			var res = (otp: await t_otp, err: await t_err);
-			if (!verify_res())
-				throw new InvalidOperationException($"{execute_in}> [{p.StartInfo.FileName} {p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
-			return res;
+			var t_inp = handle_inp(p.StandardInput);
+			var t_otp = handle_otp(p.StandardOutput);
+			var t_err = handle_err(p.StandardError);
+
+			var t = Task.Run(async ()=>
+			{
+				await t_inp;
+				p.StandardInput.Close();
+				await p.WaitForExitAsync();
+				var res = (otp: await t_otp, err: await t_err);
+				if (!verify_res())
+					throw new InvalidOperationException($"{execute_in}> [{p.StartInfo.FileName} {p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
+				return res;
+			});
+			if (!running.TryAdd(p, t))
+				throw new InvalidOperationException();
+			return t;
 		}
 
 	}

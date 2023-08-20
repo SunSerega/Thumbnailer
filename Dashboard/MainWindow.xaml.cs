@@ -174,6 +174,8 @@ namespace Dashboard
 
 			b_cache_clear.Click += (o, e) => main_thr_pool.AddJob("Clearing cache", thumb_gen.ClearAll);
 
+			b_cache_regen.Click += (o, e) => thumb_gen.RegenAll(true);
+
 		}
 
 		private void SetUpAllowedExt(ThumbGenerator thumb_gen)
