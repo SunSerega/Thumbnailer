@@ -27,6 +27,15 @@ namespace Dashboard
 			var wjl = new WorkingJobList(thr_pool.MaxJobCount);
 			b_wjl_cont.Child = wjl;
 
+			KeyDown += (o, e) =>
+			{
+				if (e.Key== System.Windows.Input.Key.Escape)
+				{
+					Close();
+					e.Handled = true;
+				}
+			};
+
 			var is_open = true;
 			var change_wh = new System.Threading.ManualResetEventSlim(false);
 			Closed += (o, e) =>

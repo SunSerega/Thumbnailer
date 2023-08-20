@@ -117,7 +117,7 @@ namespace Dashboard
 			}
 		}
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public void OneLocked(Action act, bool with_priority = true) => OneLocked(() => { act(); return 0; }, with_priority);
+		public void OneLocked(Action act, bool with_priority) => OneLocked(() => { act(); return 0; }, with_priority);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public T ManyLocked<T>(Func<T> act)

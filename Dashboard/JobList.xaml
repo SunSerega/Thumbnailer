@@ -7,7 +7,7 @@
 		mc:Ignorable="d"
 		
 		Title="Job list"
-		WindowState="Maximized"
+		WindowState="Maximized" d:DesignHeight="93.293" d:DesignWidth="113.293"
 		
 		>
 	<DockPanel>
@@ -19,8 +19,11 @@
 		<!--<TextBlock x:Name="temp2" DockPanel.Dock="Top" />-->
 
 		<ScrollViewer VerticalScrollBarVisibility = "Auto">
-			<StackPanel x:Name="sp_pending" />
+			<VirtualizingStackPanel x:Name="sp_pending" VirtualizingStackPanel.IsVirtualizing="True">
+				<d:TextBlock Text="Pending 1" />
+				<d:TextBlock Text="Pending 2" />
+			</VirtualizingStackPanel>
 		</ScrollViewer>
-		
+
 	</DockPanel>
 </Window>

@@ -2,6 +2,7 @@
 
 using System.Threading;
 
+using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 
@@ -16,6 +17,8 @@ namespace Dashboard
 		public delegate void JobWork(Action<string?> change_subjob);
 		private sealed class ThreadPoolJobDescription
 		{
+			public DateTime EnqTime { get; } = DateTime.Now;
+
 			public required string Name { get; init; }
 			public required JobWork Work { get; init; }
 
@@ -156,7 +159,7 @@ namespace Dashboard
 					l.Clear();
 				}
 
-				foreach (var job in newly_pending_jobs.Keys)
+				foreach (var job in newly_pending_jobs.Keys.OrderBy(job=>job.EnqTime))
 					on_add_pending(job, job.Name, job.Work);
 				newly_pending_jobs.Clear();
 
@@ -182,7 +185,7 @@ namespace Dashboard
 					newly_finished_jobs[i] = false;
 				}
 
-			});
+			}, with_priority: true);
 
 			private bool disposed = false;
 			public void Dispose()
@@ -224,7 +227,7 @@ namespace Dashboard
 			if (stored_o != o)
 				throw new InvalidOperationException();
 			stored_o.Dispose();
-		});
+		}, with_priority: true);
 
 		public void ObserveLoop(Action update, Action<ThreadPoolObserver> loop)
 		{
