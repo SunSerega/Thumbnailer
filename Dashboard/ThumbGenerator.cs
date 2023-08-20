@@ -76,6 +76,7 @@ namespace Dashboard
 					}
 					if (!files.TryAdd(path, cfi))
 						throw new InvalidOperationException();
+					cfi.GenerateThumb("Init check", null, thr_pool.AddJob, null, false, false);
 					purge_act = null;
 				}
 				catch (CacheFileLoadCanceledException e)
@@ -692,7 +693,7 @@ namespace Dashboard
 				string cause, Func<bool>? is_unused_check,
 				Action<string, CustomThreadPool.JobWork> add_job,
 				Action<ICachedFileInfo>? on_regenerated,
-				bool force_regen)
+				bool force_regen, bool set_cache_use_time)
 			{
 				using var this_locker = new ObjectLocker(this);
 
@@ -711,7 +712,8 @@ namespace Dashboard
 					return make_cache_use();
 				}
 
-				settings.LastCacheUseTime = DateTime.UtcNow;
+				if (set_cache_use_time)
+					settings.LastCacheUseTime = DateTime.UtcNow;
 				var write_time = new[]{
 					File.GetLastWriteTimeUtc(inp_fname),
 					// this can get stuck accessing input file to make thumb,
@@ -719,6 +721,9 @@ namespace Dashboard
 					//File.GetLastAccessTimeUtc(inp_fname),
 					new FileInfo(inp_fname).CreationTimeUtc,
 				}.Max();
+
+				if (!force_regen && settings.LastInpChangeTime == write_time && settings.CurrentThumbIsFinal)
+					return make_cache_use();
 
 				{
 					var total_wait = TimeSpan.FromSeconds(5);
@@ -731,15 +736,12 @@ namespace Dashboard
 						SetTempSource(CommonThumbSources.Waiting);
 						System.Threading.Tasks.Task.Delay(total_wait-waited)
 							.ContinueWith(t => Utils.HandleException(
-								() => GenerateThumb($"{cause} (delayed)", null, add_job, on_regenerated, force_regen)
+								() => GenerateThumb($"{cause} (delayed)", null, add_job, on_regenerated, force_regen, false)
 							));
 						return make_cache_use();
 					}
 				}
-
-				if (!force_regen && settings.LastInpChangeTime == write_time && settings.CurrentThumbIsFinal)
-					return make_cache_use();
-
+				
 				temps.TryRemove(otp_temp_name);
 				temps.VerifyEmpty();
 				settings.CurrentThumbIsFinal = false;
@@ -1153,12 +1155,12 @@ namespace Dashboard
 			string cause, Func<bool> is_unused_check,
 			Action<ICachedFileInfo>? on_regenerated,
 			bool force_regen
-		) => purge_lock.ManyLocked(() => GetCFI(fname).GenerateThumb(cause, is_unused_check, thr_pool.AddJob, on_regenerated, force_regen));
+		) => purge_lock.ManyLocked(() => GetCFI(fname).GenerateThumb(cause, is_unused_check, thr_pool.AddJob, on_regenerated, force_regen, true));
 
 		public void MassGenerate(IEnumerable<string> fnames, bool force_regen) => purge_lock.ManyLocked(() =>
 		{
 			foreach (var fname in fnames)
-				GetCFI(fname).GenerateThumb(nameof(MassGenerate), null, thr_pool.AddJob, null, force_regen);
+				GetCFI(fname).GenerateThumb(nameof(MassGenerate), null, thr_pool.AddJob, null, force_regen, true);
 		});
 
 		#endregion
