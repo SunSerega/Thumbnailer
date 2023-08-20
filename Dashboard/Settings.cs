@@ -142,28 +142,7 @@ namespace Dashboard
 			main_save_fname = Path.GetFullPath($"{path}.dat");
 			back_save_fname = Path.GetFullPath($"{path}-Backup.dat");
 			Directory.CreateDirectory(Path.GetDirectoryName(main_save_fname)!);
-
-			if (File.Exists(back_save_fname))
-			{
-
-				if (!File.Exists(main_save_fname) || !File.ReadLines(main_save_fname).SequenceEqual(File.ReadLines(back_save_fname)))
-				{
-					if (!CustomMessageBox.ShowYesNo("Backup settings file exists", $"{GetSettingsDir()}\n\nTry meld main and backup settings?"))
-						Environment.Exit(-1);
-
-					System.Diagnostics.Process.Start(
-						"meld", $"\"{Path.GetFullPath(main_save_fname)}\" \"{Path.GetFullPath(back_save_fname)}\""
-					).WaitForExit();
-
-					if (!File.Exists(main_save_fname))
-					{
-						CustomMessageBox.Show("Error!", "Settings file was not created while meld-ing");
-						Environment.Exit(-1);
-					}
-				}
-
-				File.Delete(back_save_fname);
-			}
+			RectifyBackup();
 
 			var need_resave = false;
 			if (File.Exists(main_save_fname))
@@ -226,12 +205,36 @@ namespace Dashboard
 
 		}
 
+		private void RectifyBackup()
+		{
+			if (!File.Exists(back_save_fname)) return;
+
+			if (!File.Exists(main_save_fname) || !File.ReadLines(main_save_fname).SequenceEqual(File.ReadLines(back_save_fname)))
+			{
+				if (!CustomMessageBox.ShowYesNo("Backup settings file exists", $"{GetSettingsDir()}\n\nTry meld main and backup settings?"))
+					throw new InvalidOperationException();
+
+				System.Diagnostics.Process.Start(
+					"meld", $"\"{Path.GetFullPath(main_save_fname)}\" \"{Path.GetFullPath(back_save_fname)}\""
+				).WaitForExit();
+
+				if (!File.Exists(main_save_fname))
+				{
+					CustomMessageBox.Show("Error!", "Settings file was not created while meld-ing");
+					throw new InvalidOperationException();
+				}
+			}
+
+			File.Delete(back_save_fname);
+		}
+
 		private static readonly ConcurrentDictionary<Settings, DateTime> req_resave_times = new();
 		private static readonly System.Threading.ManualResetEventSlim resave_wh = new(false);
 		private void ResaveAll()
 		{
 			using var settings_locker = new ObjectLocker(settings);
 			if (is_shut_down) return;
+			RectifyBackup();
 			File.Copy(main_save_fname, back_save_fname, false);
 
 			var sw = new StreamWriter(main_save_fname, false, enc);
@@ -372,6 +375,7 @@ namespace Dashboard
 
 			if (!File.Exists(main_save_fname))
 				File.WriteAllText(main_save_fname, "", enc);
+			RectifyBackup();
 			File.Copy(main_save_fname, back_save_fname, false);
 			File.AppendAllLines(main_save_fname, new[] { file_line });
 			File.Delete(back_save_fname);
