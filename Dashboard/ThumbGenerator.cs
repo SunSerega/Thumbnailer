@@ -61,6 +61,8 @@ namespace Dashboard
 					// will be deleted by cleanup
 					//if (!File.Exists(path))
 					//	throw new CacheFileLoadCanceledException($"3!File [{path}] does not exist");
+					if (path.StartsWith(this.cache_dir.FullName+Path.DirectorySeparatorChar))
+						throw new CacheFileLoadCanceledException($"4!Cache referes to cache internals: [{path}]");
 					if (!all_file_paths.Add(path))
 					{
 						if (!conflicting_caches.TryGetValue(path, out var l))
@@ -88,9 +90,13 @@ namespace Dashboard
 						failed_load.Add((dir.Name, e.Message));
 				}
 			}
+			change_subjob(null);
 
+			Action? before_cleanup_loop = null;
 			if (purge_acts.Count!=0)
 			{
+				change_subjob("Purge");
+
 				var lns = new List<string>();
 				void header(string h)
 				{
@@ -124,14 +130,20 @@ namespace Dashboard
 				if (CustomMessageBox.ShowYesNo("Settings load failed",
 					string.Join(Environment.NewLine, lns)
 				))
-					foreach (var purge_act in purge_acts) purge_act();
+					// Can be suspended by the system, while it's waiting for thumb
+					before_cleanup_loop += ()=>Utils.HandleException(() =>
+					{
+						foreach (var purge_act in purge_acts) purge_act();
+					});
 				else
 					App.Current!.Dispatcher.Invoke(() => App.Current.Shutdown(-1));
 
+				change_subjob(null);
 			}
 
 			new System.Threading.Thread(() =>
 			{
+				before_cleanup_loop?.Invoke();
 				while (true)
 					try
 					{
@@ -243,6 +255,26 @@ namespace Dashboard
 			}
 			public CacheUse BeginUse(string cause, Func<bool> is_freed_check);
 			public void EndUse(CacheUse use, Action? finish_while_locked);
+
+		}
+
+		private sealed class IdentityCFI : ICachedFileInfo
+		{
+			private readonly string fname;
+
+			public IdentityCFI(string fname) => this.fname = fname;
+
+			public string? InpPath => fname;
+			public string CurrentThumbPath => fname;
+
+			public IReadOnlyList<ThumbSource> ThumbSources => new[] { new ThumbSource(fname, default, (_,_)=>fname) };
+			public int ChosenThumbOptionInd => 0;
+
+			public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos) =>
+				throw new NotImplementedException();
+
+			public ICachedFileInfo.CacheUse BeginUse(string cause, Func<bool> is_freed_check) => new(this, cause, is_freed_check);
+			public void EndUse(ICachedFileInfo.CacheUse use, Action? finish_while_locked) => finish_while_locked?.Invoke();
 
 		}
 
@@ -1150,17 +1182,32 @@ namespace Dashboard
 			}
 		}
 
+		private ICachedFileInfo.CacheUse? InternalGen(
+			string fname,
+			string cause, Func<bool>? is_unused_check,
+			Action<ICachedFileInfo>? on_regenerated,
+			bool force_regen
+		)
+		{
+			fname = Path.GetFullPath(fname);
+			if (!fname.StartsWith(cache_dir.FullName+Path.DirectorySeparatorChar))
+				return GetCFI(fname).GenerateThumb(cause, is_unused_check, thr_pool.AddJob, on_regenerated, force_regen, true);
+			if (is_unused_check!=null && Path.GetExtension(fname) == ".png")
+				return new IdentityCFI(fname).BeginUse(cause, is_unused_check);
+			return null;
+		}
+
 		public ICachedFileInfo.CacheUse? Generate(
 			string fname,
 			string cause, Func<bool> is_unused_check,
 			Action<ICachedFileInfo>? on_regenerated,
 			bool force_regen
-		) => purge_lock.ManyLocked(() => GetCFI(fname).GenerateThumb(cause, is_unused_check, thr_pool.AddJob, on_regenerated, force_regen, true));
+		) => purge_lock.ManyLocked(() => InternalGen(fname, cause, is_unused_check, on_regenerated, force_regen));
 
 		public void MassGenerate(IEnumerable<string> fnames, bool force_regen) => purge_lock.ManyLocked(() =>
 		{
 			foreach (var fname in fnames)
-				GetCFI(fname).GenerateThumb(nameof(MassGenerate), null, thr_pool.AddJob, null, force_regen, true);
+				InternalGen(fname, nameof(MassGenerate), null, null, force_regen);
 		});
 
 		#endregion
