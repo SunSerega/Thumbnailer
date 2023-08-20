@@ -326,25 +326,26 @@ namespace Dashboard
 			#region ThumbSources
 
 			private ThumbSource[]? thumb_sources;
-
 			public IReadOnlyList<ThumbSource> ThumbSources => thumb_sources ??
-				throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb");
+				throw new InvalidOperationException("Should not have been called before handling GenerateThumb::on_regenerated");
 
 			private void SetTempSource(ThumbSource source)
 			{
-				thumb_sources = new[] { source };
 				settings.CurrentThumb = source.Extract(0.3, null!);
 				COMManip.ResetThumbFor(InpPath);
 			}
 			private void SetSources(Action<string?> change_subjob, ThumbSource[] thumb_sources)
 			{
 				var chosen_poss = settings.ChosenStreamPositions;
-				if (chosen_poss != null && chosen_poss.Count != thumb_sources.Length)
-					chosen_poss = null;
-				chosen_poss ??= new FileSettings.ChosenStreamPositionsInfo(thumb_sources.Length);
-				settings.ChosenStreamPositions = chosen_poss;
+				if (chosen_poss is null || chosen_poss.Count != thumb_sources.Length)
+					settings.ChosenStreamPositions = chosen_poss = new FileSettings.ChosenStreamPositionsInfo(thumb_sources.Length);
 				this.thumb_sources = thumb_sources;
 				ApplySourceAt(true, change_subjob, settings.ChosenThumbOptionInd??thumb_sources.Length-1, null, out _);
+			}
+			private void ResetSources(bool run_gc)
+			{
+				thumb_sources = null;
+				if (run_gc) GC.Collect();
 			}
 
 			public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos)
@@ -400,13 +401,14 @@ namespace Dashboard
 					throw new InvalidOperationException();
 				return use;
 			});
-
 			public void EndUse(ICachedFileInfo.CacheUse use, Action? finish_while_locked) =>
 				use_list_lock.ManyLocked(() =>
 				{
 					if (!use_list.TryRemove(use, out _))
 						throw new InvalidOperationException($"Cache[{Id}] use for [{InpPath}] ({use.Cause}) was already freed");
 					finish_while_locked?.Invoke();
+					if (use_list.IsEmpty)
+						ResetSources(true);
 				});
 
 			private bool TryEmptyUseList(Action act) => use_list_lock.OneLocked(() =>
@@ -731,8 +733,15 @@ namespace Dashboard
 
 				if (is_erased)
 					return null;
-				ICachedFileInfo.CacheUse? make_cache_use() =>
-					is_unused_check is null ? null : BeginUse(cause, is_unused_check);
+				ICachedFileInfo.CacheUse? make_cache_use()
+				{
+					if (is_unused_check is null)
+					{
+						//ResetSources(false);
+						return null;
+					}
+					return BeginUse(cause, is_unused_check);
+				}
 
 				var inp_fname = settings.InpPath ?? throw new InvalidOperationException();
 				var otp_temp_name = "thumb file";
@@ -784,34 +793,6 @@ namespace Dashboard
 					if (this.has_shut_down) return;
 					using var this_locker = new ObjectLocker(this);
 					if (this.has_shut_down) return;
-
-					//change_subjob("copy");
-					//var temp_fname = state.AddFile("inp").Path;
-					//try
-					//{
-					//	var f = Microsoft.CopyOnWrite.CopyOnWriteFilesystemFactory.GetInstance();
-					//	if (f.CopyOnWriteLinkSupportedBetweenPaths(FilePath!, temp_fname))
-					//	{
-					//		if (File.Exists(temp_fname))
-					//			File.Delete(temp_fname);
-					//		f.CloneFile(FilePath!, temp_fname);
-					//	}
-					//	else
-					//		File.Copy(FilePath!, temp_fname, true);
-					//}
-					//catch when (!File.Exists(FilePath!))
-					//{
-					//	return;
-					//}
-					//// https://learn.microsoft.com/en-us/dotnet/standard/io/handling-io-errors#handling-ioexception
-					//catch (IOException e) when ((e.HResult & 0xFFFF) == 32) // ERROR_SHARING_VIOLATION
-					//{
-					//	var res = locked_fname;
-					//	settings.ThumbPath = res;
-					//	ret(res);
-					//	//settings.LastUpdate = write_time;
-					//	return;
-					//}
 
 					// For now have removed the setting for this
 					//var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -1112,8 +1093,10 @@ namespace Dashboard
 					if (sources.Count==0)
 						sources.Add(CommonThumbSources.SoundOnly);
 
-					settings.LastInpChangeTime = write_time;
+					using var init_source_use = BeginUse("Initial source use", () => false);
 					SetSources(change_subjob, sources.ToArray());
+
+					settings.LastInpChangeTime = write_time;
 					settings.CurrentThumbIsFinal = true;
 
 					on_regenerated?.Invoke(this);

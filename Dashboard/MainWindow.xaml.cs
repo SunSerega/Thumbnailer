@@ -321,8 +321,7 @@ namespace Dashboard
 
 				++current_compare_id;
 				curr_compare_fname = null;
-				last_cache_use?.Dispose();
-				last_cache_use = null;
+				System.Threading.Interlocked.Exchange(ref last_cache_use, null)?.Dispose();
 			}
 			void begin_thumb_compare(string fname) => Utils.HandleException(() =>
 			{
@@ -331,70 +330,73 @@ namespace Dashboard
 				var compare_id = current_compare_id;
 
 				thumb_compare_org.Set(COMManip.GetExistingThumbFor(fname));
-				using var cfi_use = thumb_gen.Generate(fname, nameof(begin_thumb_compare), ()=>false, cfi => Dispatcher.InvokeAsync(() => Utils.HandleException(() =>
+				using var cfi_use = thumb_gen.Generate(fname, nameof(begin_thumb_compare), ()=>false, cfi =>
 				{
 					bool is_outdated() => compare_id != current_compare_id;
 					if (is_outdated()) return;
-
-					if (last_cache_use!=null) throw new InvalidOperationException();
-					last_cache_use = cfi.BeginUse("continuous thumb compare", is_outdated);
-
-					thumb_compare_gen.Set(cfi.CurrentThumbBmp);
-
-					var sources = cfi.ThumbSources;
-					if (sources.Count==1 && sources[0].Length==TimeSpan.Zero) return;
-					sp_gen_controls.Visibility = Visibility.Visible;
-
-					var bts = new System.Windows.Controls.Button[sources.Count];
-					sp_vid_stream_buttons.Children.Clear();
-					for (var i=0; i<sources.Count; i++)
+					var new_cache_use = cfi.BeginUse("continuous thumb compare", is_outdated);
+					Dispatcher.InvokeAsync(() => Utils.HandleException(() =>
 					{
-						bts[i] = new()
+						System.Threading.Interlocked.Exchange(ref last_cache_use, new_cache_use)?.Dispose();
+						if (is_outdated()) return;
+
+						thumb_compare_gen.Set(cfi.CurrentThumbBmp);
+
+						var sources = cfi.ThumbSources;
+						if (sources.Count==1 && sources[0].Length==TimeSpan.Zero) return;
+						sp_gen_controls.Visibility = Visibility.Visible;
+
+						var bts = new System.Windows.Controls.Button[sources.Count];
+						sp_vid_stream_buttons.Children.Clear();
+						for (var i = 0; i<sources.Count; i++)
 						{
-							Margin = new Thickness(0,0,5,0),
-							Content = sources[i].Name,
-						};
-						{
-							var ind = i;
-							bts[i].Click += (_, _) =>
+							bts[i] = new()
 							{
-								next_thumb_compare_update = () => select_source(ind);
+								Margin = new Thickness(0, 0, 5, 0),
+								Content = sources[i].Name,
+							};
+							{
+								var ind = i;
+								bts[i].Click += (_, _) =>
+								{
+									next_thumb_compare_update = () => select_source(ind);
+									thump_compare_updater.Trigger(TimeSpan.Zero, false);
+								};
+							}
+							sp_vid_stream_buttons.Children.Add(bts[i]);
+						}
+
+						void select_source(int new_ind)
+						{
+							vid_timestamp_handler = pos =>
+							{
+								tb_vid_timestamp.Text = (slider_vid_timestamp.Value * sources[new_ind].Length).ToString();
+								next_thumb_compare_update = () =>
+								{
+									cfi.ApplySourceAt(false, _ => { }, new_ind, pos, out _);
+									Dispatcher.Invoke(() =>
+										thumb_compare_gen.Set(cfi.CurrentThumbBmp)
+									);
+								};
 								thump_compare_updater.Trigger(TimeSpan.Zero, false);
 							};
-						}
-						sp_vid_stream_buttons.Children.Add(bts[i]);
-					}
-
-					void select_source(int new_ind)
-					{
-						vid_timestamp_handler = pos =>
-						{
-							tb_vid_timestamp.Text = (slider_vid_timestamp.Value * sources[new_ind].Length).ToString();
-							next_thumb_compare_update = () =>
+							var old_ind = cfi.ChosenThumbOptionInd;
+							cfi.ApplySourceAt(false, _ => { }, new_ind, null, out var initial_pos);
+							Dispatcher.Invoke(() =>
 							{
-								cfi.ApplySourceAt(false, _ => { }, new_ind, pos, out _);
-								Dispatcher.Invoke(() =>
-									thumb_compare_gen.Set(cfi.CurrentThumbBmp)
-								);
-							};
-							thump_compare_updater.Trigger(TimeSpan.Zero, false);
-						};
-						var old_ind = cfi.ChosenThumbOptionInd;
-						cfi.ApplySourceAt(false, _ => { }, new_ind, null, out var initial_pos);
-						Dispatcher.Invoke(() =>
-						{
-							//slider_vid_timestamp.Value = -1;
-							slider_vid_timestamp.Value = initial_pos;
-							thumb_compare_gen.Set(cfi.CurrentThumbBmp);
-							tb_vid_timestamp.Visibility = slider_vid_timestamp.Visibility =
-								sources[new_ind].Length != TimeSpan.Zero ? Visibility.Visible : Visibility.Hidden;
-							bts[old_ind].IsEnabled = true;
-							bts[new_ind].IsEnabled = false;
-						});
-					}
-					select_source(cfi.ChosenThumbOptionInd);
+								//slider_vid_timestamp.Value = -1;
+								slider_vid_timestamp.Value = initial_pos;
+								thumb_compare_gen.Set(cfi.CurrentThumbBmp);
+								tb_vid_timestamp.Visibility = slider_vid_timestamp.Visibility =
+									sources[new_ind].Length != TimeSpan.Zero ? Visibility.Visible : Visibility.Hidden;
+								bts[old_ind].IsEnabled = true;
+								bts[new_ind].IsEnabled = false;
+							});
+						}
+						select_source(cfi.ChosenThumbOptionInd);
 
-				})), true);
+					}));
+				}, true);
 				if (cfi_use is null) return;
 				var cfi = cfi_use.CFI;
 

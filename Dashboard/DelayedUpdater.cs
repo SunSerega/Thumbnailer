@@ -51,6 +51,10 @@ namespace Dashboard
 						Thread.CurrentThread.IsBackground = true;
 					}
 				}
+				catch when (App.Current?.IsShuttingDown??false)
+				{
+					break;
+				}
 				catch (Exception e)
 				{
 					Utils.HandleException(e);
