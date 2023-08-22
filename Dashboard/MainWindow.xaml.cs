@@ -36,8 +36,6 @@ namespace Dashboard
 
 				LoadThumbGenerator(main_thr_pool, thumb_gen =>
 				{
-					App.Current.Exit += (o, e) => thumb_gen.Shutdown();
-
 					pipe.AddThumbGen(thumb_gen);
 
 					SetUpCacheInfo(thumb_gen, main_thr_pool);
@@ -94,7 +92,7 @@ namespace Dashboard
 			/**/
 
 			var pipe = new CommandsPipe();
-			App.Current!.Exit += (o, e) => pipe.Shutdown();
+			App.Current!.Exit += (o, e) => Utils.HandleException(pipe.Shutdown);
 
 			return (main_thr_pool, pipe);
 		}
@@ -102,7 +100,7 @@ namespace Dashboard
 		private void SetUpJobCount(CustomThreadPool main_thr_pool)
 		{
 			slider_want_job_count.ValueChanged += (o, e) =>
-				main_thr_pool.SetJobCount((int)e.NewValue);
+				Utils.HandleException(() => main_thr_pool.SetJobCount((int)e.NewValue));
 			slider_want_job_count.Value = Settings.Root.MaxJobCount;
 
 			slider_active_job_count.Maximum = main_thr_pool.MaxJobCount;
@@ -117,7 +115,7 @@ namespace Dashboard
 				));
 
 			b_view_jobs.Click += (o, e) =>
-				new JobList(main_thr_pool).Show();
+				Utils.HandleException(() => new JobList(main_thr_pool).Show());
 
 			void update_log_count() => Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
 			{
@@ -131,7 +129,7 @@ namespace Dashboard
 			Log.CountUpdated += update_log_count;
 			update_log_count();
 			b_view_log.Click += (o, e) =>
-				Log.Show();
+				Utils.HandleException(Log.Show);
 
 		}
 
@@ -143,7 +141,11 @@ namespace Dashboard
 				if (App.Current!.IsShuttingDown) return;
 
 				change_subjob($"Apply ThumbGenerator");
-				Dispatcher.Invoke(()=>on_load(thumb_gen));
+				Dispatcher.Invoke(() =>
+				{
+					App.Current.Exit += (o, e) => Utils.HandleException(thumb_gen.Shutdown);
+					on_load(thumb_gen);
+				});
 
 				Console.Beep();
 			});
@@ -174,11 +176,11 @@ namespace Dashboard
 				}
 
 			}, $"cache size recalculation");
-			IsVisibleChanged += (o, e) =>
+			IsVisibleChanged += (o, e) => Utils.HandleException(() =>
 			{
 				if (!IsVisible) return;
 				cache_info_updater.Trigger(TimeSpan.Zero, false);
-			};
+			});
 			thumb_gen.CacheSizeChanged += byte_change => Dispatcher.InvokeAsync(() => Utils.HandleException(()=>
 			{
 				cache_size += byte_change;
@@ -187,9 +189,9 @@ namespace Dashboard
 			}));
 			cache_info_updater.Trigger(TimeSpan.Zero, false);
 
-			b_cache_clear.Click += (o, e) => main_thr_pool.AddJob("Clearing cache", thumb_gen.ClearAll);
+			b_cache_clear.Click += (o, e) => Utils.HandleException(() => main_thr_pool.AddJob("Clearing cache", thumb_gen.ClearAll));
 
-			b_cache_regen.Click += (o, e) => thumb_gen.RegenAll(true);
+			b_cache_regen.Click += (o, e) => Utils.HandleException(() => thumb_gen.RegenAll(true));
 
 		}
 
@@ -198,8 +200,9 @@ namespace Dashboard
 			AllowedExt.Changed += any_change =>
 				b_check_n_commit.IsEnabled = any_change;
 
-			tb_new_ext.PreviewTextInput += (o, e) =>
-				e.Handled = !FileExtList.Validate(e.Text);
+			tb_new_ext.PreviewTextInput += (o, e) => Utils.HandleException(() =>
+				e.Handled = !FileExtList.Validate(e.Text)
+			);
 			CommandManager.AddPreviewExecutedHandler(tb_new_ext, (o, e) =>
 			{
 				if (e.Command != ApplicationCommands.Paste) return;
@@ -213,12 +216,12 @@ namespace Dashboard
 				_=new AllowedExt(tb_new_ext.Text, allowed_ext_container);
 				tb_new_ext.Clear();
 			}
-			tb_new_ext.KeyDown += (o, e) =>
+			tb_new_ext.KeyDown += (o, e) => Utils.HandleException(() =>
 			{
 				if (e.Key == Key.Enter)
 					add_ext();
-			};
-			b_add_ext.Click += (_, _) => add_ext();
+			});
+			b_add_ext.Click += (_, _) => Utils.HandleException(add_ext);
 
 			b_check_n_commit.Click += (o, e) => Utils.HandleException(()=>
 			{
@@ -539,7 +542,7 @@ namespace Dashboard
 			});
 
 			foreach (var tcv in thumb_compare_all)
-				tcv.MouseDown += (o, e) =>
+				tcv.MouseDown += (o, e) => Utils.HandleException(() =>
 				{
 					if (e.ChangedButton == MouseButton.Left)
 					{
@@ -557,9 +560,9 @@ namespace Dashboard
 							System.Diagnostics.Process.Start("explorer", $"/select,\"{curr_compare_fname}\"");
 						e.Handled = true;
 					}
-				};
+				});
 
-			b_swap_compare.Click += (o, e) =>
+			b_swap_compare.Click += (o, e) => Utils.HandleException(() =>
 			{
 
 				var t = (c_thumb_compare_2.Child, c_thumb_compare_1.Child);
@@ -568,13 +571,13 @@ namespace Dashboard
 
 				(tb_thumb_compare_1.Text, tb_thumb_compare_2.Text) = (tb_thumb_compare_2.Text, tb_thumb_compare_1.Text);
 
-			};
+			});
 
-			b_reload_compare.Click += (o, e) =>
+			b_reload_compare.Click += (o, e) => Utils.HandleException(() =>
 			{
 				if (curr_compare_fname is null) return;
 				begin_thumb_compare(curr_compare_fname);
-			};
+			});
 
 			(string[] inp, string[] lst)? drag_cache = null;
 			void drag_handler(object o, DragEventArgs e)
@@ -598,14 +601,14 @@ namespace Dashboard
 			grid_thumb_compare.DragEnter += drag_handler;
 			grid_thumb_compare.DragOver += drag_handler;
 
-			grid_thumb_compare.Drop += (o, e) =>
+			grid_thumb_compare.Drop += (o, e) => Utils.HandleException(() =>
 			{
 				var lst = drag_cache!.Value.lst;
 				apply_file_lst(lst);
 				e.Handled = true;
-			};
+			});
 
-			Closing += (o, e) => clear_thumb_compare_file();
+			Closing += (o, e) => Utils.HandleException(clear_thumb_compare_file);
 			grid_thumb_compare.AllowDrop = true;
 		}
 

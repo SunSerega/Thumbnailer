@@ -48,7 +48,7 @@ namespace Dashboard
 			}
 			Changed?.Invoke(temp_ext_list != Settings.Root.AllowedExts);
 
-			b_delete.Click += (o, e) => Delete(allowed_ext_container);
+			b_delete.Click += (o, e) => Utils.HandleException(() => Delete(allowed_ext_container));
 
 		}
 

@@ -27,8 +27,8 @@ namespace Dashboard
 				Top = workingArea.Top + (workingArea.Height - ActualHeight) / 2;
 			}
 
-			SizeChanged += (o, e) => reset_dialog_location();
-			LocationChanged += (o, e) => reset_dialog_location();
+			SizeChanged += (o, e) => Utils.HandleException(reset_dialog_location);
+			LocationChanged += (o, e) => Utils.HandleException(reset_dialog_location);
 
 			if (Settings.Root.LastComparedFile != null)
 			{
@@ -43,7 +43,7 @@ namespace Dashboard
 				Close();
 			}
 
-			b_open_system_chooser.Click += (o, e) =>
+			b_open_system_chooser.Click += (o, e) => Utils.HandleException(() =>
 			{
 				var openFileDialog = new Microsoft.Win32.OpenFileDialog
 				{
@@ -75,9 +75,9 @@ namespace Dashboard
 
 				confirm(openFileDialog.FileNames);
 				e.Handled = true;
-			};
+			});
 
-			KeyDown += (o, e) =>
+			KeyDown += (o, e) => Utils.HandleException(() =>
 			{
 				if (e.Key == Key.Enter)
 				{
@@ -97,7 +97,7 @@ namespace Dashboard
 					Close();
 					e.Handled = true;
 				}
-			};
+			});
 
 		}
 	}

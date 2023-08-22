@@ -27,22 +27,22 @@ namespace Dashboard
 			var wjl = new WorkingJobList(thr_pool.MaxJobCount);
 			b_wjl_cont.Child = wjl;
 
-			KeyDown += (o, e) =>
+			KeyDown += (o, e) => Utils.HandleException(() =>
 			{
-				if (e.Key== System.Windows.Input.Key.Escape)
+				if (e.Key == System.Windows.Input.Key.Escape)
 				{
 					Close();
 					e.Handled = true;
 				}
-			};
+			});
 
 			var is_open = true;
 			var change_wh = new System.Threading.ManualResetEventSlim(false);
-			Closed += (o, e) =>
+			Closed += (o, e) => Utils.HandleException(() =>
 			{
 				is_open = false;
 				change_wh.Set();
-			};
+			});
 
 			new System.Threading.Thread(() => Utils.HandleException(() => thr_pool.ObserveLoop(change_wh.Set, observer =>
 			{
@@ -82,12 +82,12 @@ namespace Dashboard
 										To = 0,
 										Duration = TimeSpan.FromSeconds(0.5),
 									};
-									anim.Completed += (o, e) =>
+									anim.Completed += (o, e) => Utils.HandleException(() =>
 									{
 										var tb_ind = sp_pending.Children.IndexOf(tb);
 										if (tb_ind == -1) throw new InvalidOperationException();
 										sp_pending.Children.RemoveAt(tb_ind);
-									};
+									});
 									tb.BeginAnimation(HeightProperty, anim);
 								}, System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
 

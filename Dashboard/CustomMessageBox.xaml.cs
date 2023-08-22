@@ -37,7 +37,7 @@ namespace Dashboard
 			if (cont.Owner != null)
 				Owner = cont.Owner;
 
-			KeyDown += (o,e)=>
+			KeyDown += (o, e) => Utils.HandleException(() =>
 			{
 				if (e.Key == Key.Escape)
 					Close();
@@ -62,7 +62,7 @@ namespace Dashboard
 				else
 					return;
 				e.Handled = true;
-			};
+			});
 
 			Title = title;
 
@@ -82,11 +82,11 @@ namespace Dashboard
 				{
 					Content = button_name,
 				};
-				b.Click += (o, e) =>
+				b.Click += (o, e) => Utils.HandleException(() =>
 				{
 					ChosenOption = button_name;
 					Close();
-				};
+				});
 				sp_buttons.Children.Add(b);
 			}
 
