@@ -105,12 +105,12 @@ namespace Dashboard
 
 			slider_active_job_count.Maximum = main_thr_pool.MaxJobCount;
 			main_thr_pool.ActiveJobsCountChanged += () =>
-				Dispatcher.InvokeAsync(() => Utils.HandleException(() =>
+				Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
 					slider_active_job_count.Value = main_thr_pool.ActiveJobsCount
 				));
 
 			main_thr_pool.PendingJobCountChanged += () =>
-				Dispatcher.InvokeAsync(() => Utils.HandleException(() =>
+				Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
 					 tb_pending_jobs_count.Text = main_thr_pool.PendingJobCount.ToString()
 				));
 
@@ -146,6 +146,7 @@ namespace Dashboard
 					App.Current.Exit += (o, e) => Utils.HandleException(thumb_gen.Shutdown);
 					on_load(thumb_gen);
 				});
+				change_subjob(null);
 
 				Console.Beep();
 			});
@@ -181,7 +182,7 @@ namespace Dashboard
 				if (!IsVisible) return;
 				cache_info_updater.Trigger(TimeSpan.Zero, false);
 			});
-			thumb_gen.CacheSizeChanged += byte_change => Dispatcher.InvokeAsync(() => Utils.HandleException(()=>
+			thumb_gen.CacheSizeChanged += byte_change => Dispatcher.BeginInvoke(() => Utils.HandleException(()=>
 			{
 				cache_size += byte_change;
 				update_cache_info();
@@ -364,7 +365,7 @@ namespace Dashboard
 					bool is_outdated() => compare_id != current_compare_id;
 					if (is_outdated()) return;
 					var new_cache_use = cfi.BeginUse("continuous thumb compare", is_outdated);
-					Dispatcher.InvokeAsync(() => Utils.HandleException(() =>
+					Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
 					{
 						System.Threading.Interlocked.Exchange(ref last_cache_use, new_cache_use)?.Dispose();
 						if (is_outdated()) return;
@@ -403,6 +404,7 @@ namespace Dashboard
 								next_thumb_compare_update = () =>
 								{
 									cfi.ApplySourceAt(false, _ => { }, new_ind, pos, out _, set_pregen_progress);
+									// invoke sync in thump_compare_updater thread
 									Dispatcher.Invoke(() =>
 										thumb_compare_gen.Set(cfi.CurrentThumbBmp)
 									);
@@ -411,7 +413,8 @@ namespace Dashboard
 							};
 							var old_ind = cfi.ChosenThumbOptionInd;
 							cfi.ApplySourceAt(false, _ => { }, new_ind, null, out var initial_pos, set_pregen_progress);
-							Dispatcher.Invoke(() =>
+							// invoke sync in thump_compare_updater thread
+							Dispatcher.Invoke(() => Utils.HandleException(() =>
 							{
 								slider_vid_timestamp.Value = initial_pos;
 								thumb_compare_gen.Set(cfi.CurrentThumbBmp);
@@ -419,7 +422,7 @@ namespace Dashboard
 									sources[new_ind].Length != TimeSpan.Zero ? Visibility.Visible : Visibility.Hidden;
 								bts[old_ind].IsEnabled = true;
 								bts[new_ind].IsEnabled = false;
-							});
+							}));
 						}
 						select_source(cfi.ChosenThumbOptionInd);
 
@@ -536,9 +539,10 @@ namespace Dashboard
 				));
 
 			}
-			pipe.AddLoadCompareHandler(inp=> {
+			pipe.AddLoadCompareHandler(inp =>
+			{
 				var lst = extract_file_lst(inp);
-				Dispatcher.Invoke(() => apply_file_lst(lst));
+				Dispatcher.BeginInvoke(() => Utils.HandleException(() => apply_file_lst(lst)));
 			});
 
 			foreach (var tcv in thumb_compare_all)
