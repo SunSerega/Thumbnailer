@@ -116,7 +116,7 @@ partial class Test
 				{
 
 					//change_subjob("getting metadata");
-					var metadata_s = FFmpeg.Invoke($"-i \"{fname}\" -hide_banner -show_format -show_streams -print_format xml", () => true, exe: "probe").Result.otp;
+					var metadata_s = FFmpeg.Invoke($"-i \"{fname}\" -hide_banner -show_format -show_streams -print_format xml", () => true, exe: "probe").Result.otp!;
 					//change_subjob(null);
 
 					//change_subjob("parsing metadata XML");
@@ -193,7 +193,7 @@ partial class Test
 
 			var res3 = sharedBitmap.GetSharedBitmap(out var hbmp);
 
-			Bitmap.FromHbitmap(hbmp).Save(@"G:\0Prog\Thumbnailer\Test\1.bmp");
+			Image.FromHbitmap(hbmp).Save(@"G:\0Prog\Thumbnailer\Test\1.bmp");
 
 			//var CLSID_LocalThumbnailCache = new Guid("50EF4544-AC9F-4A8E-B21B-8A26180DB13F");
 			//var thumbnailCachePrivate = (IThumbnailCachePrivate)Activator.CreateInstance(Type.GetTypeFromCLSID(CLSID_LocalThumbnailCache, true)!)!;

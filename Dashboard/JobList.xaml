@@ -7,19 +7,23 @@
 		mc:Ignorable="d"
 		
 		Title="Job list"
-		WindowState="Maximized" d:DesignHeight="93.293" d:DesignWidth="113.293"
+		WindowState="Maximized" d:DesignWidth="228.93"
 		
 		>
 	<DockPanel>
 
-		<Border x:Name="b_wjl_cont" BorderBrush="Black" BorderThickness="1" DockPanel.Dock="Top" />
+		<Border x:Name="b_wjl_cont" BorderBrush="Black" BorderThickness="1" DockPanel.Dock="Top">
+			<d:Border>
+				<local:WorkingJobList/>
+			</d:Border>
+		</Border>
 
 		<!--<TextBlock x:Name="temp1" DockPanel.Dock="Top" />-->
 
 		<!--<TextBlock x:Name="temp2" DockPanel.Dock="Top" />-->
 
-		<ScrollViewer VerticalScrollBarVisibility = "Auto">
-			<VirtualizingStackPanel x:Name="sp_pending" VirtualizingStackPanel.IsVirtualizing="True">
+		<ScrollViewer VerticalScrollBarVisibility="Auto" CanContentScroll="True" IsDeferredScrollingEnabled="True" >
+			<VirtualizingStackPanel x:Name="sp_pending" IsVirtualizing="True" VirtualizationMode="Recycling" >
 				<d:TextBlock Text="Pending 1" />
 				<d:TextBlock Text="Pending 2" />
 			</VirtualizingStackPanel>

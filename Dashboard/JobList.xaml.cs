@@ -88,7 +88,7 @@ namespace Dashboard
 										if (tb_ind == -1) throw new InvalidOperationException();
 										sp_pending.Children.RemoveAt(tb_ind);
 									};
-									tb.BeginAnimation(TextBlock.HeightProperty, anim);
+									tb.BeginAnimation(HeightProperty, anim);
 								}, System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
 
 							},
@@ -114,7 +114,7 @@ namespace Dashboard
 									To = tb.DesiredSize.Height,
 									Duration = TimeSpan.FromSeconds(0.5),
 								};
-								tb.BeginAnimation(TextBlock.HeightProperty, anim);
+								tb.BeginAnimation(HeightProperty, anim);
 
 							},
 							(ind, name, thr) =>
@@ -199,6 +199,8 @@ namespace Dashboard
 
 			RenderOptions.SetEdgeMode(this, EdgeMode.Aliased);
 		}
+		[Obsolete("Use constructor with max_jobs")]
+		public WorkingJobList() : this(Environment.ProcessorCount+1) { }
 
 		public readonly struct HeaderBrushList : IReadOnlyList<Brush>
 		{

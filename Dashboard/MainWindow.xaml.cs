@@ -118,6 +118,21 @@ namespace Dashboard
 
 			b_view_jobs.Click += (o, e) =>
 				new JobList(main_thr_pool).Show();
+
+			void update_log_count() => Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
+			{
+				var s = "Log";
+				var c = Log.Count;
+				if (c != 0)
+					s += $" ({c})";
+				b_view_log.Content = s;
+				b_view_log.IsEnabled = c != 0;
+			}));
+			Log.CountUpdated += update_log_count;
+			update_log_count();
+			b_view_log.Click += (o, e) =>
+				Log.Show();
+
 		}
 
 		private void LoadThumbGenerator(CustomThreadPool main_thr_pool, Action<ThumbGenerator> on_load)
@@ -302,6 +317,15 @@ namespace Dashboard
 			slider_vid_timestamp.ValueChanged += (_, _) =>
 				vid_timestamp_handler?.Invoke(slider_vid_timestamp.Value);
 
+			void set_pregen_progress(double progress)
+			{
+				if (progress>1) progress = 1;
+				if (progress<0) progress = 0;
+				Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
+					pb_vid_pregen.Value = progress
+				));
+			}
+
 			Action? next_thumb_compare_update = null;
 			var thump_compare_updater = new DelayedUpdater(
 				() => next_thumb_compare_update?.Invoke(),
@@ -375,7 +399,7 @@ namespace Dashboard
 								tb_vid_timestamp.Text = (slider_vid_timestamp.Value * sources[new_ind].Length).ToString();
 								next_thumb_compare_update = () =>
 								{
-									cfi.ApplySourceAt(false, _ => { }, new_ind, pos, out _);
+									cfi.ApplySourceAt(false, _ => { }, new_ind, pos, out _, set_pregen_progress);
 									Dispatcher.Invoke(() =>
 										thumb_compare_gen.Set(cfi.CurrentThumbBmp)
 									);
@@ -383,13 +407,12 @@ namespace Dashboard
 								thump_compare_updater.Trigger(TimeSpan.Zero, false);
 							};
 							var old_ind = cfi.ChosenThumbOptionInd;
-							cfi.ApplySourceAt(false, _ => { }, new_ind, null, out var initial_pos);
+							cfi.ApplySourceAt(false, _ => { }, new_ind, null, out var initial_pos, set_pregen_progress);
 							Dispatcher.Invoke(() =>
 							{
-								//slider_vid_timestamp.Value = -1;
 								slider_vid_timestamp.Value = initial_pos;
 								thumb_compare_gen.Set(cfi.CurrentThumbBmp);
-								tb_vid_timestamp.Visibility = slider_vid_timestamp.Visibility =
+								tb_vid_timestamp.Visibility = pb_vid_pregen.Visibility = slider_vid_timestamp.Visibility =
 									sources[new_ind].Length != TimeSpan.Zero ? Visibility.Visible : Visibility.Hidden;
 								bts[old_ind].IsEnabled = true;
 								bts[new_ind].IsEnabled = false;

@@ -8,7 +8,7 @@
 		Title="Thumbnailer Config" WindowState="Maximized" d:DesignHeight="432.997" d:DesignWidth="545.597" >
 	<DockPanel>
 
-		<DockPanel Width="225" Margin="7" DockPanel.Dock="Left" >
+		<DockPanel MinWidth="260" Margin="7" DockPanel.Dock="Left" >
 
 			<TextBlock Text="Job slots" HorizontalAlignment="Center" DockPanel.Dock="Top" />
 
@@ -28,9 +28,11 @@
 					</TextBlock.Text>
 				</TextBlock>
 
-				<TextBlock x:Name="tb_pending_jobs_count" Text="0" HorizontalAlignment="Center" DockPanel.Dock="Left" />
+				<Button x:Name="b_view_log" d:Content="Log (123)" DockPanel.Dock="Right" Margin="3,0,0,0" />
 
-				<Button x:Name="b_view_jobs" Content="View" HorizontalAlignment="Right"/>
+				<Button x:Name="b_view_jobs" Content="Details" DockPanel.Dock="Right" Margin="3,0,0,0" />
+
+				<TextBlock x:Name="tb_pending_jobs_count" Text="0" d:Text="12345" HorizontalAlignment="Left" />
 
 			</DockPanel>
 
@@ -87,7 +89,10 @@
 					<d:Button Content="E:cover" Margin="0,0,5,0" />
 				</StackPanel>
 			</DockPanel>
-			<Slider x:Name="slider_vid_timestamp" d:Value="0.3" Maximum="1" Visibility="Hidden" d:Visibility="Visible" />
+			<Grid>
+				<ProgressBar x:Name="pb_vid_pregen" Background="Orange" Foreground="White" Minimum="0" Maximum="1" Visibility="Hidden" d:Visibility="Visible" d:Value="0.4" />
+				<Slider x:Name="slider_vid_timestamp" d:Value="0.3" Maximum="1" Visibility="Hidden" d:Visibility="Visible" />
+			</Grid>
 		</StackPanel>
 
 		<Grid x:Name="grid_thumb_compare" Margin="7" >

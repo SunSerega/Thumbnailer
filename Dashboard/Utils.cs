@@ -203,7 +203,7 @@ namespace Dashboard
 		public bool Contains(string ext) => l.Contains(Validated(ext));
 		public bool MatchesFile(string? fname)
 		{
-			var ext = System.IO.Path.GetExtension(fname);
+			var ext = Path.GetExtension(fname);
 			if (ext is null) return false;
 			if (!ext.StartsWith('.')) return false;
 			return Contains(ext.Remove(0, 1));
@@ -360,14 +360,14 @@ namespace Dashboard
 		public ESQuary(string args) => this.args = args;
 		public ESQuary(string path, string arg)
 		{
-			if (!System.IO.Directory.Exists(path))
+			if (!Directory.Exists(path))
 				throw new InvalidOperationException();
 			args = $"\"{path}\" {arg}";
 		}
 
 		private sealed class ESProcess : IEnumerator<string>
 		{
-			private static readonly string es_path = System.IO.Path.GetFullPath("Dashboard-es.exe");
+			private static readonly string es_path = Path.GetFullPath("Dashboard-es.exe");
 			private readonly System.Diagnostics.Process p;
 			private readonly Task<string> t_err;
 
@@ -437,12 +437,27 @@ namespace Dashboard
 		private const string log_fname = "Dashboard.log";
 		private static readonly object log_lock = new();
 		private static readonly System.Text.Encoding enc = new System.Text.UTF8Encoding(true);
-		
-		public static void Append(string l)
+
+		public static int Count { get; private set; } =
+			!File.Exists(log_fname) ? 0 : File.ReadLines(log_fname, enc).Count();
+		public static event Action? CountUpdated;
+
+		public static void Append(string s)
 		{
 			using var log_locker = new ObjectLocker(log_lock);
-			System.IO.File.AppendAllLines(log_fname, new[] { l }, enc);
+			var lns = s.Split(new string[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
+			File.AppendAllLines(log_fname, lns, enc);
+			Count += lns.Length;
+			CountUpdated?.Invoke();
+			Console.Beep(2000, 30);
 		}
+
+		public static void Show() => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+		{
+			FileName = log_fname,
+			UseShellExecute = true,
+			Verb = "open",
+		});
 
 	}
 
@@ -516,7 +531,7 @@ namespace Dashboard
 
 		public static BitmapImage LoadUncachedBitmap(string fname)
 		{
-			using var str = System.IO.File.OpenRead(fname);
+			using var str = File.OpenRead(fname);
 			var res = new BitmapImage();
 			res.BeginInit();
 			res.CacheOption = BitmapCacheOption.OnLoad;
