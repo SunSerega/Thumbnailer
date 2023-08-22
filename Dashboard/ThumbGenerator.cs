@@ -534,8 +534,9 @@ namespace Dashboard
 				{
 					if (!IsRoot) return;
 					var common_path = cfi.settings.GetSettingsDir() + @"\";
-					cfi.settings.TempsListStr = string.Join(';',
-						d.Select(kvp =>
+					cfi.settings.TempsListStr = string.Join(';', d
+						.Where(kvp => kvp.Value.IsDeletable)
+						.Select(kvp =>
 						{
 							var path = kvp.Value.Path;
 							if (!path.StartsWith(common_path))
