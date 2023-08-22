@@ -19,6 +19,7 @@ namespace Dashboard
 	public class ThumbGenerator
 	{
 		private readonly CustomThreadPool thr_pool;
+		private readonly string internal_files_base;
 		private readonly DirectoryInfo cache_dir;
 		private readonly FileStream lock_file;
 
@@ -36,6 +37,7 @@ namespace Dashboard
 		{
 			this.thr_pool = thr_pool;
 			this.cache_dir = Directory.CreateDirectory(cache_dir);
+			this.internal_files_base = Path.GetDirectoryName(this.cache_dir.FullName) + Path.DirectorySeparatorChar;
 			this.lock_file = File.Create(Path.Combine(this.cache_dir.FullName, ".lock"));
 
 			var dirs = this.cache_dir.GetDirectories();
@@ -61,7 +63,7 @@ namespace Dashboard
 					// will be deleted by cleanup
 					//if (!File.Exists(path))
 					//	throw new CacheFileLoadCanceledException($"3!File [{path}] does not exist");
-					if (path.StartsWith(this.cache_dir.FullName+Path.DirectorySeparatorChar))
+					if (path.StartsWith(internal_files_base))
 						throw new CacheFileLoadCanceledException($"4!Cache referes to cache internals: [{path}]");
 					if (!all_file_paths.Add(path))
 					{
@@ -1266,7 +1268,7 @@ namespace Dashboard
 		)
 		{
 			fname = Path.GetFullPath(fname);
-			if (!fname.StartsWith(cache_dir.FullName+Path.DirectorySeparatorChar))
+			if (!fname.StartsWith(internal_files_base))
 				return GetCFI(fname).GenerateThumb(cause, is_unused_check, thr_pool.AddJob, on_regenerated, force_regen, true);
 			if (is_unused_check!=null && Path.GetExtension(fname) == ".png")
 				return new IdentityCFI(fname).BeginUse(cause, is_unused_check);
