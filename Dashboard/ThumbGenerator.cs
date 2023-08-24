@@ -534,7 +534,7 @@ namespace Dashboard
 				{
 					if (!IsRoot) return;
 					var common_path = cfi.settings.GetSettingsDir() + @"\";
-					cfi.settings.TempsListStr = string.Join(';', d
+					var d_as_s = string.Join(';', d
 						.Where(kvp => kvp.Value.IsDeletable)
 						.Select(kvp =>
 						{
@@ -545,6 +545,7 @@ namespace Dashboard
 							return $"{kvp.Key}={path}";
 						})
 					);
+					cfi.settings.TempsListStr = d_as_s=="" ? null : d_as_s;
 				}
 
 				private GenerationTemp AddExisting(string temp_name, GenerationTemp temp)
@@ -815,6 +816,7 @@ namespace Dashboard
 						var metadata_xml = XDocument.Parse(metadata_s).Root!;
 						change_subjob(null);
 
+						var any_dur = false; // be it video or audio
 						var dur_s = "";
 						if (metadata_xml.Descendants("streams").SingleOrDefault() is XElement streams_xml)
 							foreach (var stream_xml in streams_xml.Descendants("stream"))
@@ -855,20 +857,15 @@ namespace Dashboard
 									frame_count = 1;
 								}
 								else
-									frame_count = int.Parse(frame_count_s??throw null!);
+								{
+									if (frame_count_s is null)
+										continue;
+									frame_count = int.Parse(frame_count_s);
+								}
 
 								var stream_is_image = frame_count == 1;
 								if (!stream_is_image && mimetype_is_image==true)
 									throw new NotImplementedException();
-
-								if (codec_type_s switch // skip if
-								{
-									"video" => false,
-									"attachment" => false,
-									"audio" => true,
-									"subtitle" => true,
-									_ => throw new FormatException(codec_type_s),
-								}) continue;
 
 								var l_dur_s1 = stream_xml.Attribute("duration")?.Value;
 								var l_dur_s2 = get_tag("DURATION") ?? get_tag("DURATION-eng");
@@ -904,6 +901,16 @@ namespace Dashboard
 								var frame_len = l_dur / frame_count;
 								l_dur -= frame_len;
 								if (l_dur < TimeSpan.Zero) throw new InvalidOperationException();
+								if (l_dur != TimeSpan.Zero) any_dur = true;
+
+								if (codec_type_s switch // skip if
+								{
+									"video" => false,
+									"attachment" => false,
+									"audio" => true,
+									"subtitle" => true,
+									_ => throw new FormatException(codec_type_s),
+								}) continue;
 
 								var pre_extracted_strong_ref = default(byte[]?[]?);
 								var pre_extracted_weak_ref = new WeakReference<byte[]?[]?>(pre_extracted_strong_ref);
@@ -935,7 +942,7 @@ namespace Dashboard
 												void flush_frame(int size)
 												{
 													if (res_i < frame_count)
-														res[res_i] = buff[0..(size-1)];
+														res[res_i] = buff[0..size];
 													var new_fill = buff_fill-size;
 													if (new_fill != 0)
 														Array.Copy(buff, size, buff, 0, new_fill);
@@ -966,7 +973,7 @@ namespace Dashboard
 													if (buff_fill == buff.Length)
 														Array.Resize(ref buff, buff_fill*2);
 
-													for (var len = 2; len<=buff_fill; ++len)
+													for (var len = Math.Max(2, buff_fill-last_read_c+1); len<=buff_fill; ++len)
 													{
 														// mjpeg end signature
 														if (buff[len-2] != 0xFF) continue;
@@ -1149,7 +1156,7 @@ namespace Dashboard
 								Log.Append($"No format data for [{inp_fname}]: {metadata_s}");
 							sources.Add(CommonThumbSources.Broken);
 						}
-						else if (sources.Any(s=>s.Length!=TimeSpan.Zero) && format_xml.Attribute("duration") is XAttribute global_dur_xml)
+						else if (any_dur && format_xml.Attribute("duration") is XAttribute global_dur_xml)
 						{
 							change_subjob("make dur string");
 							var global_dur = TimeSpan.FromSeconds(double.Parse(global_dur_xml.Value));
