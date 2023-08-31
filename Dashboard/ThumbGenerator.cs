@@ -6,6 +6,9 @@ using System.Collections.Concurrent;
 
 using System.IO;
 
+using Thread = System.Threading.Thread;
+using Interlocked = System.Threading.Interlocked;
+
 using System.Xml.Linq;
 
 using System.Windows;
@@ -56,7 +59,7 @@ namespace Dashboard
 				{
 					if (!uint.TryParse(dir.Name, out var id))
 						throw new CacheFileLoadCanceledException($"1!Invalid ID");
-					var cfi = new CachedFileInfo(id, dir.FullName, InvokeCacheSizeChanged);
+					var cfi = new CachedFileInfo(this, id, dir.FullName, InvokeCacheSizeChanged);
 					purge_act = cfi.Erase;
 					var path = cfi.InpPath ??
 						throw new CacheFileLoadCanceledException($"2!No file is assigned");
@@ -80,7 +83,7 @@ namespace Dashboard
 					}
 					if (!files.TryAdd(path, cfi))
 						throw new InvalidOperationException();
-					cfi.GenerateThumb("Init check", null, thr_pool.AddJob, null, false, false);
+					cfi.GenerateThumb("Init check", null, null, false, false);
 					purge_act = null;
 				}
 				catch (CacheFileLoadCanceledException e)
@@ -132,7 +135,8 @@ namespace Dashboard
 				if (CustomMessageBox.ShowYesNo("Settings load failed",
 					string.Join(Environment.NewLine, lns)
 				))
-					// Can be suspended by the system, while it's waiting for thumb
+					// File deletion can be suspended by the system,
+					// while explorer is waiting for thumb
 					before_cleanup_loop += ()=>Utils.HandleException(() =>
 					{
 						foreach (var purge_act in purge_acts) purge_act();
@@ -143,13 +147,13 @@ namespace Dashboard
 				change_subjob(null);
 			}
 
-			new System.Threading.Thread(() =>
+			new Thread(() =>
 			{
 				before_cleanup_loop?.Invoke();
 				while (true)
 					try
 					{
-						System.Threading.Thread.Sleep(TimeSpan.FromMinutes(1));
+						Thread.Sleep(TimeSpan.FromMinutes(1));
 						ClearInvalid();
 						ClearExtraFiles();
 					}
@@ -282,17 +286,19 @@ namespace Dashboard
 
 		private sealed class CachedFileInfo : ICachedFileInfo
 		{
+			private readonly ThumbGenerator gen;
 			private readonly uint id;
 			private readonly FileSettings settings;
 
 			#region Constructors
 
-			public CachedFileInfo(uint id, string cache_path, Action<long> on_cache_changed)
+			public CachedFileInfo(ThumbGenerator gen, uint id, string cache_path, Action<long> on_cache_changed)
 			{
 				if (!Path.IsPathRooted(cache_path))
 					throw new ArgumentException($"Path [{cache_path}] was not rooted", nameof(cache_path));
 				if (!Directory.Exists(cache_path))
 					throw new InvalidOperationException();
+				this.gen = gen;
 				this.id = id;
 				CacheSizeChanged += on_cache_changed;
 				settings = new(cache_path);
@@ -300,8 +306,8 @@ namespace Dashboard
 				temps.InitRoot();
 			}
 
-			public CachedFileInfo(uint id, string cache_path, Action<long> on_cache_changed, string target_fname)
-				: this(id, cache_path, on_cache_changed)
+			public CachedFileInfo(ThumbGenerator gen, uint id, string cache_path, Action<long> on_cache_changed, string target_fname)
+				: this(gen, id, cache_path, on_cache_changed)
 			{
 				if (!Path.IsPathRooted(target_fname))
 					throw new ArgumentException($"Path [{target_fname}] was not rooted", nameof(target_fname));
@@ -488,7 +494,7 @@ namespace Dashboard
 						{
 							if (i%100 == 0)
 								CustomMessageBox.Show("Struggling to delete [{path}]", e.ToString());
-							System.Threading.Thread.Sleep(10);
+							Thread.Sleep(10);
 						}
 				}
 
@@ -729,9 +735,20 @@ namespace Dashboard
 
 			}
 
+			private (string? cause, Action<ICachedFileInfo>? on_regenerated, bool force_regen) delayed_gen_args = default;
+			private static readonly DelayedMultiUpdater<CachedFileInfo> delayed_gen = new(cfi =>
+			{
+				var (cause, on_regenerated, force_regen) = cfi.delayed_gen_args;
+				if (cause is null) return;
+				cfi.delayed_gen_args = default;
+				cfi.GenerateThumb($"{cause} (delayed)", null, on_regenerated, force_regen, false);
+			}, TimeSpan.MaxValue, "Thumb gen wait (input recently modified)");
+
+			private volatile int gen_jobs_assigned = 0;
+			private readonly ConcurrentQueue<Action<Action<string?>>> gen_acts = new();
+
 			public ICachedFileInfo.CacheUse? GenerateThumb(
 				string cause, Func<bool>? is_unused_check,
-				Action<string, CustomThreadPool.JobWork> add_job,
 				Action<ICachedFileInfo>? on_regenerated,
 				bool force_regen, bool set_cache_use_time)
 			{
@@ -775,16 +792,14 @@ namespace Dashboard
 				{
 					var total_wait = TimeSpan.FromSeconds(5);
 					var waited = DateTime.UtcNow-write_time;
-					if (waited < total_wait)
+					if (total_wait > waited)
 					{
 						temps.TryRemove(otp_temp_name);
 						temps.VerifyEmpty();
 						settings.CurrentThumbIsFinal = false;
 						SetTempSource(CommonThumbSources.Waiting);
-						System.Threading.Tasks.Task.Delay(total_wait-waited)
-							.ContinueWith(t => Utils.HandleException(
-								() => GenerateThumb($"{cause} (delayed)", null, add_job, on_regenerated, force_regen, false)
-							));
+						delayed_gen_args = (cause, on_regenerated, force_regen);
+						delayed_gen.Trigger(this, total_wait-waited, true);
 						return make_cache_use();
 					}
 				}
@@ -794,12 +809,8 @@ namespace Dashboard
 				settings.CurrentThumbIsFinal = false;
 				SetTempSource(CommonThumbSources.Ungenerated);
 
-				add_job($"Generating thumb for: {inp_fname}", change_subjob =>
+				gen_acts.Enqueue(change_subjob =>
 				{
-					if (this.has_shut_down) return;
-					using var this_locker = new ObjectLocker(this);
-					if (this.has_shut_down) return;
-
 					// For now have removed the setting for this
 					//var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -807,7 +818,7 @@ namespace Dashboard
 					ThumbSource[]? curr_gen_thumb_sources = null;
 
 					change_subjob("getting metadata");
-					var metadata_s = FFmpeg.Invoke($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -count_packets -print_format xml", ()=>true, exe: "probe").Result.otp!;
+					var metadata_s = FFmpeg.Invoke($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -count_packets -print_format xml", () => true, exe: "probe").Result.otp!;
 					change_subjob(null);
 
 					try
@@ -930,7 +941,7 @@ namespace Dashboard
 											pre_extracted_strong_ref = new byte[]?[frame_count];
 											pre_extracted_weak_ref.SetTarget(pre_extracted_strong_ref);
 
-											add_job($"pre extract [{ind}] for [{inp_fname}]", change_subjob =>
+											gen.thr_pool.AddJob($"pre extract [{ind}] for [{inp_fname}]", change_subjob =>
 											{
 												var res = pre_extracted_strong_ref;
 												pre_extracted_strong_ref = null;
@@ -1051,7 +1062,7 @@ namespace Dashboard
 										args.Add($"-nostdin");
 
 										change_subjob("extract thumb");
-										FFmpeg.Invoke(string.Join(' ', args), ()=>File.Exists(otp_fname),
+										FFmpeg.Invoke(string.Join(' ', args), () => File.Exists(otp_fname),
 											execute_in: ffmpeg_path,
 											handle_inp: handle_inp
 										).Wait();
@@ -1205,6 +1216,27 @@ namespace Dashboard
 					on_regenerated?.Invoke(this);
 				});
 
+				if (1==Interlocked.Increment(ref gen_jobs_assigned))
+					gen.thr_pool.AddJob($"Generating thumb for [{inp_fname}] because {cause}", change_subjob =>
+					{
+						do
+						{
+							try
+							{
+								if (!gen_acts.TryDequeue(out var act))
+									throw new InvalidOperationException();
+								if (this.has_shut_down) return;
+								using var this_locker = new ObjectLocker(this);
+								if (this.has_shut_down) return;
+								act(change_subjob);
+							}
+							catch (Exception e)
+							{
+								Utils.HandleException(e);
+							}
+						} while (0!=Interlocked.Decrement(ref gen_jobs_assigned));
+					});
+
 				return make_cache_use();
 			}
 
@@ -1258,10 +1290,10 @@ namespace Dashboard
 			if (files.TryGetValue(fname, out cfi)) return cfi;
 			while (true)
 			{
-				var id = System.Threading.Interlocked.Increment(ref last_used_id);
+				var id = Interlocked.Increment(ref last_used_id);
 				var cache_file_dir = cache_dir.CreateSubdirectory(id.ToString());
 				if (cache_file_dir.EnumerateFileSystemInfos().Any()) continue;
-				cfi = new(id, cache_file_dir.FullName, InvokeCacheSizeChanged, fname);
+				cfi = new(this, id, cache_file_dir.FullName, InvokeCacheSizeChanged, fname);
 				if (!files.TryAdd(fname, cfi))
 					throw new InvalidOperationException();
 				return cfi;
@@ -1277,7 +1309,7 @@ namespace Dashboard
 		{
 			fname = Path.GetFullPath(fname);
 			if (!fname.StartsWith(internal_files_base))
-				return GetCFI(fname).GenerateThumb(cause, is_unused_check, thr_pool.AddJob, on_regenerated, force_regen, true);
+				return GetCFI(fname).GenerateThumb(cause, is_unused_check, on_regenerated, force_regen, true);
 			if (is_unused_check!=null && Path.GetExtension(fname) == ".png")
 				return new IdentityCFI(fname).BeginUse(cause, is_unused_check);
 			return null;
@@ -1302,7 +1334,7 @@ namespace Dashboard
 			for (var i = 0; i<cfis.Length; i++)
 			{
 				change_subjob($"{i}/{cfis.Length} ({i/(double)cfis.Length:P2})");
-				cfis[i].GenerateThumb("Regen", null, thr_pool.AddJob, null, force_regen, false);
+				cfis[i].GenerateThumb("Regen", null, null, force_regen, false);
 			}
 		}));
 

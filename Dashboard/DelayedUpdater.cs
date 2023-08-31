@@ -1,5 +1,9 @@
 ﻿using System;
+
 using System.Threading;
+
+using System.Linq;
+using System.Collections.Concurrent;
 
 namespace Dashboard
 {
@@ -7,7 +11,7 @@ namespace Dashboard
 	public class DelayedUpdater
 	{
 		private readonly ManualResetEventSlim ev = new(false);
-		private DateTime save_time;
+		private DateTime saved_time;
 		private bool can_delay_further = true;
 		private bool is_shut_down = false;
 
@@ -26,7 +30,7 @@ namespace Dashboard
 					{
 						if (!controller_ref.TryGetTarget(out var controller))
 							return;
-						var wait_left = controller.save_time - DateTime.Now;
+						var wait_left = controller.saved_time - DateTime.Now;
 						controller = null;
 						if (wait_left <= TimeSpan.Zero) break;
 						Thread.Sleep(wait_left);
@@ -63,15 +67,13 @@ namespace Dashboard
 
 		public DelayedUpdater(Action update, string description)
 		{
-
 			var thr = new Thread(MakeThreadStart(update, ev, new(this)))
 			{
 				IsBackground=true,
-				Name = $"DelayedUpdater: {description}",
+				Name = $"{nameof(DelayedUpdater)}: {description}",
 			};
 			thr.SetApartmentState(ApartmentState.STA);
 			thr.Start();
-
 		}
 
 		public void Trigger(TimeSpan delay, bool can_delay_further)
@@ -79,11 +81,11 @@ namespace Dashboard
 			var next_time = DateTime.Now + delay;
 			if (
 				!ev.IsSet ||
-				(!can_delay_further && next_time<save_time) ||
-				(this.can_delay_further && next_time>save_time)
+				(!can_delay_further && next_time<saved_time) ||
+				(this.can_delay_further && next_time>saved_time)
 			)
 			{
-				save_time = next_time;
+				saved_time = next_time;
 				this.can_delay_further = can_delay_further;
 				ev.Set();
 			}
@@ -96,6 +98,89 @@ namespace Dashboard
 		}
 
 		~DelayedUpdater() => Shutdown();
+
+	}
+
+	public class DelayedMultiUpdater<TKey>
+		where TKey : notnull
+	{
+		private readonly ConcurrentDictionary<TKey, (DateTime time, bool cdf)> updatables = new();
+		private readonly ManualResetEventSlim ev = new(false);
+		private readonly Action<TKey> update;
+
+		public DelayedMultiUpdater(Action<TKey> update, TimeSpan max_wait, string description)
+		{
+			this.update = update;
+			new Thread(() =>
+			{
+				while (true)
+					try
+					{
+						if (updatables.IsEmpty)
+						{
+							ev.Wait();
+							ev.Reset();
+							continue;
+						}
+
+						var kvp = updatables.MinBy(kvp => kvp.Value.time);
+						{
+							var wait = DateTime.Now-kvp.Value.time;
+							if (wait > TimeSpan.Zero)
+							{
+								if (wait > max_wait)
+									wait = max_wait;
+								Thread.Sleep(wait);
+								continue;
+							}
+						}
+						if (!updatables.TryRemove(kvp))
+							continue;
+
+						try
+						{
+							Thread.CurrentThread.IsBackground = false;
+							update(kvp.Key);
+						}
+						finally
+						{
+							Thread.CurrentThread.IsBackground = true;
+						}
+
+					}
+					catch (Exception e)
+					{
+						Utils.HandleException(e);
+					}
+			})
+			{
+				IsBackground = true,
+				Name = $"{nameof(DelayedMultiUpdater<TKey>)}<{typeof(TKey)}>: {description}",
+			}.Start();
+		}
+
+		public void Trigger(TKey key, TimeSpan delay, bool? can_delay_further)
+		{
+			var next_val = (time: DateTime.Now + delay, cdf: can_delay_further??false);
+			var need_set_ev = false;
+			updatables.AddOrUpdate(key, next_val, (key, old_val) =>
+			{
+				if (can_delay_further is null)
+					throw new InvalidOperationException();
+				if (
+					!ev.IsSet ||
+					(!next_val.cdf && next_val.time<old_val.time) ||
+					(old_val.cdf && next_val.time>old_val.time)
+				)
+				{
+					need_set_ev = true;
+					return next_val;
+				}
+				return old_val;
+			});
+			if (need_set_ev)
+				ev.Set();
+		}
 
 	}
 

@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
-using System.Collections.Concurrent;
 
 using System.Runtime.CompilerServices;
 
@@ -259,48 +258,17 @@ namespace Dashboard
 	public static class FFmpeg
 	{
 
-		private static readonly ConcurrentDictionary<System.Diagnostics.Process, Task<(string? otp, string? err)>> running = new();
-		private static readonly ManualResetEventSlim new_proc_wh = new(false);
-
-		static FFmpeg()
+		private static readonly DelayedMultiUpdater<(System.Diagnostics.Process p, Task<(string? otp, string? err)> t)> delayed_kill_switch = new(state =>
 		{
-			new Thread(() =>
-			{
-				while (true)
-					try
-					{
-						var p = running.Keys.MinBy(p => p.StartTime);
-						if (p is null)
-						{
-							Thread.CurrentThread.IsBackground = true;
-							new_proc_wh.Wait();
-							new_proc_wh.Reset();
-							continue;
-						}
-						if (!running.TryRemove(p, out var t))
-							throw new InvalidOperationException();
-
-						if (p.HasExited) continue;
-						var sleep_span = p.StartTime - DateTime.Now + TimeSpan.FromSeconds(10);
-						if (sleep_span > TimeSpan.Zero) Thread.Sleep(sleep_span);
-						if (p.HasExited) continue;
-						p.Kill();
-						var (otp, err) = t.Result;
-						CustomMessageBox.Show(
-							$"[{p.StartInfo.FileName} {p.StartInfo.Arguments}] hanged. Output:",
-							otp + "\n\n===================\n\n" + err
-						);
-					}
-					catch (Exception e)
-					{
-						Utils.HandleException(e);
-					}
-			})
-			{
-				IsBackground = true,
-				Name = "FFmpeg kill switch",
-			}.Start();
-		}
+			var (p, t) = state;
+			if (p.HasExited) return;
+			p.Kill();
+			var (otp, err) = t.Result;
+			CustomMessageBox.Show(
+				$"[{p.StartInfo.FileName} {p.StartInfo.Arguments}] hanged. Output:",
+				otp + "\n\n===================\n\n" + err
+			);
+		}, TimeSpan.MaxValue, "FFmpeg kill switch");
 
 		public static Task<(string? otp, string? err)> Invoke(string args, Func<bool> verify_res,
 			string? execute_in = null, string exe = "mpeg",
@@ -346,8 +314,7 @@ namespace Dashboard
 					throw new InvalidOperationException($"{execute_in}> [{p.StartInfo.FileName} {p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
 				return res;
 			});
-			if (!running.TryAdd(p, t))
-				throw new InvalidOperationException();
+			delayed_kill_switch.Trigger((p, t), TimeSpan.FromSeconds(10), null);
 			return t;
 		}
 

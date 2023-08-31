@@ -4,7 +4,6 @@ using System.IO;
 
 using System.Linq;
 using System.Collections.Generic;
-using System.Collections.Concurrent;
 
 namespace Dashboard
 {
@@ -200,8 +199,8 @@ namespace Dashboard
 					}
 					settings[key] = o_val;
 				}
-			// at the end, so settings are fully loaded
-			if (need_resave) RequestResave(default);
+			// at the end, to make sure settings are fully loaded first
+			if (need_resave) RequestResave(TimeSpan.Zero);
 
 		}
 
@@ -228,8 +227,6 @@ namespace Dashboard
 			File.Delete(back_save_fname);
 		}
 
-		private static readonly ConcurrentDictionary<Settings, DateTime> req_resave_times = new();
-		private static readonly System.Threading.ManualResetEventSlim resave_wh = new(false);
 		private void ResaveAll()
 		{
 			using var settings_locker = new ObjectLocker(settings);
@@ -254,54 +251,22 @@ namespace Dashboard
 
 			File.Delete(back_save_fname);
 		}
-		static Settings()
+		private static readonly DelayedMultiUpdater<Settings> resave_updater = new(s =>
 		{
-			var base_name = "Settings resaving";
-			new System.Threading.Thread(() =>
+			var thr_name = System.Threading.Thread.CurrentThread.Name;
+			try
 			{
-				var thr = System.Threading.Thread.CurrentThread;
-				while (true)
-					try
-					{
-						if (req_resave_times.IsEmpty)
-						{
-							resave_wh.Wait();
-							resave_wh.Reset();
-							continue;
-						}
-
-						var kvp = req_resave_times.MinBy(kvp => kvp.Value);
-						{
-							var wait = kvp.Value - DateTime.UtcNow;
-							if (wait > TimeSpan.Zero)
-								System.Threading.Thread.Sleep(wait);
-						}
-						if (!req_resave_times.TryRemove(kvp))
-							continue;
-
-						thr.IsBackground = false;
-						thr.Name = $"{base_name}: {kvp.Key.main_save_fname}";
-						kvp.Key.ResaveAll();
-					}
-					catch (Exception e)
-					{
-						Utils.HandleException(e);
-					}
-					finally
-					{
-						thr.IsBackground = true;
-						System.Threading.Thread.CurrentThread.Name = base_name;
-					}
-			})
+				System.Threading.Thread.CurrentThread.Name = $"{thr_name}: {s.main_save_fname}";
+				s.ResaveAll();
+			}
+			finally
 			{
-				IsBackground = true,
-				Name = base_name,
-			}.Start();
-		}
+				System.Threading.Thread.CurrentThread.Name = thr_name;
+			}
+		}, TimeSpan.FromSeconds(0.1), "Settings resaving");
 		private void RequestResave(TimeSpan delay)
 		{
-			req_resave_times[this] = DateTime.UtcNow+delay;
-			resave_wh.Set();
+			resave_updater.Trigger(this, delay, true);
 		}
 
 		protected static (T1, T2) ParseSep<T1,T2>(string s, Func<string, T1> parse1, Func<string, T2> parse2, char sep = ':')

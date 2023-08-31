@@ -224,6 +224,35 @@ namespace Dashboard
 			});
 			b_add_ext.Click += (_, _) => Utils.HandleException(add_ext);
 
+			var delayed_commit_reset_exts = new Dictionary<string, string>();
+			var delayed_commit_reset = new DelayedUpdater(() =>
+			{
+				Dictionary<string, string[]> reset_kind_to_exts;
+				lock (delayed_commit_reset_exts)
+				{
+					reset_kind_to_exts = delayed_commit_reset_exts
+						.GroupBy(kvp => kvp.Value)
+						.ToDictionary(g => g.Key, g => g.Select(kvp => kvp.Key).ToArray());
+					delayed_commit_reset_exts.Clear();
+				}
+
+				foreach (var (reset_kind, exts) in reset_kind_to_exts)
+				{
+					var q = new ESQuary("ext:"+string.Join(';', exts));
+					switch (reset_kind)
+					{
+						case "Reset":
+							foreach (var fname in q)
+								COMManip.ResetThumbFor(fname);
+							break;
+						case "Generate":
+							thumb_gen.MassGenerate(q, true);
+							break;
+						default: throw new NotImplementedException(reset_kind);
+					}
+				}
+
+			}, $"Thumb reset after AllowedExt commit");
 			b_check_n_commit.Click += (o, e) => Utils.HandleException(()=>
 			{
 
@@ -265,40 +294,29 @@ namespace Dashboard
 						Verb = "runas",
 						WorkingDirectory = Environment.CurrentDirectory,
 						CreateNoWindow = true,
-						//UseShellExecute = false,
-						//RedirectStandardOutput = true,
-						//RedirectStandardError = true,
 					};
-
 					var p = System.Diagnostics.Process.Start(psi)!;
-
-					//var err = p.StandardError.ReadToEnd();
 					p.WaitForExit();
 					if (p.ExitCode != 0)
-						//throw new Exception($"ExitCode={p.ExitCode}; err:\n{err}");
 						throw new Exception($"ExitCode={p.ExitCode}");
 					
 					COMManip.NotifyRegExtChange();
 					AllowedExt.CommitChanges();
 
-					if (gen_type != null)
-						System.Threading.Tasks.Task.Run(() => Utils.HandleException(() =>
+					if (gen_type is null) return;
+					lock (delayed_commit_reset_exts)
+						foreach (var ext in add)
 						{
-							var only_reset = gen_type switch
+							static int gen_type_ord(string gen_type) => gen_type switch
 							{
-								"Reset" => true,
-								"Generate" => false,
-								_ => throw new NotImplementedException(gen_type),
+								"Reset" => 1,
+								"Generate" => 2,
+								_ => throw new NotImplementedException()
 							};
-							var q = new ESQuary("ext:"+string.Join(';',add));
-							if (only_reset)
-							{
-								foreach (var fname in q)
-									COMManip.ResetThumbFor(fname);
-							}
-							else
-								thumb_gen.MassGenerate(q, true);
-						}));
+							if (!delayed_commit_reset_exts.TryGetValue(ext, out var old_gen_type) || gen_type_ord(old_gen_type)<gen_type_ord(gen_type))
+								delayed_commit_reset_exts[ext] = gen_type;
+						}
+					delayed_commit_reset.Trigger(TimeSpan.Zero, false);
 				}
 				else
 				{
@@ -439,6 +457,32 @@ namespace Dashboard
 				curr_compare_fname = fname;
 				b_reload_compare.IsEnabled = true;
 			});
+
+			var awaiting_mass_gen_lst = new List<string>();
+			var delayed_mass_gen = new DelayedUpdater(() =>
+			{
+				string[] lst;
+				lock (awaiting_mass_gen_lst)
+				{
+					lst = awaiting_mass_gen_lst.ToArray();
+					awaiting_mass_gen_lst.Clear();
+				}
+				thumb_gen.MassGenerate(lst, true);
+			}, "Thumb compare => mass gen");
+			void apply_file_lst(string[] lst)
+			{
+				if (lst.Length==1)
+				{
+					tray_icon.ShowWin();
+					begin_thumb_compare(lst.Single());
+					return;
+				}
+
+				lock (awaiting_mass_gen_lst)
+					awaiting_mass_gen_lst.AddRange(lst);
+				delayed_mass_gen.Trigger(TimeSpan.Zero, false);
+			}
+
 			string[] extract_file_lst(IEnumerable<string> inp)
 			{
 				static T execute_any<T>(string descr, params Func<Action, T>[] funcs)
@@ -525,20 +569,7 @@ namespace Dashboard
 					return Enumerable.Empty<string>();
 				}).ToArray();
 			}
-			void apply_file_lst(string[] lst)
-			{
-				if (lst.Length==1)
-				{
-					tray_icon.ShowWin();
-					begin_thumb_compare(lst.Single());
-					return;
-				}
 
-				System.Threading.Tasks.Task.Run(() => Utils.HandleException(() =>
-					thumb_gen.MassGenerate(lst, true)
-				));
-
-			}
 			pipe.AddLoadCompareHandler(inp =>
 			{
 				var lst = extract_file_lst(inp);
