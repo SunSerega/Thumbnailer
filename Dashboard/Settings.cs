@@ -250,6 +250,7 @@ namespace Dashboard
 			sw.Close();
 
 			File.Delete(back_save_fname);
+			settings.TrimExcess();
 		}
 		private static readonly DelayedMultiUpdater<Settings> resave_updater = new(s =>
 		{

@@ -160,20 +160,18 @@ namespace Dashboard
 
 			var cache_info_updater = new DelayedUpdater(() =>
 			{
-				Dispatcher.Invoke(() =>
-				{
-					cache_size =
-						new DirectoryInfo("cache")
-						.EnumerateFiles("*", SearchOption.AllDirectories)
-						.Sum(f => f.Length);
-					update_cache_info();
-				});
+				cache_size =
+					new DirectoryInfo("cache")
+					.EnumerateFiles("*", SearchOption.AllDirectories)
+					.Sum(f => f.Length);
+				Dispatcher.Invoke(update_cache_info);
 
 				if (cache_size > Settings.Root.MaxCacheSize)
 				{
 					if (thumb_gen.ClearInvalid()!=0) return;
 					if (thumb_gen.ClearExtraFiles()!=0) return;
-					thumb_gen.ClearOneOldest();
+					// recalc needed size change here, in case it changed
+					thumb_gen.ClearOldest(size: cache_size-Settings.Root.MaxCacheSize);
 				}
 
 			}, $"cache size recalculation");
@@ -243,7 +241,7 @@ namespace Dashboard
 					{
 						case "Reset":
 							foreach (var fname in q)
-								COMManip.ResetThumbFor(fname);
+								COMManip.ResetThumbFor(fname, TimeSpan.Zero);
 							break;
 						case "Generate":
 							thumb_gen.MassGenerate(q, true);

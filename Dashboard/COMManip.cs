@@ -102,19 +102,18 @@ namespace Dashboard
 			return true;
 		}
 
-		public static void ResetThumbFor(string? path)
+		private static DelayedMultiUpdater<string> delayed_thumb_reseter = new(
+			path=>DeleteThumbFor(path), TimeSpan.FromSeconds(0.1), "Thumb reset"
+		);
+		public static void ResetThumbFor(string? path, TimeSpan delay)
 		{
-
 			if (path is null) return;
 			if (System.IO.Path.GetPathRoot(path) == path) throw new NotImplementedException();
-			DeleteThumbFor(path);
-
-			path = System.IO.Path.GetDirectoryName(path);
-
-			if (path is null) throw new NotImplementedException();
+			delayed_thumb_reseter.Trigger(path, delay, true);
+			path = System.IO.Path.GetDirectoryName(path) ??
+				throw new NotImplementedException();
 			if (System.IO.Path.GetPathRoot(path) == path) return;
-			DeleteThumbFor(path);
-
+			delayed_thumb_reseter.Trigger(path, delay+TimeSpan.FromSeconds(0.1), true);
 		}
 
 		public static BitmapSource? GetOrTryMakeThumbFor(string fname)

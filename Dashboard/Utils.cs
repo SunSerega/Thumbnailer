@@ -43,7 +43,8 @@ namespace Dashboard
 		public static bool operator <(ByteCount c1, ByteCount c2) => c1.in_bytes < c2.in_bytes;
 		public static bool operator >(ByteCount c1, ByteCount c2) => c1.in_bytes > c2.in_bytes;
 
-		public static ByteCount operator +(ByteCount c1, ByteCount c2) => c1.in_bytes + c2.in_bytes;
+		public static long operator +(ByteCount c1, ByteCount c2) => c1.in_bytes + c2.in_bytes;
+		public static long operator -(ByteCount c1, ByteCount c2) => c1.in_bytes - c2.in_bytes;
 
 		public override string ToString()
 		{
@@ -314,7 +315,7 @@ namespace Dashboard
 					throw new InvalidOperationException($"{execute_in}> [{p.StartInfo.FileName} {p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
 				return res;
 			});
-			delayed_kill_switch.Trigger((p, t), TimeSpan.FromSeconds(10), null);
+			delayed_kill_switch.Trigger((p, t), TimeSpan.FromSeconds(60), null);
 			return t;
 		}
 

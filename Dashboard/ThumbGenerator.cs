@@ -83,7 +83,10 @@ namespace Dashboard
 					}
 					if (!files.TryAdd(path, cfi))
 						throw new InvalidOperationException();
-					cfi.GenerateThumb("Init check", null, null, false, false);
+					// skip if thumb was already fully generated
+					// even if it got deleted later, to save space
+					if (!cfi.CurrentThumbIsFinal)
+						cfi.GenerateThumb("Init check", null, null, false, false);
 					purge_act = null;
 				}
 				catch (CacheFileLoadCanceledException e)
@@ -325,6 +328,7 @@ namespace Dashboard
 			public string CurrentThumbPath => Path.Combine(settings.GetSettingsDir(), settings.CurrentThumb ??
 				throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb")
 			);
+			public bool CurrentThumbIsFinal => settings.CurrentThumbIsFinal;
 			public int ChosenThumbOptionInd => settings.ChosenThumbOptionInd ??
 				throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb");
 			private bool error_generating = false;
@@ -344,7 +348,7 @@ namespace Dashboard
 			private void SetTempSource(ThumbSource source)
 			{
 				settings.CurrentThumb = source.Extract(false,0.3, null!, null);
-				COMManip.ResetThumbFor(InpPath);
+				COMManip.ResetThumbFor(InpPath, TimeSpan.Zero);
 			}
 			private void SetSources(Action<string?> change_subjob, ThumbSource[] thumb_sources)
 			{
@@ -354,10 +358,10 @@ namespace Dashboard
 				this.thumb_sources = thumb_sources;
 				ApplySourceAt(true, change_subjob, settings.ChosenThumbOptionInd??thumb_sources.Length-1, null, out _, null);
 			}
-			private void ResetSources(bool run_gc)
+			private void ResetSources()
 			{
 				thumb_sources = null;
-				if (run_gc) GC.Collect();
+				//if (run_gc) GC.Collect();
 			}
 
 			public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos, Action<double>? on_pre_extract_progress)
@@ -394,14 +398,14 @@ namespace Dashboard
 					res = res.Remove(0, base_path.Length);
 
 				settings.CurrentThumb = res;
-				COMManip.ResetThumbFor(InpPath);
+				COMManip.ResetThumbFor(InpPath, on_pre_extract_progress is null ? TimeSpan.Zero : TimeSpan.FromSeconds(0.1));
 			}
 
 			#endregion
 
 			#region UseList
 
-			private readonly ConcurrentDictionary<ICachedFileInfo.CacheUse, byte> use_list = new();
+			private ConcurrentDictionary<ICachedFileInfo.CacheUse, byte> use_list = new();
 			private readonly OneToManyLock use_list_lock = new();
 
 			public ICachedFileInfo.CacheUse BeginUse(string cause, Func<bool> is_freed_check) => use_list_lock.ManyLocked(() =>
@@ -411,15 +415,20 @@ namespace Dashboard
 					throw new InvalidOperationException();
 				return use;
 			});
-			public void EndUse(ICachedFileInfo.CacheUse use, Action? finish_while_locked) =>
-				use_list_lock.ManyLocked(() =>
+			public void EndUse(ICachedFileInfo.CacheUse use, Action? finish_while_locked) => use_list_lock.ManyLocked(() =>
+			{
+				if (!use_list.TryRemove(use, out _))
+					throw new InvalidOperationException($"Cache[{Id}] use for [{InpPath}] ({use.Cause}) was already freed");
+				finish_while_locked?.Invoke();
+				if (use_list.IsEmpty)
 				{
-					if (!use_list.TryRemove(use, out _))
-						throw new InvalidOperationException($"Cache[{Id}] use for [{InpPath}] ({use.Cause}) was already freed");
-					finish_while_locked?.Invoke();
-					if (use_list.IsEmpty)
-						ResetSources(true);
-				});
+					// No .TrimExcess
+					// But should be fine, because
+					// .BeginUse would be invalid after this .EndUse
+					use_list = new();
+					ResetSources();
+				}
+			});
 
 			private bool TryEmptyUseList(Action act) => use_list_lock.OneLocked(() =>
 			{
@@ -620,6 +629,7 @@ namespace Dashboard
 				public int DeleteExtraFiles()
 				{
 					if (!IsRoot) throw new InvalidOperationException();
+					d.TrimExcess();
 					var non_del = new HashSet<string>(d.Count);
 					foreach (var t in d.Values)
 						if (!non_del.Add(t.Path))
@@ -809,412 +819,413 @@ namespace Dashboard
 				settings.CurrentThumbIsFinal = false;
 				SetTempSource(CommonThumbSources.Ungenerated);
 
-				gen_acts.Enqueue(change_subjob =>
-				{
-					// For now have removed the setting for this
-					//var sw = System.Diagnostics.Stopwatch.StartNew();
-
-					var sources = new List<ThumbSource>();
-					ThumbSource[]? curr_gen_thumb_sources = null;
-
-					change_subjob("getting metadata");
-					var metadata_s = FFmpeg.Invoke($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -count_packets -print_format xml", () => true, exe: "probe").Result.otp!;
-					change_subjob(null);
-
-					try
+				if (on_regenerated!=null || gen_acts.IsEmpty)
+					gen_acts.Enqueue(change_subjob =>
 					{
-						change_subjob("parsing metadata XML");
-						var metadata_xml = XDocument.Parse(metadata_s).Root!;
+						// For now have removed the setting for this
+						//var sw = System.Diagnostics.Stopwatch.StartNew();
+
+						var sources = new List<ThumbSource>();
+						ThumbSource[]? curr_gen_thumb_sources = null;
+
+						change_subjob("getting metadata");
+						var metadata_s = FFmpeg.Invoke($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -count_packets -print_format xml", () => true, exe: "probe").Result.otp!;
 						change_subjob(null);
 
-						var any_dur = false; // be it video or audio
-						var dur_s = "";
-						if (metadata_xml.Descendants("streams").SingleOrDefault() is XElement streams_xml)
-							foreach (var stream_xml in streams_xml.Descendants("stream"))
-							{
-								var ind = int.Parse(stream_xml.Attribute("index")!.Value);
-								change_subjob($"checking stream#{ind}");
+						try
+						{
+							change_subjob("parsing metadata XML");
+							var metadata_xml = XDocument.Parse(metadata_s).Root!;
+							change_subjob(null);
 
-								var codec_type_s = stream_xml.Attribute("codec_type")!.Value;
-
-								string? get_tag(string key) =>
-									stream_xml.Descendants("tag").SingleOrDefault(n => n.Attribute("key")!.Value == key)?.Attribute("value")!.Value;
-
-								var tag_mimetype = get_tag("mimetype");
-
-								var is_attachment = codec_type_s == "attachment";
-								if (is_attachment)
+							var any_dur = false; // be it video or audio
+							var dur_s = "";
+							if (metadata_xml.Descendants("streams").SingleOrDefault() is XElement streams_xml)
+								foreach (var stream_xml in streams_xml.Descendants("stream"))
 								{
-									if (tag_mimetype == null)
-										throw new InvalidOperationException();
-								}
-								else // !is_attachment
-								{
-									// G:\0Music\3Sort\!fix\Selulance (soundcloud)\[20150103] Selulance - What.mkv
-									//if (stream_is_image)
-									//	// Should work, but throw to find such file
-									//	throw new NotImplementedException(inp_fname);
-								}
+									var ind = int.Parse(stream_xml.Attribute("index")!.Value);
+									change_subjob($"checking stream#{ind}");
 
-								var mimetype_is_image = tag_mimetype?.StartsWith("image/");
-								if (mimetype_is_image==false && is_attachment) continue;
+									var codec_type_s = stream_xml.Attribute("codec_type")!.Value;
 
-								var frame_count_s = stream_xml.Attribute("nb_read_packets")?.Value;
-								int frame_count;
-								if (is_attachment)
-								{
-									if (frame_count_s != null)
-										throw new NotImplementedException();
-									frame_count = 1;
-								}
-								else
-								{
-									if (frame_count_s is null)
-										continue;
-									frame_count = int.Parse(frame_count_s);
-								}
+									string? get_tag(string key) =>
+										stream_xml.Descendants("tag").SingleOrDefault(n => n.Attribute("key")!.Value == key)?.Attribute("value")!.Value;
 
-								var stream_is_image = frame_count == 1;
-								if (!stream_is_image && mimetype_is_image==true)
-									throw new NotImplementedException();
+									var tag_mimetype = get_tag("mimetype");
 
-								var l_dur_s1 = stream_xml.Attribute("duration")?.Value;
-								var l_dur_s2 = get_tag("DURATION") ?? get_tag("DURATION-eng");
-								// torrent subs stream can have boths
-								//if ((l_dur_s1 != null) && (l_dur_s2 != null))
-								//	throw new NotImplementedException($"[{inp_fname}]: [{metadata_s}]");
-								string source_name;
-								TimeSpan l_dur;
-								if (stream_is_image)
-								{
-									source_name = $"Image:{ind}";
-									l_dur = TimeSpan.Zero;
-								}
-								else if (l_dur_s1 != null)
-								{
-									source_name = $"FStream:{ind}";
-									l_dur = TimeSpan.FromSeconds(double.Parse(l_dur_s1));
-								}
-								else if (l_dur_s2 != null)
-								{
-									source_name = $"TStream:{ind}";
-									if (!l_dur_s2.Contains('.'))
-										throw new FormatException();
-									l_dur_s2 = l_dur_s2.TrimEnd('0').TrimEnd('.'); // Otherwise TimeSpan.Parse breaks
-									l_dur = TimeSpan.Parse(l_dur_s2);
-								}
-								else
-								{
-									source_name = $"?:{ind}";
-									l_dur = TimeSpan.Zero;
-								}
-
-								var frame_len = l_dur / frame_count;
-								l_dur -= frame_len;
-								if (l_dur < TimeSpan.Zero) throw new InvalidOperationException();
-								if (l_dur != TimeSpan.Zero) any_dur = true;
-
-								if (codec_type_s switch // skip if
-								{
-									"video" => false,
-									"attachment" => false,
-									"audio" => true,
-									"subtitle" => true,
-									_ => throw new FormatException(codec_type_s),
-								}) continue;
-
-								var pre_extracted_strong_ref = default(byte[]?[]?);
-								var pre_extracted_weak_ref = new WeakReference<byte[]?[]?>(pre_extracted_strong_ref);
-								var can_pre_extract = !stream_is_image;
-
-								var last_pos = double.NaN;
-								var last_otp_fname = default(string);
-								sources.Add(new(source_name, l_dur, (force_regen, pos, change_subjob, pre_extract_progress) =>
-								{
-									using var this_locker = new ObjectLocker(this);
-									try
+									var is_attachment = codec_type_s == "attachment";
+									if (is_attachment)
 									{
-										byte[]?[]? pre_extracted = null;
-										#region Pre-extraction
-										if (can_pre_extract && pre_extract_progress!=null && (!pre_extracted_weak_ref.TryGetTarget(out pre_extracted) || pre_extracted is null))
-										{
-											pre_extracted_strong_ref = new byte[]?[frame_count];
-											pre_extracted_weak_ref.SetTarget(pre_extracted_strong_ref);
+										if (tag_mimetype == null)
+											throw new InvalidOperationException();
+									}
+									else // !is_attachment
+									{
+										// G:\0Music\3Sort\!fix\Selulance (soundcloud)\[20150103] Selulance - What.mkv
+										//if (stream_is_image)
+										//	// Should work, but throw to find such file
+										//	throw new NotImplementedException(inp_fname);
+									}
 
-											gen.thr_pool.AddJob($"pre extract [{ind}] for [{inp_fname}]", change_subjob =>
+									var mimetype_is_image = tag_mimetype?.StartsWith("image/");
+									if (mimetype_is_image==false && is_attachment) continue;
+
+									var frame_count_s = stream_xml.Attribute("nb_read_packets")?.Value;
+									int frame_count;
+									if (is_attachment)
+									{
+										if (frame_count_s != null)
+											throw new NotImplementedException();
+										frame_count = 1;
+									}
+									else
+									{
+										if (frame_count_s is null)
+											continue;
+										frame_count = int.Parse(frame_count_s);
+									}
+
+									var stream_is_image = frame_count == 1;
+									if (!stream_is_image && mimetype_is_image==true)
+										throw new NotImplementedException();
+
+									var l_dur_s1 = stream_xml.Attribute("duration")?.Value;
+									var l_dur_s2 = get_tag("DURATION") ?? get_tag("DURATION-eng");
+									// torrent subs stream can have boths
+									//if ((l_dur_s1 != null) && (l_dur_s2 != null))
+									//	throw new NotImplementedException($"[{inp_fname}]: [{metadata_s}]");
+									string source_name;
+									TimeSpan l_dur;
+									if (stream_is_image)
+									{
+										source_name = $"Image:{ind}";
+										l_dur = TimeSpan.Zero;
+									}
+									else if (l_dur_s1 != null)
+									{
+										source_name = $"FStream:{ind}";
+										l_dur = TimeSpan.FromSeconds(double.Parse(l_dur_s1));
+									}
+									else if (l_dur_s2 != null)
+									{
+										source_name = $"TStream:{ind}";
+										if (!l_dur_s2.Contains('.'))
+											throw new FormatException();
+										l_dur_s2 = l_dur_s2.TrimEnd('0').TrimEnd('.'); // Otherwise TimeSpan.Parse breaks
+										l_dur = TimeSpan.Parse(l_dur_s2);
+									}
+									else
+									{
+										source_name = $"?:{ind}";
+										l_dur = TimeSpan.Zero;
+									}
+
+									var frame_len = l_dur / frame_count;
+									l_dur -= frame_len;
+									if (l_dur < TimeSpan.Zero) throw new InvalidOperationException();
+									if (l_dur != TimeSpan.Zero) any_dur = true;
+
+									if (codec_type_s switch // skip if
+									{
+										"video" => false,
+										"attachment" => false,
+										"audio" => true,
+										"subtitle" => true,
+										_ => throw new FormatException(codec_type_s),
+									}) continue;
+
+									var pre_extracted_strong_ref = default(byte[]?[]?);
+									var pre_extracted_weak_ref = new WeakReference<byte[]?[]?>(pre_extracted_strong_ref);
+									var can_pre_extract = !stream_is_image;
+
+									var last_pos = double.NaN;
+									var last_otp_fname = default(string);
+									sources.Add(new(source_name, l_dur, (force_regen, pos, change_subjob, pre_extract_progress) =>
+									{
+										using var this_locker = new ObjectLocker(this);
+										try
+										{
+											byte[]?[]? pre_extracted = null;
+											#region Pre-extraction
+											if (can_pre_extract && pre_extract_progress!=null && (!pre_extracted_weak_ref.TryGetTarget(out pre_extracted) || pre_extracted is null))
 											{
-												var res = pre_extracted_strong_ref;
-												pre_extracted_strong_ref = null;
+												pre_extracted_strong_ref = new byte[]?[frame_count];
+												pre_extracted_weak_ref.SetTarget(pre_extracted_strong_ref);
 
-												var res_i = 0;
-												var buff_initial_size = 1024*1024;
-												var buff = new byte[buff_initial_size];
-												var buff_fill = 0;
-												void flush_frame(int size)
+												gen.thr_pool.AddJob($"pre extract [{ind}] for [{inp_fname}]", change_subjob =>
 												{
-													if (res_i < frame_count)
-														res[res_i] = buff[0..size];
-													var new_fill = buff_fill-size;
-													if (new_fill != 0)
-														Array.Copy(buff, size, buff, 0, new_fill);
-													buff_fill = new_fill;
+													var res = pre_extracted_strong_ref;
+													pre_extracted_strong_ref = null;
 
-													res_i += 1;
-													var p = res_i/(double)frame_count;
-													pre_extract_progress(p);
-													change_subjob($"done: {res_i}/{frame_count} ({p:P2})");
-												}
-
-												var frame_str = default(Stream);
-												FFmpeg.Invoke($"-nostdin -i \"{inp_fname}\" -map 0:{ind} -vf scale=256:256:force_original_aspect_ratio=decrease -c mjpeg -q:v 1 -f image2pipe -", () => true,
-													handle_otp: sr =>
+													var res_i = 0;
+													var buff_initial_size = 1024*1024;
+													var buff = new byte[buff_initial_size];
+													var buff_fill = 0;
+													void flush_frame(int size)
 													{
-														frame_str = sr.BaseStream;
-														return System.Threading.Tasks.Task.FromResult<string?>(null);
-													}
-												);
-												if (frame_str is null) throw new InvalidOperationException();
+														if (res_i < frame_count)
+															res[res_i] = buff[0..size];
+														var new_fill = buff_fill-size;
+														if (new_fill != 0)
+															Array.Copy(buff, size, buff, 0, new_fill);
+														buff_fill = new_fill;
 
-												while (true)
-												{
-													if (this.thumb_sources != curr_gen_thumb_sources) return;
-													var last_read_c = frame_str.Read(buff, buff_fill, buff.Length-buff_fill);
-													if (last_read_c==0) break;
-													buff_fill += last_read_c;
-													if (buff_fill == buff.Length)
-														Array.Resize(ref buff, buff_fill*2);
-
-													for (var len = Math.Max(2, buff_fill-last_read_c+1); len<=buff_fill; ++len)
-													{
-														// mjpeg end signature
-														if (buff[len-2] != 0xFF) continue;
-														if (buff[len-1] != 0xD9) continue;
-														flush_frame(len);
-														len = 2;
+														res_i += 1;
+														var p = res_i/(double)frame_count;
+														pre_extract_progress(p);
+														change_subjob($"done: {res_i}/{frame_count} ({p:P2})");
 													}
 
-												}
+													var frame_str = default(Stream);
+													FFmpeg.Invoke($"-nostdin -i \"{inp_fname}\" -map 0:{ind} -vf scale=256:256:force_original_aspect_ratio=decrease -c mjpeg -q:v 1 -f image2pipe -", () => true,
+														handle_otp: sr =>
+														{
+															frame_str = sr.BaseStream;
+															return System.Threading.Tasks.Task.FromResult<string?>(null);
+														}
+													);
+													if (frame_str is null) throw new InvalidOperationException();
 
-												if (buff_fill != 0) Log.Append($"[{inp_fname}] had an unfinished frame");
-												if (res_i != frame_count) Log.Append($"[{inp_fname}] was expected to have [{frame_count}] frames, but got [{res_i}]");
-												if (buff_initial_size != buff.Length) Log.Append($"[{inp_fname}] needed >MB for a size=256 frame???");
-											});
-										}
-										#endregion
+													while (true)
+													{
+														if (this.thumb_sources != curr_gen_thumb_sources) return;
+														var last_read_c = frame_str.Read(buff, buff_fill, buff.Length-buff_fill);
+														if (last_read_c==0) break;
+														buff_fill += last_read_c;
+														if (buff_fill == buff.Length)
+															Array.Resize(ref buff, buff_fill*2);
 
-										if (!force_regen && pos==last_pos)
-											return last_otp_fname ?? throw null!;
+														for (var len = Math.Max(2, buff_fill-last_read_c+1); len<=buff_fill; ++len)
+														{
+															// mjpeg end signature
+															if (buff[len-2] != 0xFF) continue;
+															if (buff[len-1] != 0xD9) continue;
+															flush_frame(len);
+															len = 2;
+														}
 
-										using var l_temps = new LocalTempsList(this);
-										var args = new List<string>();
+													}
 
-										temps.TryRemove(otp_temp_name);
-										var otp_temp = l_temps.AddFile(otp_temp_name, "thump.png");
-										var otp_fname = otp_temp.Path;
+													if (buff_fill != 0) Log.Append($"[{inp_fname}] had an unfinished frame");
+													if (res_i != frame_count) Log.Append($"[{inp_fname}] was expected to have [{frame_count}] frames, but got [{res_i}]");
+													if (buff_initial_size != buff.Length) Log.Append($"[{inp_fname}] needed >MB for a size=256 frame???");
+												});
+											}
+											#endregion
 
-										//TODO https://trac.ffmpeg.org/ticket/10512
-										// - Need to cd into input folder for conversion to work
-										string? ffmpeg_path = null;
+											if (!force_regen && pos==last_pos)
+												return last_otp_fname ?? throw null!;
 
-										Func<StreamWriter, System.Threading.Tasks.Task>? handle_inp = null;
+											using var l_temps = new LocalTempsList(this);
+											var args = new List<string>();
 
-										if (pre_extracted != null && pre_extracted[(int)(pos * (pre_extracted.Length-1))] is byte[] data)
-										{
-											handle_inp = sw => sw.BaseStream.WriteAsync(data, 0, data.Length);
-											args.Add($"-i -");
-										}
-										else
-										{
-											if (l_dur != TimeSpan.Zero)
-												args.Add($"-ss {pos*l_dur.TotalSeconds}");
+											temps.TryRemove(otp_temp_name);
+											var otp_temp = l_temps.AddFile(otp_temp_name, "thump.png");
+											var otp_fname = otp_temp.Path;
 
-											//TODO https://trac.ffmpeg.org/ticket/10506
-											// - Need to first extract the attachments, before they can be used as input
-											if (is_attachment)
+											//TODO https://trac.ffmpeg.org/ticket/10512
+											// - Need to cd into input folder for conversion to work
+											string? ffmpeg_path = null;
+
+											Func<StreamWriter, System.Threading.Tasks.Task>? handle_inp = null;
+
+											if (pre_extracted != null && pre_extracted[(int)(pos * (pre_extracted.Length-1))] is byte[] data)
 											{
-												if (l_dur != TimeSpan.Zero)
-													throw new NotImplementedException();
-
-												FFmpeg.Invoke($"-dump_attachment:{ind} pipe:1 -i \"{inp_fname}\" -nostdin", () => true,
-													handle_otp: sr =>
-													{
-														handle_inp = sw => sr.BaseStream.CopyToAsync(sw.BaseStream);
-														return System.Threading.Tasks.Task.FromResult<string?>(null);
-													}
-												);
-												if (handle_inp is null) throw new InvalidOperationException();
-
+												handle_inp = sw => sw.BaseStream.WriteAsync(data, 0, data.Length);
 												args.Add($"-i -");
 											}
 											else
 											{
-												ffmpeg_path = Path.GetDirectoryName(inp_fname)!;
-												args.Add($"-i \"{Path.GetFileName(inp_fname)}\"");
-												args.Add($"-map 0:{ind}");
-												args.Add($"-vframes 1");
-											}
+												if (l_dur != TimeSpan.Zero)
+													args.Add($"-ss {pos*l_dur.TotalSeconds}");
 
-											args.Add($"-vf scale=256:256:force_original_aspect_ratio=decrease");
-										}
-
-										args.Add($"\"{otp_fname}\"");
-										args.Add($"-y");
-										args.Add($"-nostdin");
-
-										change_subjob("extract thumb");
-										FFmpeg.Invoke(string.Join(' ', args), () => File.Exists(otp_fname),
-											execute_in: ffmpeg_path,
-											handle_inp: handle_inp
-										).Wait();
-										InvokeCacheSizeChanged(+FileSize(otp_fname));
-										change_subjob(null);
-
-										if (dur_s!="")
-										{
-											change_subjob("load bg image");
-											Size sz;
-											var bg_im = new Image();
-											{
-												var bg_im_source = Utils.LoadUncachedBitmap(otp_fname);
-												sz = new(bg_im_source.Width, bg_im_source.Height);
-												if (sz.Width>256 || sz.Height>256)
-													throw new InvalidOperationException();
-												bg_im.Source = bg_im_source;
-											}
-											otp_temp.Dispose();
-											change_subjob(null);
-
-											change_subjob("compose output");
-											var res_c = new Grid();
-											res_c.Children.Add(bg_im);
-											res_c.Children.Add(new Viewbox
-											{
-												Opacity = 0.6,
-												Width = sz.Width,
-												Height = sz.Height*0.2,
-												HorizontalAlignment = HorizontalAlignment.Right,
-												VerticalAlignment = VerticalAlignment.Center,
-												Child = new Image
+												//TODO https://trac.ffmpeg.org/ticket/10506
+												// - Need to first extract the attachments, before they can be used as input
+												if (is_attachment)
 												{
-													Source = new DrawingImage
-													{
-														Drawing = new GeometryDrawing
+													if (l_dur != TimeSpan.Zero)
+														throw new NotImplementedException();
+
+													FFmpeg.Invoke($"-dump_attachment:{ind} pipe:1 -i \"{inp_fname}\" -nostdin", () => true,
+														handle_otp: sr =>
 														{
-															Brush = Brushes.Black,
-															Pen = new Pen(Brushes.White, 0.08),
-															Geometry = new FormattedText(
-																dur_s,
-																System.Globalization.CultureInfo.InvariantCulture,
-																FlowDirection.LeftToRight,
-																new Typeface(
-																	new TextBlock().FontFamily,
-																	FontStyles.Normal,
-																	FontWeights.ExtraBold,
-																	FontStretches.Normal
-																),
-																1,
-																Brushes.Black,
-																96
-															).BuildGeometry(default)
+															handle_inp = sw => sr.BaseStream.CopyToAsync(sw.BaseStream);
+															return System.Threading.Tasks.Task.FromResult<string?>(null);
 														}
-													}
-												},
-											});
-											change_subjob(null);
+													);
+													if (handle_inp is null) throw new InvalidOperationException();
 
-											change_subjob("render output");
-											var bitmap = new RenderTargetBitmap((int)sz.Width, (int)sz.Height, 96, 96, PixelFormats.Pbgra32);
-											res_c.Measure(sz);
-											res_c.Arrange(new(sz));
-											bitmap.Render(res_c);
-											change_subjob(null);
+													args.Add($"-i -");
+												}
+												else
+												{
+													ffmpeg_path = Path.GetDirectoryName(inp_fname)!;
+													args.Add($"-i \"{Path.GetFileName(inp_fname)}\"");
+													args.Add($"-map 0:{ind}");
+													args.Add($"-vframes 1");
+												}
 
-											change_subjob("save output");
-											var enc = new PngBitmapEncoder();
-											enc.Frames.Add(BitmapFrame.Create(bitmap));
-											using (Stream fs = File.Create(otp_fname))
-												enc.Save(fs);
+												args.Add($"-vf scale=256:256:force_original_aspect_ratio=decrease");
+											}
+
+											args.Add($"\"{otp_fname}\"");
+											args.Add($"-y");
+											args.Add($"-nostdin");
+
+											change_subjob("extract thumb");
+											FFmpeg.Invoke(string.Join(' ', args), () => File.Exists(otp_fname),
+												execute_in: ffmpeg_path,
+												handle_inp: handle_inp
+											).Wait();
 											InvokeCacheSizeChanged(+FileSize(otp_fname));
 											change_subjob(null);
 
+											if (dur_s!="")
+											{
+												change_subjob("load bg image");
+												Size sz;
+												var bg_im = new Image();
+												{
+													var bg_im_source = Utils.LoadUncachedBitmap(otp_fname);
+													sz = new(bg_im_source.Width, bg_im_source.Height);
+													if (sz.Width>256 || sz.Height>256)
+														throw new InvalidOperationException();
+													bg_im.Source = bg_im_source;
+												}
+												otp_temp.Dispose();
+												change_subjob(null);
+
+												change_subjob("compose output");
+												var res_c = new Grid();
+												res_c.Children.Add(bg_im);
+												res_c.Children.Add(new Viewbox
+												{
+													Opacity = 0.6,
+													Width = sz.Width,
+													Height = sz.Height*0.2,
+													HorizontalAlignment = HorizontalAlignment.Right,
+													VerticalAlignment = VerticalAlignment.Center,
+													Child = new Image
+													{
+														Source = new DrawingImage
+														{
+															Drawing = new GeometryDrawing
+															{
+																Brush = Brushes.Black,
+																Pen = new Pen(Brushes.White, 0.08),
+																Geometry = new FormattedText(
+																	dur_s,
+																	System.Globalization.CultureInfo.InvariantCulture,
+																	FlowDirection.LeftToRight,
+																	new Typeface(
+																		new TextBlock().FontFamily,
+																		FontStyles.Normal,
+																		FontWeights.ExtraBold,
+																		FontStretches.Normal
+																	),
+																	1,
+																	Brushes.Black,
+																	96
+																).BuildGeometry(default)
+															}
+														}
+													},
+												});
+												change_subjob(null);
+
+												change_subjob("render output");
+												var bitmap = new RenderTargetBitmap((int)sz.Width, (int)sz.Height, 96, 96, PixelFormats.Pbgra32);
+												res_c.Measure(sz);
+												res_c.Arrange(new(sz));
+												bitmap.Render(res_c);
+												change_subjob(null);
+
+												change_subjob("save output");
+												var enc = new PngBitmapEncoder();
+												enc.Frames.Add(BitmapFrame.Create(bitmap));
+												using (Stream fs = File.Create(otp_fname))
+													enc.Save(fs);
+												InvokeCacheSizeChanged(+FileSize(otp_fname));
+												change_subjob(null);
+
+											}
+
+											l_temps.GiveToCFI(otp_temp_name);
+											l_temps.VerifyEmpty();
+
+											last_otp_fname = otp_fname;
+											last_pos = pos;
+											return otp_fname;
 										}
+										catch (Exception e)
+										{
+											Log.Append($"Error making thumb for [{inp_fname}]: {e}");
+											//Utils.HandleException(e);
+											error_generating = true;
+											return CommonThumbSources.Broken.Extract(false, 0, null!, null);
+										}
+									}));
 
-										l_temps.GiveToCFI(otp_temp_name);
-										l_temps.VerifyEmpty();
+									change_subjob(null);
+								}
 
-										last_otp_fname = otp_fname;
-										last_pos = pos;
-										return otp_fname;
-									}
-									catch (Exception e)
-									{
-										Log.Append($"Error making thumb for [{inp_fname}]: {e}");
-										//Utils.HandleException(e);
-										error_generating = true;
-										return CommonThumbSources.Broken.Extract(false, 0, null!, null);
-									}
-								}));
+							var format_xml = metadata_xml.Descendants("format").SingleOrDefault();
+							if (format_xml is null)
+							{
+								if (sources.Count != 0)
+									throw new NotImplementedException(inp_fname);
+								if (File.Exists(inp_fname))
+									Log.Append($"No format data for [{inp_fname}]: {metadata_s}");
+								sources.Add(CommonThumbSources.Broken);
+							}
+							else if (any_dur && format_xml.Attribute("duration") is XAttribute global_dur_xml)
+							{
+								change_subjob("make dur string");
+								var global_dur = TimeSpan.FromSeconds(double.Parse(global_dur_xml.Value));
+
+								if (dur_s!="" || global_dur.TotalHours>=1)
+									dur_s += Math.Truncate(global_dur.TotalHours).ToString() + ':';
+								if (dur_s!="" || global_dur.Minutes!=0)
+									dur_s += global_dur.Minutes.ToString("00") + ':';
+								if (dur_s!="" || global_dur.Seconds!=0)
+									dur_s += global_dur.Seconds.ToString("00");
+								if (dur_s.Length<5)
+								{
+									var s = global_dur.TotalSeconds;
+									s -= Math.Truncate(s);
+									var frac_s = s.ToString("N"+(5-dur_s.Length))[2..].TrimEnd('0');
+									if (frac_s!="") dur_s += '_'+frac_s;
+								}
 
 								change_subjob(null);
 							}
 
-						var format_xml = metadata_xml.Descendants("format").SingleOrDefault();
-						if (format_xml is null)
-						{
-							if (sources.Count != 0)
-								throw new NotImplementedException(inp_fname);
-							if (File.Exists(inp_fname))
-								Log.Append($"No format data for [{inp_fname}]: {metadata_s}");
-							sources.Add(CommonThumbSources.Broken);
 						}
-						else if (any_dur && format_xml.Attribute("duration") is XAttribute global_dur_xml)
+						catch (InvalidOperationException e)
 						{
-							change_subjob("make dur string");
-							var global_dur = TimeSpan.FromSeconds(double.Parse(global_dur_xml.Value));
-
-							if (dur_s!="" || global_dur.TotalHours>=1)
-								dur_s += Math.Truncate(global_dur.TotalHours).ToString() + ':';
-							if (dur_s!="" || global_dur.Minutes!=0)
-								dur_s += global_dur.Minutes.ToString("00") + ':';
-							if (dur_s!="" || global_dur.Seconds!=0)
-								dur_s += global_dur.Seconds.ToString("00");
-							if (dur_s.Length<5)
-							{
-								var s = global_dur.TotalSeconds;
-								s -= Math.Truncate(s);
-								var frac_s = s.ToString("N"+(5-dur_s.Length))[2..].TrimEnd('0');
-								if (frac_s!="") dur_s += '_'+frac_s;
-							}
-
-							change_subjob(null);
+							throw new FormatException(metadata_s, e);
+						}
+						catch (NullReferenceException e)
+						{
+							throw new FormatException(metadata_s, e);
+						}
+						catch (FormatException e)
+						{
+							throw new FormatException(metadata_s, e);
 						}
 
-					}
-					catch (InvalidOperationException e)
-					{
-						throw new FormatException(metadata_s, e);
-					}
-					catch (NullReferenceException e)
-					{
-						throw new FormatException(metadata_s, e);
-					}
-					catch (FormatException e)
-					{
-						throw new FormatException(metadata_s, e);
-					}
+						if (sources.Count==0)
+							sources.Add(CommonThumbSources.SoundOnly);
 
-					if (sources.Count==0)
-						sources.Add(CommonThumbSources.SoundOnly);
+						using var init_source_use = BeginUse("Initial source use", () => false);
+						curr_gen_thumb_sources = sources.ToArray();
+						SetSources(change_subjob, curr_gen_thumb_sources);
 
-					using var init_source_use = BeginUse("Initial source use", () => false);
-					curr_gen_thumb_sources = sources.ToArray();
-					SetSources(change_subjob, curr_gen_thumb_sources);
+						settings.LastInpChangeTime = write_time;
+						settings.CurrentThumbIsFinal = true;
 
-					settings.LastInpChangeTime = write_time;
-					settings.CurrentThumbIsFinal = true;
-
-					on_regenerated?.Invoke(this);
-				});
+						on_regenerated?.Invoke(this);
+					});
 
 				if (1==Interlocked.Increment(ref gen_jobs_assigned))
 					gen.thr_pool.AddJob($"Generating thumb for [{inp_fname}] because {cause}", change_subjob =>
@@ -1224,7 +1235,7 @@ namespace Dashboard
 							try
 							{
 								if (!gen_acts.TryDequeue(out var act))
-									throw new InvalidOperationException();
+									continue;
 								if (this.has_shut_down) return;
 								using var this_locker = new ObjectLocker(this);
 								if (this.has_shut_down) return;
@@ -1253,7 +1264,7 @@ namespace Dashboard
 				is_erased = true;
 				Shutdown();
 				DeleteDir(settings.GetSettingsDir());
-				COMManip.ResetThumbFor(InpPath);
+				COMManip.ResetThumbFor(InpPath, TimeSpan.Zero);
 			}
 
 			// Shutdown without erasing (when exiting)
@@ -1334,7 +1345,9 @@ namespace Dashboard
 			for (var i = 0; i<cfis.Length; i++)
 			{
 				change_subjob($"{i}/{cfis.Length} ({i/(double)cfis.Length:P2})");
-				cfis[i].GenerateThumb("Regen", null, null, force_regen, false);
+				var cfi = cfis[i];
+				if (cfi.CurrentThumbIsFinal && cfi.LastCacheUseTime==default) continue;
+				cfi.GenerateThumb("Regen", null, null, force_regen, false);
 			}
 		}));
 
@@ -1383,13 +1396,23 @@ namespace Dashboard
 			return c;
 		}
 
-		public void ClearOneOldest() => purge_lock.OneLocked(() =>
+		public void ClearOldest(long size) => purge_lock.OneLocked(() =>
 		{
-			if (files.IsEmpty) return;
-			foreach (var cfi in files.Values.AsParallel().Where(cfi=>cfi.CanClearTemps).OrderBy(cfi => cfi.LastCacheUseTime))
+			void size_change_handler(long d_size) => size += d_size;
+			CacheSizeChanged += size_change_handler;
+			try
 			{
-				if (cfi.TryClearTemps())
-					break;
+
+				foreach (var cfi in files.Values.AsParallel().Where(cfi => cfi.CanClearTemps).OrderBy(cfi => cfi.LastCacheUseTime))
+				{
+					if (cfi.TryClearTemps() && size<=0)
+						break;
+				}
+
+			}
+			finally
+			{
+				CacheSizeChanged -= size_change_handler;
 			}
 		}, with_priority: false);
 
