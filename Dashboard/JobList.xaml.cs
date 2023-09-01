@@ -64,13 +64,16 @@ namespace Dashboard
 								var b = wjl.HeaderBrush[ind];
 								tb.Background = b;
 								var c = ((SolidColorBrush)b).Color;
-								tb.Foreground = new SolidColorBrush(Color.FromRgb(
-									(byte)(255-c.R),
-									(byte)(255-c.G),
-									(byte)(255-c.B)
-								));
 
-								_=System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(1)).ContinueWith(_ =>
+								// https://stackoverflow.com/a/69869976/9618919
+								var Ys = (
+									Math.Pow(c.R/255.0, 2.2) * 0.2126 +
+									Math.Pow(c.G/255.0, 2.2) * 0.7152 +
+									Math.Pow(c.B/255.0, 2.2) * 0.0722
+								);
+								tb.Foreground = Ys > 0.36 ? Brushes.Black : Brushes.White;
+
+								_=System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(10)).ContinueWith(_ => Utils.HandleException(() =>
 								{
 									var anim = new DoubleAnimation
 									{
@@ -89,7 +92,7 @@ namespace Dashboard
 										sp_pending.Children.RemoveAt(tb_ind);
 									});
 									tb.BeginAnimation(HeightProperty, anim);
-								}, System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
+								}), System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
 
 							},
 							(new_pending, name, work) =>
