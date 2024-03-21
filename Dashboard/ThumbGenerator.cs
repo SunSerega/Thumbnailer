@@ -931,6 +931,7 @@ namespace Dashboard
 										"attachment" => false,
 										"audio" => true,
 										"subtitle" => true,
+										"data" => true, // some Core Media metadata thing
 										_ => throw new FormatException(codec_type_s),
 									}) continue;
 
