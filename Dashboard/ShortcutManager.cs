@@ -54,6 +54,7 @@ namespace Dashboard
 			var shell = new Shell();
 			foreach (var lnk in new ESQuary("ext:lnk"))
 			{
+				if (lnk.Contains('$')) continue;
 				string? lnk_target = null;
 				try
 				{
@@ -87,6 +88,11 @@ namespace Dashboard
 				catch when (!File.Exists(lnk))
 				{
 					continue;
+				}
+				catch (COMException e)
+				{
+					CustomMessageBox.Show($"Failed to update shortcut {lnk}", e.ToString());
+					throw;
 				}
 				lnk_target_cache[lnk] = (lnk_target, get_lnk_change_time(lnk));
 			}

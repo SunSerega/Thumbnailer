@@ -7,7 +7,7 @@
 	</PropertyGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="powershell -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(OutDir)$(ProjectName)&quot;" />
+		<Exec Command="pwsh -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(OutDir)$(ProjectName)&quot;" />
 	</Target>
 	
 </Project>
