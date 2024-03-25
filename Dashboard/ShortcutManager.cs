@@ -13,8 +13,8 @@ namespace Dashboard
 
 	public class ShortcutManager
 	{
-		private static readonly Dictionary<string, (string? target, DateTime dt)> lnk_target_cache = new();
-		private static readonly ConcurrentBag<string> targets_waiting = new();
+		private static readonly Dictionary<string, (string? target, DateTime dt)> lnk_target_cache = [];
+		private static readonly ConcurrentBag<string> targets_waiting = [];
 
 		private static readonly DelayedUpdater lnk_updater = new(() =>
 		{

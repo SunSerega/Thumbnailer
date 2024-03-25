@@ -30,11 +30,7 @@ namespace Dashboard
 
 		#region Load
 
-		private sealed class CacheFileLoadCanceledException : Exception
-		{
-			public CacheFileLoadCanceledException(string? message)
-				: base(message) { }
-		}
+		private sealed class CacheFileLoadCanceledException(string? message) : Exception(message) { }
 
 		public ThumbGenerator(CustomThreadPool thr_pool, string cache_dir, Action<string?> change_subjob)
 		{
@@ -75,7 +71,7 @@ namespace Dashboard
 							if (!files.TryRemove(path, out var old_cfi))
 								throw new InvalidOperationException();
 							purge_acts.Add(old_cfi.Erase);
-							l = new() { old_cfi.Id };
+							l = [old_cfi.Id];
 							conflicting_caches[path] = l;
 						}
 						l.Add(id);
@@ -176,19 +172,11 @@ namespace Dashboard
 
 		#region ThumbSource
 
-		public sealed class ThumbSource
-		{
-			private readonly string name;
-			private readonly TimeSpan len;
-			private readonly Func<bool, double, Action<string?>, Action<double>?, string> extract;
-
-			public ThumbSource(string name, TimeSpan len, Func<bool, double, Action<string?>, Action<double>?, string> extract)
-			{
-				this.name = name;
-				this.len = len;
-				this.extract = extract;
-			}
-
+		public sealed class ThumbSource(
+			string name,
+			TimeSpan len,
+			Func<bool, double, Action<string?>, Action<double>?, string> extract
+		) {
 			public string Name => name;
 
 			public TimeSpan Length => len;
@@ -224,18 +212,12 @@ namespace Dashboard
 
 			public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos, Action<double>? on_pre_extract_progress);
 
-			public sealed class CacheUse : IDisposable
+			public sealed class CacheUse(
+				ICachedFileInfo cfi,
+				string cause,
+				Func<bool> is_freed_check
+			) : IDisposable
 			{
-				private readonly ICachedFileInfo cfi;
-				private readonly string cause;
-				private readonly Func<bool> is_freed_check;
-
-				public CacheUse(ICachedFileInfo cfi, string cause, Func<bool> is_freed_check)
-				{
-					this.cfi = cfi;
-					this.cause = cause;
-					this.is_freed_check = is_freed_check;
-				}
 				public CacheUse Dupe() => cfi.BeginUse(cause, is_freed_check);
 
 				public ICachedFileInfo CFI => cfi;
@@ -267,16 +249,12 @@ namespace Dashboard
 
 		}
 
-		private sealed class IdentityCFI : ICachedFileInfo
+		private sealed class IdentityCFI(string fname) : ICachedFileInfo
 		{
-			private readonly string fname;
-
-			public IdentityCFI(string fname) => this.fname = fname;
-
 			public string? InpPath => fname;
 			public string CurrentThumbPath => fname;
 
-			public IReadOnlyList<ThumbSource> ThumbSources => new[] { new ThumbSource(fname, default, (_,_,_,_)=>fname) };
+			public IReadOnlyList<ThumbSource> ThumbSources => [new ThumbSource(fname, default, (_,_,_,_)=>fname)];
 			public int ChosenThumbOptionInd => 0;
 
 			public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos, Action<double>? on_pre_extract_progress) =>
@@ -468,17 +446,8 @@ namespace Dashboard
 			private void InvokeCacheSizeChanged(long change) =>
 				CacheSizeChanged?.Invoke(change);
 
-			private sealed class GenerationTemp : IDisposable
+			private sealed class GenerationTemp(string path, Action<string>? on_unload) : IDisposable
 			{
-				private readonly string path;
-				private readonly Action<string>? on_unload;
-
-				public GenerationTemp(string path, Action<string>? on_unload)
-				{
-					this.path = path;
-					this.on_unload = on_unload;
-				}
-
 				public string Path => path;
 
 				public bool IsDeletable => on_unload != null;
@@ -537,12 +506,9 @@ namespace Dashboard
 				return true;
 			}
 
-			private sealed class LocalTempsList : IDisposable
+			private sealed class LocalTempsList(CachedFileInfo cfi) : IDisposable
 			{
-				private readonly CachedFileInfo cfi;
-				private readonly Dictionary<string, GenerationTemp> d = new();
-
-				public LocalTempsList(CachedFileInfo cfi) => this.cfi = cfi;
+				private readonly Dictionary<string, GenerationTemp> d = [];
 
 				private bool IsRoot => cfi.temps == this;
 				private void OnChanged()
@@ -587,7 +553,7 @@ namespace Dashboard
 					if (tls is null) return;
 					foreach (var tle in tls.Split(';'))
 					{
-						var tle_spl = tle.Split(new[] { '=' }, 2);
+						var tle_spl = tle.Split(['='], 2);
 						if (tle_spl.Length!=2) throw new FormatException(tle);
 						var temp_name = tle_spl[0];
 						var temp_path = Path.Combine(cfi.settings.GetSettingsDir(), tle_spl[1]);
@@ -829,7 +795,8 @@ namespace Dashboard
 						ThumbSource[]? curr_gen_thumb_sources = null;
 
 						change_subjob("getting metadata");
-						var metadata_s = FFmpeg.Invoke($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -count_packets -print_format xml", () => true, exe: "probe").Result.otp!;
+						var ffmpeg = FFmpeg.Invoke($"-i \"{inp_fname}\" -hide_banner -show_format -show_streams -count_packets -print_format xml", () => true, exe: "probe");
+						var metadata_s = ffmpeg.Output!;
 						change_subjob(null);
 
 						try
@@ -1202,6 +1169,10 @@ namespace Dashboard
 							}
 
 						}
+						catch when (ffmpeg.BeenKilled)
+						{
+							return;
+						}
 						catch (InvalidOperationException e)
 						{
 							throw new FormatException(metadata_s, e);
@@ -1219,7 +1190,7 @@ namespace Dashboard
 							sources.Add(CommonThumbSources.SoundOnly);
 
 						using var init_source_use = BeginUse("Initial source use", () => false);
-						curr_gen_thumb_sources = sources.ToArray();
+						curr_gen_thumb_sources = [.. sources];
 						SetSources(change_subjob, curr_gen_thumb_sources);
 
 						settings.LastInpChangeTime = write_time;

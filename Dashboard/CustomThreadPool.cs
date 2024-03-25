@@ -203,7 +203,7 @@ namespace Dashboard
 		}
 
 		private readonly OneToManyLock observers_lock = new();
-		private readonly Dictionary<Thread, WeakReference<ThreadPoolObserverImpl>> observers = new();
+		private readonly Dictionary<Thread, WeakReference<ThreadPoolObserverImpl>> observers = [];
 
 		public ThreadPoolObserver BeginObserving(Action update) => observers_lock.OneLocked(() =>
 		{

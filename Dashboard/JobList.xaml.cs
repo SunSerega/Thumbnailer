@@ -205,10 +205,9 @@ namespace Dashboard
 		[Obsolete("Use constructor with max_jobs")]
 		public WorkingJobList() : this(Environment.ProcessorCount+1) { }
 
-		public readonly struct HeaderBrushList : IReadOnlyList<Brush>
+		public readonly struct HeaderBrushList(WorkingJobList root) : IReadOnlyList<Brush>
 		{
-			private readonly Brush[] a;
-			public HeaderBrushList(WorkingJobList root) => a = root.header_brushes;
+			private readonly Brush[] a = root.header_brushes;
 
 			public readonly Brush this[int i] => a[i];
 

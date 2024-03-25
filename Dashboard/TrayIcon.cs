@@ -68,12 +68,8 @@ namespace Dashboard
 			Visibility = Visibility.Visible;
 		}
 
-		private sealed class DummyCommand : ICommand
+		private sealed class DummyCommand(Action body) : ICommand
 		{
-			private readonly Action body;
-
-			public DummyCommand(Action body) => this.body=body;
-
 			event EventHandler? ICommand.CanExecuteChanged { add { } remove { } }
 
 			bool ICommand.CanExecute(object? parameter) => true;

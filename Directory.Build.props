@@ -1,12 +1,13 @@
-
+﻿
 
 
 <Project>
 	
 	<PropertyGroup>
-		<TargetFramework>net7.0-windows</TargetFramework>
+		<TargetFramework>net8.0-windows</TargetFramework>
 		<Nullable>enable</Nullable>
 		<NoWarn>1701;1702;CA1416</NoWarn>
+		<LangVersion>latest</LangVersion>
 	</PropertyGroup>
 	
 </Project>

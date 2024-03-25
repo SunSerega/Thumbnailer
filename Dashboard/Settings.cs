@@ -42,11 +42,9 @@ namespace Dashboard
 
 	}
 
-	public sealed class FileSettings : Settings
+	public sealed class FileSettings(string cache_file_path)
+		: Settings(Path.Combine(cache_file_path, "Settings"))
 	{
-		public FileSettings(string cache_file_path)
-			: base(Path.Combine(cache_file_path, "Settings")) { }
-
 		protected override string SettingsDescription() => $"Settings of [{InpPath}]";
 
 		public string? TempsListStr
@@ -343,7 +341,7 @@ namespace Dashboard
 				File.WriteAllText(main_save_fname, "", enc);
 			RectifyBackup();
 			File.Copy(main_save_fname, back_save_fname, false);
-			File.AppendAllLines(main_save_fname, new[] { file_line });
+			File.AppendAllLines(main_save_fname, [file_line]);
 			File.Delete(back_save_fname);
 
 			RequestResave(TimeSpan.FromSeconds(10));

@@ -462,7 +462,7 @@ namespace Dashboard
 				string[] lst;
 				lock (awaiting_mass_gen_lst)
 				{
-					lst = awaiting_mass_gen_lst.ToArray();
+					lst = [.. awaiting_mass_gen_lst];
 					awaiting_mass_gen_lst.Clear();
 				}
 				thumb_gen.MassGenerate(lst, true);

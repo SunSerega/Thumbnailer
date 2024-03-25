@@ -3,17 +3,13 @@
 
 using Dashboard;
 using System;
-using System.Collections;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Windows.Forms;
 using System.Xml.Linq;
 
 partial class Test
@@ -30,10 +26,10 @@ partial class Test
 		void add_xml_node(string key, XElement n, string source)
 		{
 
-			raw_data.GetOrAdd(key, _ => new()).Add(new(source, null));
+			raw_data.GetOrAdd(key, _ => []).Add(new(source, null));
 
 			foreach (var attrib in n.Attributes())
-				raw_data.GetOrAdd($"{key}::{attrib.Name}", _ => new()).Add(new(source, attrib.Value));
+				raw_data.GetOrAdd($"{key}::{attrib.Name}", _ => []).Add(new(source, attrib.Value));
 
 			foreach (var sub_n in n.Descendants())
 				add_xml_node($"{key}.{sub_n.Name}", sub_n, source);
@@ -116,7 +112,7 @@ partial class Test
 				{
 
 					//change_subjob("getting metadata");
-					var metadata_s = FFmpeg.Invoke($"-i \"{fname}\" -hide_banner -show_format -show_streams -print_format xml", () => true, exe: "probe").Result.otp!;
+					var metadata_s = FFmpeg.Invoke($"-i \"{fname}\" -hide_banner -show_format -show_streams -print_format xml", () => true, exe: "probe").Output!;
 					//change_subjob(null);
 
 					//change_subjob("parsing metadata XML");
@@ -165,6 +161,7 @@ partial class Test
 		//Console.ReadLine();
 	}
 
+	[System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0060:Remove unused parameter", Justification = "Test")]
 	public static unsafe void ReplaceThumbnail(string filePath, string newThumbnailPath)
 	{
 		//var newThumbnail = new Bitmap(newThumbnailPath);
@@ -640,16 +637,10 @@ partial class Test
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
-	public struct SIZE
+	public struct SIZE(int cx, int cy)
 	{
-		public int cx;
-		public int cy;
-
-		public SIZE(int cx, int cy)
-		{
-			this.cx = cx;
-			this.cy = cy;
-		}
+		public int cx = cx;
+		public int cy = cy;
 	}
 
 	public enum WTS_ALPHATYPE : uint

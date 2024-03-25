@@ -167,7 +167,7 @@ namespace Thumbnailer
 								return;
 							load_exc_lst.Add(e);
 							if (load_exc_lst.Count<100) continue;
-							throw new AggregateException(load_exc_lst.ToArray());
+							throw new AggregateException([.. load_exc_lst]);
 						}
 				}
 

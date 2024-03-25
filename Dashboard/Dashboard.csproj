@@ -12,7 +12,7 @@
 	</PropertyGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="pwsh -File &quot;$(ProjectDir)Shutdown.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;&#xD;&#xA;pwsh -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(OutDir)$(ProjectName)&quot; &quot;runtimes&quot; &quot;Hardcodet.NotifyIcon&quot; &quot;CopyOnWrite&quot;&#xD;&#xA;pwsh -File &quot;$(ProjectDir)Restart.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;&#xD;&#xA;pwsh -File &quot;$(ProjectDir)Make startup lnk.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;" />
+		<Exec Command="pwsh -File &quot;$(ProjectDir)Shutdown.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;&#xD;&#xA;pwsh -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(ProjectDir)$(OutDir)$(ProjectName)&quot; &quot;runtimes&quot; &quot;Hardcodet.NotifyIcon&quot; &quot;CopyOnWrite&quot;&#xD;&#xA;pwsh -File &quot;$(ProjectDir)Restart.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;&#xD;&#xA;pwsh -File &quot;$(ProjectDir)Make startup lnk.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;" />
 	</Target>
 	
 	<ItemGroup>

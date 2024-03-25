@@ -20,12 +20,12 @@ namespace Dashboard.Tests
 					throw new FormatException(fname);
 				return fname.Remove(0, dir.Length);
 			}).ToDictionary(f => f, f => 0).Keys.ToHashSet();
-			Assert.IsTrue(fls.IsSupersetOf(new[] {
+			Assert.IsTrue(fls.IsSupersetOf([
 				"DashboardTests.dll",
 				"Dashboard for Thumbnailer.dll",
 				"Microsoft.VisualStudio.TestPlatform.Common.dll",
 				"Hardcodet.NotifyIcon.Wpf.dll",
-			}));
+			]));
 		}
 
 		[TestMethod()]

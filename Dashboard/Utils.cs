@@ -17,18 +17,18 @@ using System.Windows.Media.Imaging;
 namespace Dashboard
 {
 
-	public readonly struct ByteCount
+	public readonly struct ByteCount(long in_bytes)
 	{
-		private static readonly string[] byte_scales = { "B", "KB", "MB", "GB" };
+		private readonly long in_bytes = in_bytes;
+
+		private static readonly string[] byte_scales = [ "B", "KB", "MB", "GB" ];
 		private static readonly int scale_up_threshold = 5000;
 
-		private readonly long in_bytes;
-		public ByteCount(long in_bytes) => this.in_bytes = in_bytes;
 		public static implicit operator ByteCount(long in_bytes) => new(in_bytes);
 
 		public static ByteCount Parse(string s)
 		{
-			var spl = s.Split(new[] { ' ' }, 2);
+			var spl = s.Split([' '], 2);
 			if (spl.Length==1) return long.Parse(s);
 
 			var c = double.Parse(spl[0]);
@@ -165,7 +165,7 @@ namespace Dashboard
 
 	public readonly struct FileExtList : ICollection<string>, IEquatable<FileExtList>
 	{
-		private readonly HashSet<string> l = new();
+		private readonly HashSet<string> l = [];
 
 		public int Count => l.Count;
 
@@ -259,19 +259,36 @@ namespace Dashboard
 	public static class FFmpeg
 	{
 
-		private static readonly DelayedMultiUpdater<(System.Diagnostics.Process p, Task<(string? otp, string? err)> t)> delayed_kill_switch = new(state =>
-		{
-			var (p, t) = state;
-			if (p.HasExited) return;
-			p.Kill();
-			var (otp, err) = t.Result;
-			CustomMessageBox.Show(
-				$"[{p.StartInfo.FileName} {p.StartInfo.Arguments}] hanged. Output:",
-				otp + "\n\n===================\n\n" + err
-			);
-		}, TimeSpan.MaxValue, "FFmpeg kill switch");
+		public sealed class InvokeState(
+			System.Diagnostics.Process p,
+			Task<(string? otp, string? err)> t
+		) {
+			private bool been_killed = false;
 
-		public static Task<(string? otp, string? err)> Invoke(string args, Func<bool> verify_res,
+			public void Kill()
+			{
+				if (p.HasExited) return;
+				been_killed = true;
+				p.Kill();
+				var (otp, err) = t.Result;
+				CustomMessageBox.Show(
+					$"[{p.StartInfo.FileName} {p.StartInfo.Arguments}] hanged. Output:",
+					otp + "\n\n===================\n\n" + err
+				);
+			}
+
+			public void Wait() => t.Wait();
+
+			public string? Output => t.Result.otp;
+
+			public bool BeenKilled => been_killed;
+
+		}
+
+		private static readonly DelayedMultiUpdater<InvokeState> delayed_kill_switch =
+			new(state => state.Kill(), TimeSpan.MaxValue, "FFmpeg kill switch");
+
+		public static InvokeState Invoke(string args, Func<bool> verify_res,
 			string? execute_in = null, string exe = "mpeg",
 			Func<StreamWriter, Task>? handle_inp = null,
 			Func<StreamReader, Task<string?>>? handle_otp = null,
@@ -315,8 +332,10 @@ namespace Dashboard
 					throw new InvalidOperationException($"{execute_in}> [{p.StartInfo.FileName} {p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
 				return res;
 			});
-			delayed_kill_switch.Trigger((p, t), TimeSpan.FromSeconds(60), null);
-			return t;
+
+			var res = new InvokeState(p, t);
+			delayed_kill_switch.Trigger(res, TimeSpan.FromSeconds(600), null);
+			return res;
 		}
 
 	}
@@ -356,10 +375,7 @@ namespace Dashboard
 			public string Current => l ?? throw new InvalidOperationException();
 			object IEnumerator.Current => Current;
 
-			public sealed class ESException : Exception
-			{
-				public ESException(string message) : base(message) { }
-			}
+			public sealed class ESException(string message) : Exception(message) { }
 
 			public bool MoveNext()
 			{
@@ -408,12 +424,15 @@ namespace Dashboard
 
 		public static int Count { get; private set; } =
 			!File.Exists(log_fname) ? 0 : File.ReadLines(log_fname, enc).Count();
+
+		private static readonly string[] line_separators = [ "\r\n", "\n", "\r" ];
+
 		public static event Action? CountUpdated;
 
 		public static void Append(string s)
 		{
 			using var log_locker = new ObjectLocker(log_lock);
-			var lns = s.Split(new string[] { "\r\n", "\n", "\r" }, StringSplitOptions.None);
+			var lns = s.Split(line_separators, StringSplitOptions.None);
 			File.AppendAllLines(log_fname, lns, enc);
 			Count += lns.Length;
 			CountUpdated?.Invoke();

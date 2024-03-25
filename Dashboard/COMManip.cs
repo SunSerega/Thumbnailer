@@ -14,10 +14,7 @@ namespace Dashboard
 			(IThumbnailCache)Activator.CreateInstance(Type.GetTypeFromCLSID(new("50EF4544-AC9F-4A8E-B21B-8A26180DB13F"), true)!)!;
 		private static IThumbnailCachePrivate MakePrivateTC() => (IThumbnailCachePrivate)MakeLocalTC();
 
-		public sealed class ThumbnailMissingException : Exception
-		{
-			public ThumbnailMissingException(string message) : base(message) { }
-		}
+		public sealed class ThumbnailMissingException(string message) : Exception(message) { }
 
 		private static BitmapSource? ConvertHBitmap(IntPtr bmp) => bmp == default ? null :
 			System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(bmp, 0, default, BitmapSizeOptions.FromEmptyOptions());
@@ -102,7 +99,7 @@ namespace Dashboard
 			return true;
 		}
 
-		private static DelayedMultiUpdater<string> delayed_thumb_reseter = new(
+		private static readonly DelayedMultiUpdater<string> delayed_thumb_reseter = new(
 			path=>DeleteThumbFor(path), TimeSpan.FromSeconds(0.1), "Thumb reset"
 		);
 		public static void ResetThumbFor(string? path, TimeSpan delay)
@@ -544,16 +541,10 @@ namespace Dashboard
 		}
 
 		[StructLayout(LayoutKind.Sequential)]
-		private struct SIZE
+		private struct SIZE(int cx, int cy)
 		{
-			public int cx;
-			public int cy;
-
-			public SIZE(int cx, int cy)
-			{
-				this.cx = cx;
-				this.cy = cy;
-			}
+			public int cx = cx;
+			public int cy = cy;
 		}
 
 		private enum WTS_ALPHATYPE : uint

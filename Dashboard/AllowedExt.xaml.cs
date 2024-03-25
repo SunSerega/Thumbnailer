@@ -8,7 +8,7 @@ namespace Dashboard
 {
 	public partial class AllowedExt : UserControl
 	{
-		private static readonly FileExtList temp_ext_list = new();
+		private static readonly FileExtList temp_ext_list = [];
 
 		public static event Action<bool>? Changed;
 		public static (string[] add, string[] rem) GetChanges() => (
