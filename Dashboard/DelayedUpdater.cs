@@ -161,6 +161,7 @@ namespace Dashboard
 
 		public void Trigger(TKey key, TimeSpan delay, bool? can_delay_further)
 		{
+			ArgumentOutOfRangeException.ThrowIfLessThan(delay, TimeSpan.Zero);
 			var next_val = (time: DateTime.Now + delay, cdf: can_delay_further??false);
 			var need_set_ev = true;
 			updatables.AddOrUpdate(key, next_val, (key, old_val) =>

@@ -674,13 +674,15 @@ namespace Dashboard
 
 			public int DeleteExtraFiles()
 			{
-				using var this_locker = new ObjectLocker(this);
+				using var this_locker = ObjectLocker.TryLock(this);
+				if (this_locker is null) return 0;
 				return temps.DeleteExtraFiles();
 			}
 
 			public bool TryClearTemps()
 			{
-				using var this_locker = new ObjectLocker(this);
+				using var this_locker = ObjectLocker.TryLock(this);
+				if (this_locker is null) return false;
 				return TryEmptyUseList(() =>
 				{
 					settings.LastInpChangeTime = DateTime.MinValue;
@@ -721,6 +723,7 @@ namespace Dashboard
 			}, TimeSpan.MaxValue, "Thumb gen wait (input recently modified)");
 
 			private volatile int gen_jobs_assigned = 0;
+			private CustomThreadPool.ThreadPoolJobHeader? gen_job_obj = null;
 			private readonly ConcurrentQueue<Action<Action<string?>>> gen_acts = new();
 
 			public ICachedFileInfo.CacheUse? GenerateThumb(
@@ -728,10 +731,18 @@ namespace Dashboard
 				Action<ICachedFileInfo>? on_regenerated,
 				bool force_regen, bool set_cache_use_time)
 			{
-				using var this_locker = new ObjectLocker(this);
+				ObjectLocker? TryLockThis()
+				{
+					if (on_regenerated is not null)
+						return new ObjectLocker(this);
+					while (true)
+					{
+						var l = ObjectLocker.TryLock(this);
+						if (l is not null) return l;
+						if (gen_jobs_assigned != 0) return null;
+					}
+				}
 
-				if (is_erased)
-					return null;
 				ICachedFileInfo.CacheUse? make_cache_use()
 				{
 					if (is_unused_check is null)
@@ -741,6 +752,11 @@ namespace Dashboard
 					}
 					return BeginUse(cause, is_unused_check);
 				}
+
+				if (is_erased) return null;
+				using var this_locker = TryLockThis();
+				if (is_erased) return null;
+				if (this_locker is null) return make_cache_use();
 
 				var inp_fname = settings.InpPath ?? throw new InvalidOperationException();
 				var otp_temp_name = "thumb file";
@@ -768,6 +784,8 @@ namespace Dashboard
 				{
 					var total_wait = TimeSpan.FromSeconds(5);
 					var waited = DateTime.UtcNow-write_time;
+					// Too recently updated, wait for more updates
+					// (to avoid trying to regen file currently being torrented)
 					if (total_wait > waited)
 					{
 						temps.TryRemove(otp_temp_name);
@@ -1200,7 +1218,7 @@ namespace Dashboard
 					});
 
 				if (1==Interlocked.Increment(ref gen_jobs_assigned))
-					gen.thr_pool.AddJob($"Generating thumb for [{inp_fname}] because {cause}", change_subjob =>
+					this.gen_job_obj = gen.thr_pool.AddJob($"Generating thumb for [{inp_fname}] because {cause}", change_subjob =>
 					{
 						do
 						{
@@ -1218,7 +1236,10 @@ namespace Dashboard
 								Utils.HandleException(e);
 							}
 						} while (0!=Interlocked.Decrement(ref gen_jobs_assigned));
+						this.gen_job_obj = null;
 					});
+				else if (this.gen_job_obj is CustomThreadPool.ThreadPoolJobHeader gen_job_obj)
+					gen.thr_pool.BumpJob(gen_job_obj);
 
 				return make_cache_use();
 			}
@@ -1368,16 +1389,16 @@ namespace Dashboard
 			return c;
 		}
 
-		public void ClearOldest(long size) => purge_lock.OneLocked(() =>
+		public void ClearOldest(long size_to_clear) => purge_lock.OneLocked(() =>
 		{
-			void size_change_handler(long d_size) => size += d_size;
+			void size_change_handler(long size_change) => size_to_clear += size_change;
 			CacheSizeChanged += size_change_handler;
 			try
 			{
 
 				foreach (var cfi in files.Values.AsParallel().Where(cfi => cfi.CanClearTemps).OrderBy(cfi => cfi.LastCacheUseTime))
 				{
-					if (cfi.TryClearTemps() && size<=0)
+					if (cfi.TryClearTemps() && size_to_clear<=0)
 						break;
 				}
 

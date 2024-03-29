@@ -412,6 +412,21 @@ namespace Dashboard
 			Monitor.Enter(o);
 		}
 
+		public static ObjectLocker? TryLock(object o)
+		{
+			bool got_lock = false;
+			Monitor.TryEnter(o, ref got_lock);
+			if (!got_lock) return null;
+			try
+			{
+				return new ObjectLocker(o);
+			}
+			finally
+			{
+				Monitor.Exit(o);
+			}
+		}
+
 		public void Dispose() => Monitor.Exit(o);
 
 	}
@@ -515,6 +530,13 @@ namespace Dashboard
 				return no_res;
 			}
 		}
+
+		public static void HandleException(this Task t) =>
+			t.ContinueWith(
+				t=>HandleException(t.Exception?.InnerException ??
+					new Exception("Task faulted, but no exception exists")),
+				TaskContinuationOptions.OnlyOnFaulted
+			);
 
 		public static BitmapImage LoadUncachedBitmap(string fname)
 		{

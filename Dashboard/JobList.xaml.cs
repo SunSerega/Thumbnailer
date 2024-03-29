@@ -46,7 +46,7 @@ namespace Dashboard
 
 			new System.Threading.Thread(() => Utils.HandleException(() => thr_pool.ObserveLoop(change_wh.Set, observer =>
 			{
-				var pending_tb_map = new Dictionary<object, TextBlock>();
+				var pending_tb_map = new Dictionary<CustomThreadPool.ThreadPoolJobHeader, Stack<TextBlock>>();
 
 				while (is_open)
 				{
@@ -57,13 +57,18 @@ namespace Dashboard
 					try
 					{
 						Dispatcher.Invoke(() => observer.GetChanges(
-							(old_pending, ind) =>
+							on_rem_pending: (old_pending, ind) =>
 							{
-								if (!pending_tb_map.Remove(old_pending, out var tb))
+								if (!pending_tb_map.TryGetValue(old_pending, out var tb_st))
 									throw new InvalidOperationException();
+								if (!tb_st.TryPop(out var tb))
+									throw new InvalidOperationException();
+								if (tb_st.Count==0)
+									if (!pending_tb_map.Remove(old_pending))
+										throw new InvalidOperationException();
 								var b = wjl.HeaderBrush[ind];
 								tb.Background = b;
-								var c = ((SolidColorBrush)b).Color;
+								var c = b.Color;
 
 								// https://stackoverflow.com/a/69869976/9618919
 								var Ys = (
@@ -95,7 +100,7 @@ namespace Dashboard
 								}), System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
 
 							},
-							(new_pending, name, work) =>
+							on_add_pending: (new_pending, name, _) =>
 							{
 								var tb = new TextBlock
 								{
@@ -103,7 +108,10 @@ namespace Dashboard
 									Margin = new Thickness(2),
 									Background = Brushes.LightGray,
 								};
-								pending_tb_map.Add(new_pending, tb);
+								if (pending_tb_map.TryGetValue(new_pending, out var tb_st))
+									tb_st.Push(tb);
+								else
+									pending_tb_map.Add(new_pending, new Stack<TextBlock>([tb]));
 								sp_pending.Children.Insert(0, tb);
 
 								tb.Measure(new(double.PositiveInfinity, double.PositiveInfinity));
@@ -120,15 +128,15 @@ namespace Dashboard
 								tb.BeginAnimation(HeightProperty, anim);
 
 							},
-							(ind, name, thr) =>
+							on_worker_accepted: (ind, name, thr) =>
 							{
 								wjl.ChangeJob(ind, name);
 							},
-							(ind, new_subjob) =>
+							on_subjob_changed: (ind, new_subjob) =>
 							{
 								wjl.ChangeSubJob(ind, new_subjob);
 							},
-							ind =>
+							on_finished: ind =>
 							{
 								wjl.ChangeJob(ind, null);
 							}
@@ -156,7 +164,7 @@ namespace Dashboard
 
 	public sealed class WorkingJobList : FrameworkElement
 	{
-		private readonly Brush[] header_brushes;
+		private readonly SolidColorBrush[] header_brushes;
 
 		private readonly Line[] hor_lines;
 		private readonly Line[] ver_lines;
@@ -205,15 +213,15 @@ namespace Dashboard
 		[Obsolete("Use constructor with max_jobs")]
 		public WorkingJobList() : this(Environment.ProcessorCount+1) { }
 
-		public readonly struct HeaderBrushList(WorkingJobList root) : IReadOnlyList<Brush>
+		public readonly struct HeaderBrushList(WorkingJobList root) : IReadOnlyList<SolidColorBrush>
 		{
-			private readonly Brush[] a = root.header_brushes;
+			private readonly SolidColorBrush[] a = root.header_brushes;
 
-			public readonly Brush this[int i] => a[i];
+			public readonly SolidColorBrush this[int i] => a[i];
 
 			public readonly int Count => a.Length;
 
-			public readonly IEnumerator<Brush> GetEnumerator() => a.AsEnumerable().GetEnumerator();
+			public readonly IEnumerator<SolidColorBrush> GetEnumerator() => a.AsEnumerable().GetEnumerator();
 
 			readonly IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 

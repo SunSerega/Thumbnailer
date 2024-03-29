@@ -15,17 +15,20 @@ namespace Dashboard
 		#region Observing
 
 		public delegate void JobWork(Action<string?> change_subjob);
-		private sealed class ThreadPoolJobDescription
+		public abstract class ThreadPoolJobHeader { }
+		private sealed class ThreadPoolJobDescription : ThreadPoolJobHeader
 		{
 			public DateTime EnqTime { get; } = DateTime.Now;
 
 			public required string Name { get; init; }
 			public required JobWork Work { get; init; }
 
-			public Thread? JobThread { get; set; } = null;
 			public int WorkerIndex { get; set; } = -1;
+			public bool IsPending => WorkerIndex == -1;
 
 			public string? CurrentSubJob { get; set; } = null;
+
+			public bool HasFinished { get; set; } = false;
 
 		}
 
@@ -33,8 +36,8 @@ namespace Dashboard
 		{
 
 			public abstract void GetChanges(
-				Action<object, int> on_rem_pending,
-				Action<object, string, JobWork> on_add_pending,
+				Action<ThreadPoolJobHeader, string, JobWork> on_add_pending,
+				Action<ThreadPoolJobHeader, int> on_rem_pending,
 				Action<int, string, Thread> on_worker_accepted,
 				Action<int, string?> on_subjob_changed,
 				Action<int> on_finished
@@ -48,19 +51,16 @@ namespace Dashboard
 			private readonly Thread[] threads;
 			private readonly OneToManyLock change_lock = new();
 
-			public ThreadPoolObserverImpl(CustomThreadPool root, Action update) {
+			public ThreadPoolObserverImpl(CustomThreadPool root, Action update)
+			{
 				this.update = update;
 				threads = Array.ConvertAll(root.items, item => item.Thread);
 
-				newly_pending_jobs = new(root.items.Length, root.pending_jobs.Count);
-				foreach (var job in root.pending_jobs)
-					if (!newly_pending_jobs.TryAdd(job, default))
-						throw new InvalidOperationException();
-				if (!newly_pending_jobs.IsEmpty)
+				new_pending_jobs = new(root.pending_jobs);
+				if (!new_pending_jobs.IsEmpty)
 					update();
 
 				newly_started_jobs = Array.ConvertAll(root.items, item => item.CurrentJob);
-				old_pending_jobs = Array.ConvertAll(root.items, item => new List<ThreadPoolJobDescription>());
 
 				changed_subjobs = Array.ConvertAll(newly_started_jobs, job =>
 				{
@@ -87,18 +87,21 @@ namespace Dashboard
 				update();
 			}
 
-			private struct NoDictValue { }
-			private readonly ConcurrentDictionary<ThreadPoolJobDescription, NoDictValue> newly_pending_jobs = new();
+			private readonly ConcurrentStack<ThreadPoolJobDescription> new_pending_jobs;
 			public void MarkJobAdded(ThreadPoolJobDescription job) => Update(() =>
 			{
 				if (disposed)
 					throw new InvalidOperationException();
-				if (!newly_pending_jobs.TryAdd(job, default))
-					throw new InvalidOperationException();
+				new_pending_jobs.Push(job);
+			});
+
+			private readonly ConcurrentDictionary<ThreadPoolJobDescription, int> old_pending_job_counts = new();
+			public void MarkJobDupRemoved(ThreadPoolJobDescription job) => Update(() =>
+			{
+				old_pending_job_counts.AddOrUpdate(job, 1, (_, c) => c+1);
 			});
 
 			private readonly ThreadPoolJobDescription?[] newly_started_jobs;
-			private readonly List<ThreadPoolJobDescription>[] old_pending_jobs;
 			public void MarkJobStarted(ThreadPoolJobDescription job) => Update(() =>
 			{
 				var worker_ind = job.WorkerIndex;
@@ -109,9 +112,7 @@ namespace Dashboard
 				newly_started_jobs[worker_ind] = job;
 				newly_finished_jobs[worker_ind] = false;
 
-				if (!newly_pending_jobs.TryRemove(job, out _))
-					old_pending_jobs[worker_ind].Add(job);
-
+				old_pending_job_counts.AddOrUpdate(job, 1, (_, c) => c+1);
 			});
 
 			private readonly ValueTuple<string?>?[] changed_subjobs;
@@ -143,25 +144,29 @@ namespace Dashboard
 			});
 
 			public override void GetChanges(
-				Action<object, int> on_rem_pending,
-				Action<object, string, JobWork> on_add_pending,
+				Action<ThreadPoolJobHeader, string, JobWork> on_add_pending,
+				Action<ThreadPoolJobHeader, int> on_rem_pending,
 				Action<int, string, Thread> on_worker_accepted,
 				Action<int, string?> on_subjob_changed,
 				Action<int> on_finished
 			) => change_lock.OneLocked(() =>
 			{
 
-				for (var i = 0; i < old_pending_jobs.Length; ++i)
+				var old_pending_job_counts = this.old_pending_job_counts.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+				this.old_pending_job_counts.Clear();
+
+				while (new_pending_jobs.TryPop(out var job))
 				{
-					var l = old_pending_jobs[i];
-					foreach (var job in l)
-						on_rem_pending(job, i);
-					l.Clear();
+					old_pending_job_counts.TryGetValue(job, out var rem_c);
+					if (rem_c == 0)
+						on_add_pending(job, job.Name, job.Work);
+					else
+						old_pending_job_counts[job] = rem_c - 1;
 				}
 
-				foreach (var job in newly_pending_jobs.Keys.OrderBy(job=>job.EnqTime))
-					on_add_pending(job, job.Name, job.Work);
-				newly_pending_jobs.Clear();
+				foreach (var kvp in old_pending_job_counts)
+					for (var i = 0; i < kvp.Value; ++i)
+						on_rem_pending(kvp.Key, kvp.Key.WorkerIndex);
 
 				for (var i = 0; i < newly_started_jobs.Length; ++i)
 				{
@@ -259,15 +264,38 @@ namespace Dashboard
 
 		private readonly BlockingCollection<ThreadPoolJobDescription> pending_jobs = new(new ConcurrentStack<ThreadPoolJobDescription>());
 		public int PendingJobCount => pending_jobs.Count;
+		public int PendingUniqueJobCount => pending_jobs.Distinct().Count();
 		public event Action? PendingJobCountChanged;
 		private void InvokePendingJobCountChanged() =>
 			PendingJobCountChanged?.Invoke();
 
-		public void AddJob(string name, JobWork work)
+		public ThreadPoolJobHeader AddJob(string name, JobWork work)
 		{
 			var job = new ThreadPoolJobDescription { Name=name, Work=work };
 			ObservableAct(o => o.MarkJobAdded(job));
 			pending_jobs.Add(job);
+			InvokePendingJobCountChanged();
+			return job;
+		}
+
+		private readonly ConcurrentDictionary<ThreadPoolJobDescription, int> pending_job_dups = new();
+		private void PendingJobUnduped(ThreadPoolJobDescription job)
+		{
+			var dup_c = pending_job_dups.AddOrUpdate(job,
+				_ => throw new InvalidOperationException(),
+				(_, c) => c - 1
+			);
+			if (dup_c==0)
+				pending_job_dups.TryRemove(job, out _);
+			ObservableAct(o => o.MarkJobDupRemoved(job));
+		}
+		public void BumpJob(ThreadPoolJobHeader job_obj)
+		{
+			var job = (ThreadPoolJobDescription)job_obj;
+			if (!job.IsPending) return;
+			pending_job_dups.AddOrUpdate(job, 1, (_, c) => c + 1);
+			pending_jobs.Add(job);
+			ObservableAct(o => o.MarkJobAdded(job));
 			InvokePendingJobCountChanged();
 		}
 
@@ -290,7 +318,7 @@ namespace Dashboard
 			public ThreadPoolItem(CustomThreadPool root, int ind)
 			{
 				this.root = root;
-				this.ind=ind;
+				this.ind = ind;
 				thr = new(JobConsumingLoop) {
 					IsBackground = true,
 					Name = $"ThreadPoolItem[{ind}]",
@@ -299,20 +327,35 @@ namespace Dashboard
 				thr.Start();
 			}
 
-			private void ChangeState(ThreadPoolJobDescription? new_job)
+			private bool ChangeState(ThreadPoolJobDescription? new_job)
 			{
 				if ((current_job is null) == (new_job is null))
 					throw new InvalidOperationException();
 
 				if (current_job is null)
 				{
-					new_job!.WorkerIndex = ind;
+					if (new_job is null) throw null!;
+
+					bool should_execute;
+					using (var new_job_locker = new ObjectLocker(new_job))
+					{
+						should_execute = new_job.IsPending;
+						if (should_execute)
+							new_job.WorkerIndex = this.ind;
+					}
+
+					if (!should_execute)
+					{
+						root.PendingJobUnduped(new_job);
+						return false;
+					}
+
 					root.ObservableAct(o => o.MarkJobStarted(new_job));
 				}
 				else
 				{
 					root.ObservableAct(o => o.MarkJobFinished(current_job));
-					current_job.WorkerIndex = -2;
+					current_job.HasFinished = true;
 				}
 				current_job = new_job;
 
@@ -320,6 +363,7 @@ namespace Dashboard
 
 				Interlocked.Add(ref root.active_job_count, new_job is null ? -1 : +1);
 				root.InvokeActiveJobsCountChanged();
+				return true;
 			}
 
 			private void JobConsumingLoop()
@@ -341,7 +385,8 @@ namespace Dashboard
 						if (App.Current?.IsShuttingDown??false)
 							break;
 
-						ChangeState(job);
+						if (!ChangeState(job))
+							continue;
 						try
 						{
 							job.Work(sj => {

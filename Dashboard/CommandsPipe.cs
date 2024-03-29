@@ -35,7 +35,7 @@ namespace Dashboard
 				var bw = new BinaryWriter(str);
 
 				var fname = br.ReadString();
-				using var cfi_use = thumb_gen.Generate(fname, nameof(Commands.GimmiThumb), ()=>false, null, false);
+				using var cfi_use = thumb_gen.Generate(fname, nameof(Commands.GimmiThumb), () => false, null, false);
 				if (cfi_use != null) bw.Write(cfi_use.CFI.CurrentThumbPath);
 
 			});
@@ -44,10 +44,10 @@ namespace Dashboard
 			{
 				var br = new BinaryReader(str);
 				var c = br.ReadInt32();
-				var res = new string[c];
-				for (var i = 0; i < res.Length; ++i)
-					res[i] = br.ReadString();
-				handler(res);
+				var file_list = new string[c];
+				for (var i = 0; i < file_list.Length; ++i)
+					file_list[i] = br.ReadString();
+				handler(file_list);
 			});
 
 		public CommandsPipe()

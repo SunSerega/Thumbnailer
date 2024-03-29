@@ -8,7 +8,7 @@
 		Title="Thumbnailer Config" WindowState="Maximized" d:DesignHeight="432.997" d:DesignWidth="545.597" >
 	<DockPanel>
 
-		<DockPanel MinWidth="260" Margin="7" DockPanel.Dock="Left" >
+		<DockPanel MinWidth="291" Margin="7" DockPanel.Dock="Left" >
 
 			<TextBlock Text="Job slots" HorizontalAlignment="Center" DockPanel.Dock="Top" />
 
@@ -32,7 +32,7 @@
 
 				<Button x:Name="b_view_jobs" Content="Details" DockPanel.Dock="Right" Margin="3,0,0,0" />
 
-				<TextBlock x:Name="tb_pending_jobs_count" Text="0" d:Text="12345" HorizontalAlignment="Left" />
+				<TextBlock x:Name="tb_pending_jobs_count" Text="0" d:Text="12345 (1234)" HorizontalAlignment="Left" />
 
 			</DockPanel>
 

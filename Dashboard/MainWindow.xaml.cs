@@ -111,7 +111,7 @@ namespace Dashboard
 
 			main_thr_pool.PendingJobCountChanged += () =>
 				Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
-					 tb_pending_jobs_count.Text = main_thr_pool.PendingJobCount.ToString()
+					 tb_pending_jobs_count.Text = $"{main_thr_pool.PendingJobCount} ({main_thr_pool.PendingUniqueJobCount})"
 				));
 
 			b_view_jobs.Click += (o, e) =>
@@ -160,10 +160,11 @@ namespace Dashboard
 
 			var cache_info_updater = new DelayedUpdater(() =>
 			{
-				cache_size =
+				static long get_cache_size() =>
 					new DirectoryInfo("cache")
 					.EnumerateFiles("*", SearchOption.AllDirectories)
 					.Sum(f => f.Length);
+				cache_size = get_cache_size();
 				Dispatcher.Invoke(update_cache_info);
 
 				if (cache_size > Settings.Root.MaxCacheSize)
@@ -171,7 +172,8 @@ namespace Dashboard
 					if (thumb_gen.ClearInvalid()!=0) return;
 					if (thumb_gen.ClearExtraFiles()!=0) return;
 					// recalc needed size change here, in case it changed
-					thumb_gen.ClearOldest(size: cache_size-Settings.Root.MaxCacheSize);
+					cache_size = get_cache_size();
+					thumb_gen.ClearOldest(size_to_clear: cache_size-Settings.Root.MaxCacheSize);
 				}
 
 			}, $"cache size recalculation");
@@ -257,7 +259,7 @@ namespace Dashboard
 				var sb = new StringBuilder();
 				var (add, rem) = AllowedExt.GetChanges();
 
-				if (add.Any())
+				if (add.Length!=0)
 				{
 					sb.AppendLine($"Added: ");
 					foreach (var ext in add)
@@ -267,7 +269,7 @@ namespace Dashboard
 					sb.AppendLine();
 				}
 
-				if (rem.Any())
+				if (rem.Length!=0)
 				{
 					sb.AppendLine($"Removed: ");
 					foreach (var ext in rem)
@@ -281,11 +283,11 @@ namespace Dashboard
 
 				if (CustomMessageBox.ShowYesNo("Confirm changes", sb.ToString(), this))
 				{
-					var gen_type = !add.Any() ? null : CustomMessageBox.Show("What to do with files of added extensions?", "Press Escape to do nothing", "Reset", "Generate");
+					var gen_type = add.Length==0 ? null : CustomMessageBox.Show("What to do with files of added extensions?", "Press Escape to do nothing", "Reset", "Generate");
 
 					var reg_ext_args = new List<string>();
-					if (add.Any()) reg_ext_args.Add("add:"+string.Join(';', add));
-					if (rem.Any()) reg_ext_args.Add("rem:"+string.Join(';', rem));
+					if (add.Length!=0) reg_ext_args.Add("add:"+string.Join(';', add));
+					if (rem.Length!=0) reg_ext_args.Add("rem:"+string.Join(';', rem));
 					var psi = new System.Diagnostics.ProcessStartInfo(@"RegExtController.exe", string.Join(' ', reg_ext_args))
 					{
 						UseShellExecute = true,
@@ -564,7 +566,7 @@ namespace Dashboard
 								return res.AsEnumerable();
 							}
 						);
-					return Enumerable.Empty<string>();
+					return [];
 				}).ToArray();
 			}
 
