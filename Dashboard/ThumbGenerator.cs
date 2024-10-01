@@ -471,7 +471,7 @@ namespace Dashboard
 						catch (Exception e)
 						{
 							if (i%100 == 0)
-								CustomMessageBox.Show("Struggling to delete [{path}]", e.ToString());
+								CustomMessageBox.Show($"Struggling to delete [{path}]", e.ToString());
 							Thread.Sleep(10);
 						}
 				}
@@ -846,7 +846,7 @@ namespace Dashboard
 									}
 									else // !is_attachment
 									{
-										// G:\0Music\3Sort\!fix\Selulance (soundcloud)\[20150103] Selulance - What.mkv
+										// C:\0\Music\3Sort\!fix\Selulance (soundcloud)\[20150103] Selulance - What.mkv
 										//if (stream_is_image)
 										//	// Should work, but throw to find such file
 										//	throw new NotImplementedException(inp_fname);

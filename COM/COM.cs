@@ -97,7 +97,7 @@ namespace Thumbnailer
 				};
 				lns.AddRange(e.ToString().Replace("\r", "").Split('\n'));
 				lns.Add("");
-				File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.log", lns, Common.Encoding);
+				File.AppendAllLines(@"C:\Users\SunSerega\Desktop\Thumbnailer.log", lns, Common.Encoding);
 			}
 			catch (Exception e2)
 			{
@@ -137,7 +137,7 @@ namespace Thumbnailer
 		public void GetThumbnail(int cx, out IntPtr hBitmap, out WTS_ALPHATYPE bitmapType)
 		{
 			//var sw = System.Diagnostics.Stopwatch.StartNew();
-			//File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.info.log", new[] { $"{DateTime.Now} | Starter: {curr_file_name}" }, Common.Encoding);
+			//File.AppendAllLines(@"C:\Users\SunSerega\Desktop\Thumbnailer.info.log", [$"{DateTime.Now} | Starter: {curr_file_name}"], Common.Encoding);
 
 			hBitmap = IntPtr.Zero;
 			bitmapType = WTS_ALPHATYPE.WTSAT_UNKNOWN;
@@ -194,7 +194,7 @@ namespace Thumbnailer
 			}
 			finally
 			{
-				//File.AppendAllLines(@"C:\Users\SunMachine\Desktop\Thumbnailer.info.log", new[] { $"{DateTime.Now} | Finished: {curr_file_name} ({sw.Elapsed})" }, Common.Encoding);
+				//File.AppendAllLines(@"C:\Users\SunSerega\Desktop\Thumbnailer.info.log", new[] { $"{DateTime.Now} | Finished: {curr_file_name} ({sw.Elapsed})" }, Common.Encoding);
 			}
 		}
 

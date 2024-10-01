@@ -30,7 +30,9 @@ namespace Dashboard
 			SizeChanged += (o, e) => Utils.HandleException(reset_dialog_location);
 			LocationChanged += (o, e) => Utils.HandleException(reset_dialog_location);
 
-			if (Settings.Root.LastComparedFile != null)
+			if (!File.Exists(Settings.Root.LastComparedFile))
+                Settings.Root.LastComparedFile = null;
+            if (Settings.Root.LastComparedFile != null)
 			{
 				tb_choise.Text = Settings.Root.LastComparedFile;
 				tb_choise.SelectAll();

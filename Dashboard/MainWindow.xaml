@@ -8,7 +8,7 @@
 		Title="Thumbnailer Config" WindowState="Maximized" d:DesignHeight="432.997" d:DesignWidth="545.597" >
 	<DockPanel>
 
-		<DockPanel MinWidth="291" Margin="7" DockPanel.Dock="Left" >
+		<DockPanel MinWidth="300" Margin="7" DockPanel.Dock="Left" >
 
 			<TextBlock Text="Job slots" HorizontalAlignment="Center" DockPanel.Dock="Top" />
 
@@ -41,7 +41,13 @@
 			<DockPanel DockPanel.Dock="Top">
 				<Button x:Name="b_cache_regen" Content="Regen" DockPanel.Dock="Right" Margin="3,0,0,0" />
 				<Button x:Name="b_cache_clear" Content="Clear" DockPanel.Dock="Right" Margin="3,0,0,0" />
-				<TextBlock x:Name="tb_cache_info" d:Text="Cache size: 123.45 KB" Margin="3,0,0,0" />
+				<TextBlock Text="Cache size:" DockPanel.Dock="Left" Margin="3,0,0,0"/>
+				<TextBlock x:Name="tb_cache_filled" d:Text="123.45 KB" DockPanel.Dock="Left" Margin="3,0,0,0" />
+				<TextBlock Text="/" DockPanel.Dock="Left" Margin="3,0,0,0"/>
+				<ComboBox x:Name="cb_cache_cap_scale" d:SelectedIndex="0" DockPanel.Dock="Right">
+					<d:ComboBoxItem Content="MB" />
+				</ComboBox>
+				<TextBox x:Name="tb_cache_cap_v" d:Text="700.0" DockPanel.Dock="Left" Margin="3,0,0,0"/>
 			</DockPanel>
 
 			<Border BorderBrush="Black" BorderThickness="0,0,0,1" Margin="0,5,0,5" DockPanel.Dock="Top" />

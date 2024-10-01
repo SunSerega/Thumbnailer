@@ -18,6 +18,14 @@ partial class Test
 
 	static void Main()
 	{
+		var q = new ESQuary("\"C:\\0\\Sort\\\" ext:lnk");
+		var e = q.GetEnumerator();
+		while (e.MoveNext())
+			Console.WriteLine(e.Current);
+	}
+
+	public static void FindAllAttributes()
+	{
 		var thr_pool = new CustomThreadPool(10);
 		thr_pool.SetJobCount(6);
 
@@ -190,7 +198,7 @@ partial class Test
 
 			var res3 = sharedBitmap.GetSharedBitmap(out var hbmp);
 
-			Image.FromHbitmap(hbmp).Save(@"G:\0Prog\Thumbnailer\Test\1.bmp");
+			Image.FromHbitmap(hbmp).Save(@"C:\0\Prog\Thumbnailer\Test\1.bmp");
 
 			//var CLSID_LocalThumbnailCache = new Guid("50EF4544-AC9F-4A8E-B21B-8A26180DB13F");
 			//var thumbnailCachePrivate = (IThumbnailCachePrivate)Activator.CreateInstance(Type.GetTypeFromCLSID(CLSID_LocalThumbnailCache, true)!)!;
@@ -212,13 +220,13 @@ partial class Test
 
 		//var res5 = sharedBitmap.GetSharedBitmap(out var hbmp2);
 
-		//Bitmap.FromHbitmap(hbmp2).Save(@"G:\0Prog\Thumbnailer\Test\2.bmp");
+		//Bitmap.FromHbitmap(hbmp2).Save(@"C:\0\Prog\Thumbnailer\Test\2.bmp");
 
 		//thumbnailCache.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out var sharedBitmap2, out var cacheFlags2, out _);
 
 		//var res6 = sharedBitmap2.GetSharedBitmap(out var hbmp3);
 
-		//Bitmap.FromHbitmap(hbmp3).Save(@"G:\0Prog\Thumbnailer\Test\3.bmp");
+		//Bitmap.FromHbitmap(hbmp3).Save(@"C:\0\Prog\Thumbnailer\Test\3.bmp");
 
 		thumbnailCache.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_EXTRACT, out _, out _, out _);
 

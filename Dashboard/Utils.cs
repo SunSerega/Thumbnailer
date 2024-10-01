@@ -17,12 +17,21 @@ using System.Windows.Media.Imaging;
 namespace Dashboard
 {
 
-	public readonly struct ByteCount(long in_bytes)
+	public readonly struct ByteCount(long in_bytes) : IEquatable<ByteCount>
 	{
 		private readonly long in_bytes = in_bytes;
 
 		private static readonly string[] byte_scales = [ "B", "KB", "MB", "GB" ];
-		private static readonly int scale_up_threshold = 5000;
+		private const int scale_factor = 1024;
+		private const int scale_up_threshold = 5000;
+
+		public static ByteCount Compose(double v, int scale_ind)
+		{
+			v *= Math.Pow(scale_factor, scale_ind);
+			return (long)v;
+		}
+
+		public static void ForEachScale(Action<string> act) => Array.ForEach(byte_scales, act);
 
 		public static implicit operator ByteCount(long in_bytes) => new(in_bytes);
 
@@ -35,10 +44,15 @@ namespace Dashboard
 			var scale_i = byte_scales.AsReadOnly().IndexOf(spl[1]);
 			if (scale_i==-1) throw new FormatException($"[{spl[1]}] is not a byte scale");
 			for (var i = 0; i< scale_i; ++i)
-				c *= 1024;
+				c *= scale_factor;
 
 			return (long)c;
 		}
+
+		public static bool operator ==(ByteCount c1, ByteCount c2) => c1.in_bytes == c2.in_bytes;
+		public static bool operator !=(ByteCount c1, ByteCount c2) => c1.in_bytes != c2.in_bytes;
+		public bool Equals(ByteCount other) => this == other;
+		public override bool Equals(object? other_obj) => other_obj is ByteCount other && this == other;
 
 		public static bool operator <(ByteCount c1, ByteCount c2) => c1.in_bytes < c2.in_bytes;
 		public static bool operator >(ByteCount c1, ByteCount c2) => c1.in_bytes > c2.in_bytes;
@@ -46,31 +60,40 @@ namespace Dashboard
 		public static long operator +(ByteCount c1, ByteCount c2) => c1.in_bytes + c2.in_bytes;
 		public static long operator -(ByteCount c1, ByteCount c2) => c1.in_bytes - c2.in_bytes;
 
-		public override string ToString()
+		public (double v, int scale_ind) Split()
 		{
-			var c = (double)in_bytes;
-
-			var sign = "";
-			if (c<0)
-			{
-				c = -c;
-				sign = "-";
-			}
-
-			var byte_scales_enmr = byte_scales.AsReadOnly().GetEnumerator();
-			if (!byte_scales_enmr.MoveNext()) throw new NotImplementedException();
-			var byte_scale = byte_scales_enmr.Current;
+			var v = (double)in_bytes;
+			
+			if (byte_scales.Length==0)
+				throw new NotImplementedException();
+			var scale_ind = 0;
 
 			while (true)
 			{
-				if (c<scale_up_threshold) break;
-				if (!byte_scales_enmr.MoveNext()) break;
-				byte_scale = byte_scales_enmr.Current;
-				c /= 1024;
+				if (Math.Abs(v) < scale_up_threshold) break;
+				if (scale_ind+1 == byte_scales.Length) break;
+				scale_ind += 1;
+				v /= scale_factor;
 			}
 
-			return $"{sign}{c:0.##} {byte_scale}";
+			return (v, scale_ind);
 		}
+
+		public override string ToString()
+		{
+			var (v, scale_ind) = Split();
+
+			var sign = "";
+			if (v<0)
+			{
+				v *= -1;
+				sign = "-";
+			}
+
+			return $"{sign}{v:0.##} {byte_scales[scale_ind]}";
+		}
+
+		public override int GetHashCode() => in_bytes.GetHashCode();
 
 	}
 
@@ -214,7 +237,7 @@ namespace Dashboard
 		public IEnumerator<string> GetEnumerator() => l.GetEnumerator();
 		IEnumerator IEnumerable.GetEnumerator() => l.GetEnumerator();
 
-		public override string ToString() => string.Join(';', l);
+		public override string ToString() => string.Join(';', l.Order());
 
 	}
 	

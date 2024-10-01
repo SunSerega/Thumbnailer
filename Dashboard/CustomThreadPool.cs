@@ -264,7 +264,7 @@ namespace Dashboard
 
 		private readonly BlockingCollection<ThreadPoolJobDescription> pending_jobs = new(new ConcurrentStack<ThreadPoolJobDescription>());
 		public int PendingJobCount => pending_jobs.Count;
-		public int PendingUniqueJobCount => pending_jobs.Distinct().Count();
+		public int PendingUniqueJobCount => pending_jobs.Where(job=>job.IsPending).Distinct().Count();
 		public event Action? PendingJobCountChanged;
 		private void InvokePendingJobCountChanged() =>
 			PendingJobCountChanged?.Invoke();

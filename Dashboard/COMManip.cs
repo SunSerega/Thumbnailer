@@ -79,9 +79,9 @@ namespace Dashboard
 			}
 			catch (COMException e) when (e.HResult == WTS_E_FAILEDEXTRACTION)
 			{
-				//TODO WTS_E_FAILEDEXTRACTION for "C:\Users\SunMachine\Desktop"
-				//CustomMessageBox.Show(nameof(WTS_E_FAILEDEXTRACTION), path);
-				return false;
+                //TODO WTS_E_FAILEDEXTRACTION for "C:\Users\SunSerega\Desktop"
+                //CustomMessageBox.Show(nameof(WTS_E_FAILEDEXTRACTION), path);
+                return false;
 			}
 
 			try

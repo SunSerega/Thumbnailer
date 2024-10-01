@@ -5,9 +5,11 @@ using System.Collections.Generic;
 
 using System.IO;
 using System.Text;
+using System.Globalization;
 
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 
 namespace Dashboard
 {
@@ -34,11 +36,13 @@ namespace Dashboard
 
 				SetUpJobCount(main_thr_pool);
 
+				SetUpCacheCapInfo();
+
 				LoadThumbGenerator(main_thr_pool, thumb_gen =>
 				{
 					pipe.AddThumbGen(thumb_gen);
 
-					SetUpCacheInfo(thumb_gen, main_thr_pool);
+					SetUpCacheFillInfo(thumb_gen, main_thr_pool);
 
 					SetUpAllowedExt(thumb_gen);
 
@@ -109,10 +113,14 @@ namespace Dashboard
 					slider_active_job_count.Value = main_thr_pool.ActiveJobsCount
 				));
 
+			var pending_jobs_count_updater = new DelayedUpdater(() =>
+			{
+				var c2 = main_thr_pool.PendingUniqueJobCount;
+				var c1 = main_thr_pool.PendingJobCount;
+				Dispatcher.Invoke(() => tb_pending_jobs_count.Text = $"{c1} ({c2})");
+			}, "Pending jobs count update");
 			main_thr_pool.PendingJobCountChanged += () =>
-				Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
-					 tb_pending_jobs_count.Text = $"{main_thr_pool.PendingJobCount} ({main_thr_pool.PendingUniqueJobCount})"
-				));
+				pending_jobs_count_updater.Trigger(TimeSpan.FromSeconds(1.0/60), false);
 
 			b_view_jobs.Click += (o, e) =>
 				Utils.HandleException(() => new JobList(main_thr_pool).Show());
@@ -152,28 +160,89 @@ namespace Dashboard
 			});
 		}
 
-		private void SetUpCacheInfo(ThumbGenerator thumb_gen, CustomThreadPool main_thr_pool)
+		private void SetUpCacheCapInfo()
 		{
-			ByteCount cache_size = 0;
+			ByteCount.ForEachScale(scale_name =>
+			{
+				cb_cache_cap_scale.Items.Add(scale_name);
+			});
+
+			bool cache_cap_v_edited = false;
+			bool recalculating_cache_cap = false;
+			void recalculate_cache_cap()
+			{
+				try
+				{
+					recalculating_cache_cap = true;
+					var (size_v, size_scale_ind) = Settings.Root.MaxCacheSize.Split();
+					if (!cache_cap_v_edited)
+						tb_cache_cap_v.Text = Math.Round(size_v, 2, MidpointRounding.AwayFromZero).ToString("N2");
+					cb_cache_cap_scale.SelectedIndex = size_scale_ind;
+				}
+				finally
+				{
+					recalculating_cache_cap = false;
+				}
+			}
+			recalculate_cache_cap();
+
+			static bool try_parse_cache_cap(string s, out double v) =>
+				double.TryParse(s, NumberStyles.AllowDecimalPoint | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out v);
+			tb_cache_cap_v.TextChanged += (o, e) => Utils.HandleException(() =>
+			{
+				if (recalculating_cache_cap) return;
+				tb_cache_cap_v.Background = try_parse_cache_cap(tb_cache_cap_v.Text, out _) ?
+					Brushes.YellowGreen : Brushes.Coral;
+				cache_cap_v_edited = true;
+			});
+			tb_cache_cap_v.KeyDown += (o, e) => Utils.HandleException(() =>
+			{
+				if (e.Key != Key.Enter) return;
+
+				if (!try_parse_cache_cap(tb_cache_cap_v.Text, out var v))
+				{
+					CustomMessageBox.Show("Invalid size", "Expected a non-negative float", this);
+					return;
+				}
+
+				Settings.Root.MaxCacheSize = ByteCount.Compose(v, cb_cache_cap_scale.SelectedIndex);
+				tb_cache_cap_v.Background = Brushes.Transparent;
+				cache_cap_v_edited = false;
+				recalculate_cache_cap();
+			});
+			cb_cache_cap_scale.SelectionChanged += (o, e) => Utils.HandleException(() =>
+			{
+				Settings.Root.MaxCacheSize = ByteCount.Compose(Settings.Root.MaxCacheSize.Split().v, cb_cache_cap_scale.SelectedIndex);
+				recalculate_cache_cap();
+			});
+		}
+
+		private void SetUpCacheFillInfo(ThumbGenerator thumb_gen, CustomThreadPool main_thr_pool)
+		{
+			b_cache_clear.Click += (o, e) => Utils.HandleException(() => main_thr_pool.AddJob("Clearing cache", thumb_gen.ClearAll));
+
+			b_cache_regen.Click += (o, e) => Utils.HandleException(() => thumb_gen.RegenAll(true));
+
+			ByteCount cache_fill = 0;
 			void update_cache_info() =>
-				tb_cache_info.Text = $"Cache size: {cache_size}";
+				tb_cache_filled.Text = cache_fill.ToString();
 
 			var cache_info_updater = new DelayedUpdater(() =>
 			{
-				static long get_cache_size() =>
+				static long get_cache_fill() =>
 					new DirectoryInfo("cache")
 					.EnumerateFiles("*", SearchOption.AllDirectories)
 					.Sum(f => f.Length);
-				cache_size = get_cache_size();
+				cache_fill = get_cache_fill();
 				Dispatcher.Invoke(update_cache_info);
 
-				if (cache_size > Settings.Root.MaxCacheSize)
+				if (cache_fill > Settings.Root.MaxCacheSize)
 				{
 					if (thumb_gen.ClearInvalid()!=0) return;
 					if (thumb_gen.ClearExtraFiles()!=0) return;
 					// recalc needed size change here, in case it changed
-					cache_size = get_cache_size();
-					thumb_gen.ClearOldest(size_to_clear: cache_size-Settings.Root.MaxCacheSize);
+					cache_fill = get_cache_fill();
+					thumb_gen.ClearOldest(size_to_clear: cache_fill-Settings.Root.MaxCacheSize);
 				}
 
 			}, $"cache size recalculation");
@@ -182,17 +251,13 @@ namespace Dashboard
 				if (!IsVisible) return;
 				cache_info_updater.Trigger(TimeSpan.Zero, false);
 			});
-			thumb_gen.CacheSizeChanged += byte_change => Dispatcher.BeginInvoke(() => Utils.HandleException(()=>
+			thumb_gen.CacheSizeChanged += byte_change => Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
 			{
-				cache_size += byte_change;
+				cache_fill += byte_change;
 				update_cache_info();
 				cache_info_updater.Trigger(TimeSpan.FromSeconds(0.5), true);
 			}));
 			cache_info_updater.Trigger(TimeSpan.Zero, false);
-
-			b_cache_clear.Click += (o, e) => Utils.HandleException(() => main_thr_pool.AddJob("Clearing cache", thumb_gen.ClearAll));
-
-			b_cache_regen.Click += (o, e) => Utils.HandleException(() => thumb_gen.RegenAll(true));
 
 		}
 
@@ -430,7 +495,7 @@ namespace Dashboard
 								thump_compare_updater.Trigger(TimeSpan.Zero, false);
 							};
 							var old_ind = cfi.ChosenThumbOptionInd;
-							cfi.ApplySourceAt(false, _ => { }, new_ind, null, out var initial_pos, set_pregen_progress);
+							cfi.ApplySourceAt(true, _ => { }, new_ind, null, out var initial_pos, set_pregen_progress);
 							// invoke sync in thump_compare_updater thread
 							Dispatcher.Invoke(() => Utils.HandleException(() =>
 							{
