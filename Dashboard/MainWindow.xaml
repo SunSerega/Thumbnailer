@@ -47,40 +47,14 @@
 				<ComboBox x:Name="cb_cache_cap_scale" d:SelectedIndex="0" DockPanel.Dock="Right">
 					<d:ComboBoxItem Content="MB" />
 				</ComboBox>
-				<TextBox x:Name="tb_cache_cap_v" d:Text="700.0" DockPanel.Dock="Left" Margin="3,0,0,0"/>
+				<ContentControl x:Name="c_cache_cap_v" DockPanel.Dock="Left" Margin="3,0,0,0">
+					<d:TextBox d:Text="700.0" />
+				</ContentControl>
 			</DockPanel>
 
 			<Border BorderBrush="Black" BorderThickness="0,0,0,1" Margin="0,5,0,5" DockPanel.Dock="Top" />
 
-			<TextBlock Text="Allowed extensions" HorizontalAlignment="Center" DockPanel.Dock="Top" />
-
-			<StackPanel Orientation="Horizontal" HorizontalAlignment="Center" DockPanel.Dock="Top">
-				<Button x:Name="b_check_n_commit" Content="Check and commit" Margin="3" Padding="3,0,3,2" IsEnabled="False" />
-			</StackPanel>
-
-			<DockPanel DockPanel.Dock="Top">
-
-				<Button x:Name="b_add_ext" DockPanel.Dock="Right" Margin="3" >
-					<Grid Width="15" Height="15" >
-						<Line X1="2" Y1="1.5" X2="13" Y2="1.5" Stroke="Green" StrokeThickness="3" VerticalAlignment="Center" />
-						<Line X1="1.5" Y1="2" X2="1.5" Y2="13" Stroke="Green" StrokeThickness="3" HorizontalAlignment="Center" />
-					</Grid>
-				</Button>
-
-				<Border BorderBrush="Black" BorderThickness="0,0,0,0">
-					<TextBox x:Name="tb_new_ext" d:Text="mkv" FontSize="14" />
-				</Border>
-
-			</DockPanel>
-
-			<ScrollViewer VerticalScrollBarVisibility="Auto">
-				<StackPanel x:Name="allowed_ext_container">
-					<d:StackPanel>
-						<local:AllowedExt />
-						<local:AllowedExt />
-					</d:StackPanel>
-				</StackPanel>
-			</ScrollViewer>
+			<local:AllowedExtList x:Name="allowed_ext_list" />
 
 		</DockPanel>
 

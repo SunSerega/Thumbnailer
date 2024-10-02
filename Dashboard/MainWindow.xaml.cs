@@ -37,13 +37,15 @@ public partial class MainWindow : Window
 
             SetUpCacheCapInfo();
 
+            allowed_ext_list.AddFromSettings();
+
             LoadThumbGenerator(main_thr_pool, thumb_gen =>
             {
                 pipe.AddThumbGen(thumb_gen);
 
-                SetUpCacheFillInfo(thumb_gen, main_thr_pool);
+                AllowedExtInstaller.SetThumbGen(thumb_gen);
 
-                SetUpAllowedExt(thumb_gen);
+                SetUpCacheFillInfo(thumb_gen, main_thr_pool);
 
                 SetUpThumbCompare(thumb_gen, pipe);
 
@@ -166,49 +168,28 @@ public partial class MainWindow : Window
             cb_cache_cap_scale.Items.Add(scale_name);
         });
 
-        bool cache_cap_v_edited = false;
-        bool recalculating_cache_cap = false;
-        void recalculate_cache_cap()
-        {
-            try
-            {
-                recalculating_cache_cap = true;
-                var (size_v, size_scale_ind) = Settings.Root.MaxCacheSize.Split();
-                if (!cache_cap_v_edited)
-                    tb_cache_cap_v.Text = Math.Round(size_v, 2, MidpointRounding.AwayFromZero).ToString("N2");
-                cb_cache_cap_scale.SelectedIndex = size_scale_ind;
-            }
-            finally
-            {
-                recalculating_cache_cap = false;
-            }
-        }
-        recalculate_cache_cap();
-
         static bool try_parse_cache_cap(string s, out double v) =>
             double.TryParse(s, NumberStyles.AllowDecimalPoint | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out v);
-        tb_cache_cap_v.TextChanged += (o, e) => Utils.HandleException(() =>
-        {
-            if (recalculating_cache_cap) return;
-            tb_cache_cap_v.Background = try_parse_cache_cap(tb_cache_cap_v.Text, out _) ?
-                Brushes.YellowGreen : Brushes.Coral;
-            cache_cap_v_edited = true;
-        });
-        tb_cache_cap_v.KeyDown += (o, e) => Utils.HandleException(() =>
-        {
-            if (e.Key != Key.Enter) return;
+        var tb_cache_cap_v = new FilteredTextBox<double>(
+            try_parse_cache_cap,
+            v => Settings.Root.MaxCacheSize = ByteCount.Compose(v, cb_cache_cap_scale.SelectedIndex),
+            ("Invalid size", "Expected a non-negative float")
+        );
+        c_cache_cap_v.Content = tb_cache_cap_v;
 
-            if (!try_parse_cache_cap(tb_cache_cap_v.Text, out var v))
+        void recalculate_cache_cap()
+        {
+            var (size_v, size_scale_ind) = Settings.Root.MaxCacheSize.Split();
+            if (!tb_cache_cap_v.Edited)
             {
-                CustomMessageBox.Show("Invalid size", "Expected a non-negative float", this);
-                return;
+                var cap_v = Math.Round(size_v, 2, MidpointRounding.AwayFromZero).ToString("N2");
+                tb_cache_cap_v.ResetContent(cap_v);
             }
+            cb_cache_cap_scale.SelectedIndex = size_scale_ind;
+        }
+        tb_cache_cap_v.Commited += recalculate_cache_cap;
+        recalculate_cache_cap();
 
-            Settings.Root.MaxCacheSize = ByteCount.Compose(v, cb_cache_cap_scale.SelectedIndex);
-            tb_cache_cap_v.Background = Brushes.Transparent;
-            cache_cap_v_edited = false;
-            recalculate_cache_cap();
-        });
         cb_cache_cap_scale.SelectionChanged += (o, e) => Utils.HandleException(() =>
         {
             Settings.Root.MaxCacheSize = ByteCount.Compose(Settings.Root.MaxCacheSize.Split().v, cb_cache_cap_scale.SelectedIndex);
@@ -258,141 +239,6 @@ public partial class MainWindow : Window
         }));
         cache_info_updater.Trigger(TimeSpan.Zero, false);
 
-    }
-
-    private void SetUpAllowedExt(ThumbGenerator thumb_gen)
-    {
-        AllowedExt.Changed += any_change =>
-            b_check_n_commit.IsEnabled = any_change;
-
-        tb_new_ext.PreviewTextInput += (o, e) => Utils.HandleException(() =>
-            e.Handled = !FileExtList.Validate(e.Text)
-        );
-        CommandManager.AddPreviewExecutedHandler(tb_new_ext, (o, e) =>
-        {
-            if (e.Command != ApplicationCommands.Paste) return;
-            if (!Clipboard.ContainsText()) return;
-            e.Handled = !FileExtList.Validate(Clipboard.GetText());
-        });
-
-        void add_ext()
-        {
-            if (tb_new_ext.Text=="") return;
-            _=new AllowedExt(tb_new_ext.Text, allowed_ext_container);
-            tb_new_ext.Clear();
-        }
-        tb_new_ext.KeyDown += (o, e) => Utils.HandleException(() =>
-        {
-            if (e.Key == Key.Enter)
-                add_ext();
-        });
-        b_add_ext.Click += (_, _) => Utils.HandleException(add_ext);
-
-        var delayed_commit_reset_exts = new Dictionary<string, string>();
-        var delayed_commit_reset = new DelayedUpdater(() =>
-        {
-            Dictionary<string, string[]> reset_kind_to_exts;
-            lock (delayed_commit_reset_exts)
-            {
-                reset_kind_to_exts = delayed_commit_reset_exts
-                    .GroupBy(kvp => kvp.Value)
-                    .ToDictionary(g => g.Key, g => g.Select(kvp => kvp.Key).ToArray());
-                delayed_commit_reset_exts.Clear();
-            }
-
-            foreach (var (reset_kind, exts) in reset_kind_to_exts)
-            {
-                var q = new ESQuary("ext:"+string.Join(';', exts));
-                switch (reset_kind)
-                {
-                    case "Reset":
-                        foreach (var fname in q)
-                            COMManip.ResetThumbFor(fname, TimeSpan.Zero);
-                        break;
-                    case "Generate":
-                        thumb_gen.MassGenerate(q, true);
-                        break;
-                    default: throw new NotImplementedException(reset_kind);
-                }
-            }
-
-        }, $"Thumb reset after AllowedExt commit");
-        b_check_n_commit.Click += (o, e) => Utils.HandleException(()=>
-        {
-
-            var sb = new StringBuilder();
-            var (add, rem) = AllowedExt.GetChanges();
-
-            if (add.Length!=0)
-            {
-                sb.AppendLine($"Added: ");
-                foreach (var ext in add)
-                    sb.AppendLine(ext);
-                sb.Append('~', 30);
-                sb.AppendLine();
-                sb.AppendLine();
-            }
-
-            if (rem.Length!=0)
-            {
-                sb.AppendLine($"Removed: ");
-                foreach (var ext in rem)
-                    sb.AppendLine(ext);
-                sb.Append('~', 30);
-                sb.AppendLine();
-                sb.AppendLine();
-            }
-
-            sb.AppendLine($"Commit?");
-
-            if (CustomMessageBox.ShowYesNo("Confirm changes", sb.ToString(), this))
-            {
-                var gen_type = add.Length==0 ? null : CustomMessageBox.Show("What to do with files of added extensions?", "Press Escape to do nothing", "Reset", "Generate");
-
-                var reg_ext_args = new List<string>();
-                if (add.Length!=0) reg_ext_args.Add("add:"+string.Join(';', add));
-                if (rem.Length!=0) reg_ext_args.Add("rem:"+string.Join(';', rem));
-                var psi = new System.Diagnostics.ProcessStartInfo(@"RegExtController.exe", string.Join(' ', reg_ext_args))
-                {
-                    UseShellExecute = true,
-                    Verb = "runas",
-                    WorkingDirectory = Environment.CurrentDirectory,
-                    CreateNoWindow = true,
-                };
-                var p = System.Diagnostics.Process.Start(psi)!;
-                p.WaitForExit();
-                if (p.ExitCode != 0)
-                    throw new Exception($"ExitCode={p.ExitCode}");
-                
-                COMManip.NotifyRegExtChange();
-                AllowedExt.CommitChanges();
-
-                if (gen_type is null) return;
-                lock (delayed_commit_reset_exts)
-                    foreach (var ext in add)
-                    {
-                        static int gen_type_ord(string gen_type) => gen_type switch
-                        {
-                            "Reset" => 1,
-                            "Generate" => 2,
-                            _ => throw new NotImplementedException()
-                        };
-                        if (!delayed_commit_reset_exts.TryGetValue(ext, out var old_gen_type) || gen_type_ord(old_gen_type)<gen_type_ord(gen_type))
-                            delayed_commit_reset_exts[ext] = gen_type;
-                    }
-                delayed_commit_reset.Trigger(TimeSpan.Zero, false);
-            }
-            else
-            {
-                foreach (var ext in rem)
-                    _=new AllowedExt(ext, allowed_ext_container);
-                foreach (var ext in add)
-                    allowed_ext_container.Children.Cast<AllowedExt>().Single(ae => ae.tb_name.Text == ext).Delete(allowed_ext_container);
-            }
-        });
-
-        foreach (var ext in Settings.Root.AllowedExts)
-            _=new AllowedExt(ext, allowed_ext_container);
     }
 
     private void SetUpThumbCompare(ThumbGenerator thumb_gen, CommandsPipe pipe)

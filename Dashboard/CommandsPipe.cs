@@ -60,23 +60,27 @@ public class CommandsPipe
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
 
+                var need_old_proc_kill_command = true;
                 //Separate thread, in case old process accepts message, but then hangs
                 new System.Threading.Thread(() => Utils.HandleException(() =>
                 {
-                    using var client = new NamedPipeClientStream(name);
-                    try
+                    while (need_old_proc_kill_command)
                     {
-                        client.Connect(TimeSpan.FromSeconds(1));
+                        using var client = new NamedPipeClientStream(name);
+                        try
+                        {
+                            client.Connect(TimeSpan.FromSeconds(1));
+                        }
+                        catch (TimeoutException) { continue; }
+                        try
+                        {
+                            new BinaryWriter(client)
+                                .Write(Commands.NewerKillsOlder);
+                            client.Flush();
+                            client.WaitForPipeDrain();
+                        }
+                        catch (IOException) { continue; }
                     }
-                    catch (TimeoutException) { return; }
-                    try
-                    {
-                        new BinaryWriter(client)
-                            .Write(Commands.NewerKillsOlder);
-                        client.Flush();
-                        client.WaitForPipeDrain();
-                    }
-                    catch (IOException) { return; }
                 }))
                 {
                     IsBackground = true,
@@ -88,7 +92,7 @@ public class CommandsPipe
                     if (p.WaitForExit(TimeSpan.FromSeconds(1)))
                         continue;
 
-                    var mb = new CustomMessageBox($"Force killing [{p.Id}]", null, default(Window));
+                    var mb = new CustomMessageBox($"Force killing [{p.Id}]", null, App.Current?.MainWindow);
                     p.WaitForExitAsync().ContinueWith(t => mb.Dispatcher.Invoke(mb.Close));
                     mb.ShowDialog();
 
@@ -96,6 +100,7 @@ public class CommandsPipe
                     p.WaitForExit();
                 }
 
+                need_old_proc_kill_command = false;
                 //CustomMessageBox.Show(sw.Elapsed.ToString());
             }
         }
@@ -135,6 +140,10 @@ public class CommandsPipe
                     handler(server);
                     server.Flush();
                     server.Disconnect();
+                }
+                catch when (App.Current?.IsShuttingDown??false)
+                {
+                    break;
                 }
                 catch (Exception e)
                 {

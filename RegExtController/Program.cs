@@ -26,7 +26,8 @@ try
                 foreach (var ext in exts)
                     Microsoft.Win32.Registry.ClassesRoot.DeleteSubKey('.'+ext+@"\ShellEx\{e357fccd-a995-4576-b01f-234630154e96}", false);
                 break;
-            default: throw new FormatException(arg);
+            default:
+                throw new FormatException(arg);
         }
 
     }

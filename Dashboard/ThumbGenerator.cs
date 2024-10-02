@@ -1347,6 +1347,13 @@ public class ThumbGenerator
 
     #region Clear
 
+    public bool ClearOne(string fname)
+    {
+        if (!files.TryRemove(fname, out var cfi)) return false;
+        cfi.Erase();
+        return true;
+    }
+
     public int ClearInvalid() {
         var c = purge_lock.OneLocked(() =>
         {

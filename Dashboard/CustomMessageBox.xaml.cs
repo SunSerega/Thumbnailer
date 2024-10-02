@@ -120,6 +120,15 @@ public partial class CustomMessageBox : Window
     }
     public static string? Show(string title, string? content, params string[] button_names) => Show(title, content, no_own, button_names);
 
+    public static TRes? Show<TRes>(string title, string? content, OwnerWindowContainer owner, params TRes[] options) where TRes : struct, Enum
+    {
+        if (options.Length == 0) throw new ArgumentException("options.Length == 0");
+        var res_name = Show(title, content, owner, Array.ConvertAll(options, e => e.ToString()));
+        if (res_name is null) return null;
+        return (TRes)Enum.Parse(typeof(TRes), res_name);
+    }
+    public static TRes? Show<TRes>(string title, string? content, params TRes[] options) where TRes : struct, Enum => Show<TRes>(title, content, no_own, options);
+
     public static string? Show(string title, string? content, OwnerWindowContainer owner) => Show(title, content, owner, "OK");
     public static string? Show(string title, string? content) => Show(title, content, no_own);
 

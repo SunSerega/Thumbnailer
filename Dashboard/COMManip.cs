@@ -106,8 +106,8 @@ public partial class COMManip
         if (path is null) return;
         if (System.IO.Path.GetPathRoot(path) == path) throw new NotImplementedException();
         delayed_thumb_reseter.Trigger(path, delay, true);
-        path = System.IO.Path.GetDirectoryName(path) ??
-            throw new NotImplementedException();
+        path = System.IO.Path.GetDirectoryName(path)
+            ?? throw new NotImplementedException();
         if (System.IO.Path.GetPathRoot(path) == path) return;
         delayed_thumb_reseter.Trigger(path, delay+TimeSpan.FromSeconds(0.1), true);
     }

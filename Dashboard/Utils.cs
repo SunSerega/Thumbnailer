@@ -206,11 +206,12 @@ public readonly struct FileExtList : ICollection<string>, IEquatable<FileExtList
 
     public static bool Validate(string ext)
     {
-        if (ext.Contains('.'))
-            return false;
-        if (ext.Contains(';'))
-            return false;
-        return true;
+        // implicit in the next check
+        //if (ext.Contains(';'))
+        //    return false;
+        //if (ext.Contains('.'))
+        //    return false;
+        return ext.Length!=0 && ext.All(char.IsLetterOrDigit);
     }
     private static string Validated(string ext) =>
         Validate(ext) ? ext : throw new FormatException(ext);
