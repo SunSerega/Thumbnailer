@@ -1,7 +1,4 @@
-﻿
-
-
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 	
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
@@ -16,26 +13,26 @@
 	</Target>
 	
 	<ItemGroup>
-	  <COMReference Include="Shell32">
-	    <WrapperTool>tlbimp</WrapperTool>
-	    <VersionMinor>0</VersionMinor>
-	    <VersionMajor>1</VersionMajor>
-	    <Guid>50a7e9b0-70ef-11d1-b75a-00a0c90564fe</Guid>
-	    <Lcid>0</Lcid>
-	    <Isolated>false</Isolated>
-	    <EmbedInteropTypes>true</EmbedInteropTypes>
-	  </COMReference>
+		<COMReference Include="Shell32">
+			<WrapperTool>tlbimp</WrapperTool>
+			<VersionMinor>0</VersionMinor>
+			<VersionMajor>1</VersionMajor>
+			<Guid>50a7e9b0-70ef-11d1-b75a-00a0c90564fe</Guid>
+			<Lcid>0</Lcid>
+			<Isolated>false</Isolated>
+			<EmbedInteropTypes>true</EmbedInteropTypes>
+		</COMReference>
 	</ItemGroup>
 	
 	<ItemGroup>
-	  <Resource Include="Icon.ico" />
+		<Resource Include="Icon.ico" />
 	</ItemGroup>
 	
 	<ItemGroup>
-	  <PackageReference Include="CopyOnWrite" Version="0.3.6" />
-	  <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
-	  <PackageReference Include="System.Speech" Version="7.0.0" />
-	  <PackageReference Include="System.Xml.XDocument" Version="4.3.0" />
+		<PackageReference Include="CopyOnWrite" Version="0.3.6" />
+		<PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
+		<PackageReference Include="System.Speech" Version="7.0.0" />
+		<PackageReference Include="System.Xml.XDocument" Version="4.3.0" />
 	</ItemGroup>
 	
 	<ItemGroup>
@@ -65,6 +62,8 @@
 		</ContentWithTargetPath>
 	</ItemGroup>
 	
+	<ItemGroup>
+		<None Include="..\.editorconfig" Link=".editorconfig" />
+	</ItemGroup>
+	
 </Project>
-
-
