@@ -16,7 +16,7 @@ namespace Dashboard
         private static readonly Brush b_ext_commited = Brushes.Transparent;
         private static readonly Brush b_ext_added = Brushes.YellowGreen;
         private static readonly Brush b_ext_removed = Brushes.Coral;
-        private static readonly Brush b_ext_broken = Brushes.DarkRed; //TODO
+        private static readonly Brush b_ext_broken = Brushes.Violet;
 
         private static bool CheckInstalled(string ext)
         {
@@ -54,18 +54,33 @@ namespace Dashboard
 
         }
 
+        private Action MakeExtReinstall(string ext) => () =>
+        {
+            var gen_type = AskRegenType(
+                "What to do with files of reinstalled extension?", [ext],
+                ExtRegenType.Skip, ExtRegenType.Reset, ExtRegenType.Generate
+            );
+            if (gen_type is null) return;
+            AllowedExtInstaller.Install(ext, gen_type.Value);
+            ext_vis_map[ext].b_body.Background = b_ext_commited;
+        };
+        private Action MakeExtRemove(string ext) => () =>
+        {
+            if (selected_exts.Contains(ext))
+                RemoveExt(ext);
+            else
+                AddExt(ext);
+        };
+        private AllowedExt MakeExtVis(string ext) =>
+            new(ext, MakeExtReinstall(ext), MakeExtRemove(ext));
+
         public void AddFromSettings()
         {
             foreach (var ext in Settings.Root.AllowedExts)
             {
                 if (!selected_exts.Add(ext))
                     throw new InvalidOperationException();
-                var vis = new AllowedExt(ext, () => {
-                    if (selected_exts.Contains(ext))
-                        RemoveExt(ext);
-                    else
-                        AddExt(ext);
-                });
+                var vis = MakeExtVis(ext);
                 allowed_ext_container.Children.Add(vis);
                 ext_vis_map.Add(ext, vis);
                 vis.b_body.Background = CheckInstalled(ext) ? b_ext_commited : b_ext_broken;
@@ -74,7 +89,7 @@ namespace Dashboard
 
         private AllowedExt AddVisExt(string ext)
         {
-            var vis = new AllowedExt(ext, () => RemoveExt(ext));
+            var vis = MakeExtVis(ext);
             ext_vis_map.Add(ext, vis);
 
             {

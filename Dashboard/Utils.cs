@@ -187,7 +187,7 @@ public sealed class OneToManyLock
 
 public readonly struct FileExtList : ICollection<string>, IEquatable<FileExtList>
 {
-    private readonly HashSet<string> l = [];
+    private readonly HashSet<string> l = new(StringComparer.OrdinalIgnoreCase);
 
     public int Count => l.Count;
 

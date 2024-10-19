@@ -33,7 +33,7 @@ public partial class CustomMessageBox : Window
             return;
         }
 
-        if (cont.Owner != null)
+        if (cont.Owner != null && cont.Owner.IsVisible)
             Owner = cont.Owner;
 
         KeyDown += (o, e) => Utils.HandleException(() =>
