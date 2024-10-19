@@ -1,33 +1,33 @@
 ﻿<Window x:Class="Dashboard.JobList"
-		xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-		xmlns:local="clr-namespace:Dashboard"
-		mc:Ignorable="d"
-		
-		Title="Job list"
-		WindowState="Maximized" d:DesignWidth="228.93"
-		
-		>
-	<DockPanel>
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Dashboard"
+        mc:Ignorable="d"
+        
+        Title="Job list"
+        WindowState="Maximized" d:DesignWidth="228.93"
+        
+        >
+    <DockPanel>
 
-		<Border x:Name="b_wjl_cont" BorderBrush="Black" BorderThickness="1" DockPanel.Dock="Top">
-			<d:Border>
-				<local:WorkingJobList/>
-			</d:Border>
-		</Border>
+        <Border x:Name="b_wjl_cont" BorderBrush="Black" BorderThickness="1" DockPanel.Dock="Top">
+            <d:Border>
+                <local:WorkingJobList/>
+            </d:Border>
+        </Border>
 
-		<!--<TextBlock x:Name="temp1" DockPanel.Dock="Top" />-->
+        <!--<TextBlock x:Name="temp1" DockPanel.Dock="Top" />-->
 
-		<!--<TextBlock x:Name="temp2" DockPanel.Dock="Top" />-->
+        <!--<TextBlock x:Name="temp2" DockPanel.Dock="Top" />-->
 
-		<ScrollViewer VerticalScrollBarVisibility="Auto" CanContentScroll="True" IsDeferredScrollingEnabled="True" >
-			<VirtualizingStackPanel x:Name="sp_pending" IsVirtualizing="True" VirtualizationMode="Recycling" >
-				<d:TextBlock Text="Pending 1" />
-				<d:TextBlock Text="Pending 2" />
-			</VirtualizingStackPanel>
-		</ScrollViewer>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" CanContentScroll="True" IsDeferredScrollingEnabled="True" >
+            <VirtualizingStackPanel x:Name="sp_pending" IsVirtualizing="True" VirtualizationMode="Recycling" >
+                <d:TextBlock Text="Pending 1" />
+                <d:TextBlock Text="Pending 2" />
+            </VirtualizingStackPanel>
+        </ScrollViewer>
 
-	</DockPanel>
+    </DockPanel>
 </Window>
