@@ -41,7 +41,11 @@ public class FilteredTextBox<T> : ContentControl
         tb.KeyDown += (o, e) => Utils.HandleException(() =>
         {
             if (e.Key != Key.Escape) return;
+            if (tb.Text == uncommited_text) return;
+            var (sel_s, sel_l) = (tb.SelectionStart, tb.SelectionLength);
             ResetContent(uncommited_text);
+            (tb.SelectionStart, tb.SelectionLength) = (sel_s, sel_l);
+            e.Handled = true;
         });
 
         tb.KeyDown += (o, e) => Utils.HandleException(() =>
