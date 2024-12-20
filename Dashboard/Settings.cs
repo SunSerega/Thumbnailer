@@ -261,7 +261,7 @@ public abstract class Settings
         {
             System.Threading.Thread.CurrentThread.Name = thr_name;
         }
-    }, TimeSpan.FromSeconds(0.1), "Settings resaving");
+    }, "Settings resaving");
     private void RequestResave(TimeSpan delay)
     {
         resave_updater.Trigger(this, delay, true);

@@ -719,7 +719,7 @@ public class ThumbGenerator
             if (cause is null) return;
             cfi.delayed_gen_args = default;
             cfi.GenerateThumb($"{cause} (delayed)", null, on_regenerated, force_regen, false);
-        }, TimeSpan.MaxValue, "Thumb gen wait (input recently modified)");
+        }, "Thumb gen wait (input recently modified)");
 
         private volatile int gen_jobs_assigned = 0;
         private CustomThreadPool.ThreadPoolJobHeader? gen_job_obj = null;

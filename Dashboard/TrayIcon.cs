@@ -8,6 +8,7 @@ using Hardcodet.Wpf.TaskbarNotification;
 using System.Windows.Media.Imaging;
 
 namespace Dashboard;
+
 public sealed class TrayIcon : TaskbarIcon
 {
     readonly Window w;
@@ -75,6 +76,5 @@ public sealed class TrayIcon : TaskbarIcon
 
         void ICommand.Execute(object? parameter) => body();
     }
-
 
 }
