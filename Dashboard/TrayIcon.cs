@@ -3,9 +3,11 @@
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Controls;
+using System.Windows.Media.Imaging;
 
 using Hardcodet.Wpf.TaskbarNotification;
-using System.Windows.Media.Imaging;
+
+using SunSharpUtils;
 
 namespace Dashboard;
 
@@ -29,25 +31,27 @@ public sealed class TrayIcon : TaskbarIcon
             {
                 Header = "Shutdown",
             };
-            mi.Click += (o, e) => Utils.HandleException(App.Current!.Shutdown);
+            mi.Click += (o, e) => Err.Handle(Common.Shutdown);
             ContextMenu.Items.Add(mi);
         }
 
-        w.KeyDown += (o, e) => Utils.HandleException(() =>
+        w.KeyDown += (o, e) => Err.Handle(() =>
         {
             if (e.Key==Key.Escape) w.Close();
         });
-        w.Closing += (o, e) => Utils.HandleException(() =>
+        w.Closing += (o, e) => Err.Handle(() =>
         {
             if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
             {
-                App.Current!.Shutdown();
+                Common.Shutdown();
                 return;
             }
             ShowIco();
             e.Cancel = true;
         });
-        App.Current!.Exit += (o, e) => Utils.HandleException(Dispose);
+        // On Win10, the icon remains in the tray after the process shuts down
+        // On Win11 this is no longer an issue, but might as well dispose properly
+        Common.OnShutdown += _ => Err.Handle(Dispose);
 
         NoLeftClickDelay = true;
         LeftClickCommand = new DummyCommand(ShowWin);

@@ -2,7 +2,7 @@
 
 using System.Windows.Controls;
 
-using static Dashboard.AllowedExtList;
+using SunSharpUtils;
 
 namespace Dashboard;
 
@@ -15,9 +15,9 @@ public partial class AllowedExt : UserControl
     {
         InitializeComponent();
         tb_name.Text = ext;
-        b_reinstall.Click += (o, e) => Utils.HandleException(on_reinstalled);
+        b_reinstall.Click += (o, e) => Err.Handle(on_reinstalled);
 
-        b_delete.Click += (o, e) => Utils.HandleException(on_removed);
+        b_delete.Click += (o, e) => Err.Handle(on_removed);
 
     }
 

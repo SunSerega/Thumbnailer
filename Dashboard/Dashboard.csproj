@@ -9,7 +9,7 @@
 	</PropertyGroup>
 	
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="pwsh -File &quot;$(ProjectDir)Shutdown.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;&#xD;&#xA;pwsh -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(ProjectDir)$(OutDir)$(ProjectName)&quot; &quot;runtimes&quot; &quot;Hardcodet.NotifyIcon&quot; &quot;CopyOnWrite&quot;&#xD;&#xA;pwsh -File &quot;$(ProjectDir)Restart.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;&#xD;&#xA;pwsh -File &quot;$(ProjectDir)Make startup lnk.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;" />
+		<Exec Command="pwsh -File &quot;$(ProjectDir)Shutdown.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;&#xD;&#xA;pwsh -File &quot;$(SolutionDir)Deploy.ps1&quot; &quot;$(ProjectDir)$(OutDir)$(ProjectName)&quot; &quot;SunSharpUtils&quot; &quot;runtimes&quot; &quot;Hardcodet.NotifyIcon&quot; &quot;CopyOnWrite&quot;&#xD;&#xA;pwsh -File &quot;$(ProjectDir)Restart.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;&#xD;&#xA;pwsh -File &quot;$(ProjectDir)Make startup lnk.ps1&quot; &quot;$(SolutionDir)0Deployed\$(AssemblyName).exe&quot;" />
 	</Target>
 	
 	<ItemGroup>
@@ -29,10 +29,12 @@
 	</ItemGroup>
 	
 	<ItemGroup>
-		<PackageReference Include="CopyOnWrite" Version="0.3.6" />
-		<PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
-		<PackageReference Include="System.Speech" Version="7.0.0" />
-		<PackageReference Include="System.Xml.XDocument" Version="4.3.0" />
+		<PackageReference Include="CopyOnWrite" Version="0.5.0" />
+		<PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
+		<PackageReference Include="SunSharpUtils" Version="1.0.0" />
+		<PackageReference Include="SunSharpUtils.Threading" Version="1.0.0" />
+		<PackageReference Include="SunSharpUtils.WPF" Version="1.0.0" />
+		<PackageReference Include="System.Speech" Version="9.0.0" />
 	</ItemGroup>
 	
 	<ItemGroup>

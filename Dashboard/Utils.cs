@@ -14,6 +14,9 @@ using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
+using SunSharpUtils.WPF;
+using SunSharpUtils.Threading;
+
 namespace Dashboard;
 
 public readonly struct ByteCount(long in_bytes) : IEquatable<ByteCount>
@@ -425,35 +428,6 @@ public sealed class ESQuary : IEnumerable<string>
 
 }
 
-public readonly struct ObjectLocker : IDisposable
-{
-    private readonly object o;
-
-    public ObjectLocker(object o)
-    {
-        this.o = o;
-        Monitor.Enter(o);
-    }
-
-    public static ObjectLocker? TryLock(object o)
-    {
-        bool got_lock = false;
-        Monitor.TryEnter(o, ref got_lock);
-        if (!got_lock) return null;
-        try
-        {
-            return new ObjectLocker(o);
-        }
-        finally
-        {
-            Monitor.Exit(o);
-        }
-    }
-
-    public void Dispose() => Monitor.Exit(o);
-
-}
-
 public static class Log
 {
     private const string log_fname = "Dashboard.log";
@@ -503,63 +477,8 @@ public static class TTS
 
 public sealed class LoadCanceledException : Exception { }
 
-public static class Handler<TErr>
-    where TErr: Exception
-{
-
-    public static T Try<T>(Func<T> body, Func<TErr,T> handle, Func<TErr, bool>? cond = null)
-    {
-        try
-        {
-            return body();
-        }
-        catch (TErr e) when (cond is null || cond(e))
-        {
-            return handle(e);
-        }
-    }
-
-}
-
 public static class Utils
 {
-
-    public static void HandleException(Exception e)
-    {
-        CustomMessageBox.Show("ERROR", e.ToString());
-    }
-
-    public static void HandleException(Action act)
-    {
-        try
-        {
-            act();
-        }
-        catch (Exception e)
-        {
-            HandleException(e);
-        }
-    }
-
-    public static T? HandleException<T>(Func<T> act, T? no_res = default)
-    {
-        try
-        {
-            return act();
-        }
-        catch (Exception e)
-        {
-            HandleException(e);
-            return no_res;
-        }
-    }
-
-    public static void HandleException(this Task t) =>
-        t.ContinueWith(
-            t=>HandleException(t.Exception?.InnerException ??
-                new Exception("Task faulted, but no exception exists")),
-            TaskContinuationOptions.OnlyOnFaulted
-        );
 
     public static BitmapImage LoadUncachedBitmap(string fname)
     {

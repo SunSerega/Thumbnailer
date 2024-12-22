@@ -7,8 +7,11 @@ using System.Collections.Generic;
 using System.Threading;
 
 using System.Windows;
-using System.Windows.Threading;
 using System.Windows.Controls;
+using System.Windows.Threading;
+
+using SunSharpUtils;
+using SunSharpUtils.Threading;
 
 namespace Dashboard.Tests;
 
@@ -39,7 +42,7 @@ public class OneToManyLockTests
         var done_many = 0;
 
         for (var i = 0; i<one_thr_c; ++i)
-            threads.Add(new Thread(() => Utils.HandleException(() =>
+            threads.Add(new Thread(() => Err.Handle(() =>
             {
                 Thread.Sleep(1000);
                 for (int i = 0; i<one_rep_c; ++i)
@@ -61,7 +64,7 @@ public class OneToManyLockTests
             });
 
         for (var i = 0; i<many_thr_c; ++i)
-            threads.Add(new Thread(() => Utils.HandleException(() =>
+            threads.Add(new Thread(() => Err.Handle(() =>
             {
                 Thread.Sleep(1000);
                 for (int i = 0; i<many_rep_c; ++i)
@@ -85,7 +88,7 @@ public class OneToManyLockTests
         foreach (var thr in threads)
             thr.Start();
 
-        var win_thr = new Thread(() => Utils.HandleException(() =>
+        var win_thr = new Thread(() => Err.Handle(() =>
         {
             static UIElement make_otp_line(string name, out TextBlock tb) => new Viewbox
             {

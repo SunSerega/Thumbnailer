@@ -10,6 +10,8 @@ using System.Windows.Shapes;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
 
+using SunSharpUtils;
+
 namespace Dashboard;
 
 public partial class JobList : Window
@@ -26,7 +28,7 @@ public partial class JobList : Window
         var wjl = new WorkingJobList(thr_pool.MaxJobCount);
         b_wjl_cont.Child = wjl;
 
-        KeyDown += (o, e) => Utils.HandleException(() =>
+        KeyDown += (o, e) => Err.Handle(() =>
         {
             if (e.Key == System.Windows.Input.Key.Escape)
             {
@@ -37,13 +39,13 @@ public partial class JobList : Window
 
         var is_open = true;
         var change_wh = new System.Threading.ManualResetEventSlim(false);
-        Closed += (o, e) => Utils.HandleException(() =>
+        Closed += (o, e) => Err.Handle(() =>
         {
             is_open = false;
             change_wh.Set();
         });
 
-        new System.Threading.Thread(() => Utils.HandleException(() => thr_pool.ObserveLoop(change_wh.Set, observer =>
+        new System.Threading.Thread(() => Err.Handle(() => thr_pool.ObserveLoop(change_wh.Set, observer =>
         {
             var pending_tb_map = new Dictionary<CustomThreadPool.ThreadPoolJobHeader, Stack<TextBlock>>();
 
@@ -77,7 +79,7 @@ public partial class JobList : Window
                             );
                             tb.Foreground = Ys > 0.36 ? Brushes.Black : Brushes.White;
 
-                            _=System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(10)).ContinueWith(_ => Utils.HandleException(() =>
+                            _=System.Threading.Tasks.Task.Delay(TimeSpan.FromSeconds(10)).ContinueWith(_ => Err.Handle(() =>
                             {
                                 var anim = new DoubleAnimation
                                 {
@@ -89,7 +91,7 @@ public partial class JobList : Window
                                     To = 0,
                                     Duration = TimeSpan.FromSeconds(0.5),
                                 };
-                                anim.Completed += (o, e) => Utils.HandleException(() =>
+                                anim.Completed += (o, e) => Err.Handle(() =>
                                 {
                                     var tb_ind = sp_pending.Children.IndexOf(tb);
                                     if (tb_ind == -1) throw new InvalidOperationException();
@@ -141,7 +143,7 @@ public partial class JobList : Window
                         }
                     ));
                 }
-                catch when (App.Current!.IsShuttingDown)
+                catch when (Common.IsShuttingDown)
                 {
                     return;
                 }

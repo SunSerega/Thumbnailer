@@ -5,6 +5,8 @@ using Win32Exception = System.ComponentModel.Win32Exception;
 
 using System.Windows.Media.Imaging;
 
+using SunSharpUtils.Threading;
+
 namespace Dashboard;
 
 public partial class COMManip

@@ -9,6 +9,9 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Controls;
 
+using SunSharpUtils;
+using SunSharpUtils.WPF;
+
 namespace Dashboard;
 
 public partial class FileChooser : Window
@@ -16,7 +19,7 @@ public partial class FileChooser : Window
     public FileChooser(Action<IEnumerable<string>> on_confirm)
     {
         InitializeComponent();
-        Owner = App.Current!.MainWindow;
+        Owner = WPFCommon.CurrentApp!.MainWindow;
 
         void reset_dialog_location()
         {
@@ -26,8 +29,8 @@ public partial class FileChooser : Window
             Top = workingArea.Top + (workingArea.Height - ActualHeight) / 2;
         }
 
-        SizeChanged += (o, e) => Utils.HandleException(reset_dialog_location);
-        LocationChanged += (o, e) => Utils.HandleException(reset_dialog_location);
+        SizeChanged += (o, e) => Err.Handle(reset_dialog_location);
+        LocationChanged += (o, e) => Err.Handle(reset_dialog_location);
 
         if (!File.Exists(Settings.Root.LastComparedFile))
             Settings.Root.LastComparedFile = null;
@@ -44,7 +47,7 @@ public partial class FileChooser : Window
             Close();
         }
 
-        b_open_system_chooser.Click += (o, e) => Utils.HandleException(() =>
+        b_open_system_chooser.Click += (o, e) => Err.Handle(() =>
         {
             var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
@@ -78,7 +81,7 @@ public partial class FileChooser : Window
             e.Handled = true;
         });
 
-        KeyDown += (o, e) => Utils.HandleException(() =>
+        KeyDown += (o, e) => Err.Handle(() =>
         {
             if (e.Key == Key.Enter)
             {

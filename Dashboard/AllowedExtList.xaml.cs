@@ -6,6 +6,9 @@ using System.Collections.Generic;
 using System.Windows.Media;
 using System.Windows.Controls;
 
+using SunSharpUtils;
+using SunSharpUtils.WPF;
+
 namespace Dashboard;
 
 public partial class AllowedExtList : UserControl
@@ -50,7 +53,9 @@ public partial class AllowedExtList : UserControl
             ("Invalid extension", "Extension must be non-empty and contain only letters and digits, excluding the dot")
         );
         c_new_ext.Content = tb_new_ext;
-        b_add_ext.Click += (o,e)=> Utils.HandleException(() => tb_new_ext.TryCommit());
+        tb_new_ext.Commited += () => tb_new_ext.ResetContent("");
+
+        b_add_ext.Click += (o,e)=> Err.Handle(() => tb_new_ext.TryCommit());
 
     }
 
@@ -202,7 +207,7 @@ public partial class AllowedExtList : UserControl
 
         sb.AppendLine($"Commit?");
 
-        if (!CustomMessageBox.ShowYesNo("Confirm changes", sb.ToString(), App.Current?.MainWindow))
+        if (!CustomMessageBox.ShowYesNo("Confirm changes", sb.ToString(), WPFCommon.CurrentApp?.MainWindow))
             return;
 
         var add_gen_type = AskRegenType(

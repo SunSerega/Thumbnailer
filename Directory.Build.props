@@ -9,6 +9,11 @@
 		<NoWarn>1701;1702;CA1416</NoWarn>
 		<LangVersion>latest</LangVersion>
 	</PropertyGroup>
+
+	<Target Name="RestoreNuget" BeforeTargets="PreBuildEvent">
+		<Exec Command="nuget restore &quot;$(SolutionPath)&quot;" />
+		<Message Text="Restored nuget" Importance="high"/>
+	</Target>
 	
 </Project>
 

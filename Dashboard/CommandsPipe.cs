@@ -7,7 +7,8 @@ using System.Security.AccessControl;
 using System.Linq;
 using System.Collections.Generic;
 
-using System.Windows;
+using SunSharpUtils;
+using SunSharpUtils.WPF;
 
 namespace Dashboard;
 public class CommandsPipe
@@ -25,7 +26,7 @@ public class CommandsPipe
 
     private readonly Dictionary<int, Action<Stream>> command_handlers = new()
     {
-        { Commands.NewerKillsOlder, _=>App.Current!.Dispatcher.Invoke(App.Current.Shutdown) },
+        { Commands.NewerKillsOlder, _=>Common.Shutdown() },
     };
     public void AddThumbGen(ThumbGenerator thumb_gen) =>
         command_handlers.Add(Commands.GimmiThumb, str =>
@@ -62,7 +63,7 @@ public class CommandsPipe
 
                 var need_old_proc_kill_command = true;
                 //Separate thread, in case old process accepts message, but then hangs
-                new System.Threading.Thread(() => Utils.HandleException(() =>
+                new System.Threading.Thread(() => Err.Handle(() =>
                 {
                     while (need_old_proc_kill_command)
                     {
@@ -92,7 +93,7 @@ public class CommandsPipe
                     if (p.WaitForExit(TimeSpan.FromSeconds(1)))
                         continue;
 
-                    var mb = new CustomMessageBox($"Force killing [{p.Id}]", null, App.Current?.MainWindow);
+                    var mb = new CustomMessageBox($"Force killing [{p.Id}]", null, WPFCommon.CurrentApp?.MainWindow);
                     p.WaitForExitAsync().ContinueWith(t => mb.Dispatcher.Invoke(mb.Close));
                     mb.ShowDialog();
 
@@ -141,13 +142,13 @@ public class CommandsPipe
                     server.Flush();
                     server.Disconnect();
                 }
-                catch when (App.Current?.IsShuttingDown??false)
+                catch when (Common.IsShuttingDown)
                 {
                     break;
                 }
                 catch (Exception e)
                 {
-                    Utils.HandleException(e);
+                    Err.Handle(e);
                 }
         })
         {

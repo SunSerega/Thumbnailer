@@ -8,6 +8,9 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 
+using SunSharpUtils;
+using SunSharpUtils.Threading;
+
 namespace Dashboard;
 
 public class ShortcutManager
@@ -90,7 +93,7 @@ public class ShortcutManager
             }
             catch (COMException e)
             {
-                CustomMessageBox.Show($"Failed to update shortcut {lnk}", e.ToString());
+                Err.Handle(new MessageException($"Failed to update shortcut {lnk}\n\n{e}"));
                 throw;
             }
             lnk_target_cache[lnk] = (lnk_target, get_lnk_change_time(lnk));

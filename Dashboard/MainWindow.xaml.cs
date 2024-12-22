@@ -4,12 +4,14 @@ using System.Linq;
 using System.Collections.Generic;
 
 using System.IO;
-using System.Text;
 using System.Globalization;
 
 using System.Windows;
 using System.Windows.Input;
-using System.Windows.Media;
+
+using SunSharpUtils;
+using SunSharpUtils.WPF;
+using SunSharpUtils.Threading;
 
 namespace Dashboard;
 
@@ -29,8 +31,8 @@ public partial class MainWindow : Window
             var (main_thr_pool, pipe) = LogicInit();
 
             if (shutdown_triggered)
-                App.Current!.Shutdown(0);
-            if (App.Current!.IsShuttingDown)
+                Common.Shutdown();
+            if (Common.IsShuttingDown)
                 return;
 
             SetUpJobCount(main_thr_pool);
@@ -59,7 +61,7 @@ public partial class MainWindow : Window
         }
         catch (Exception e)
         {
-            Utils.HandleException(e);
+            Err.Handle(e);
             Environment.Exit(-1);
         }
 
@@ -97,7 +99,7 @@ public partial class MainWindow : Window
         /**/
 
         var pipe = new CommandsPipe();
-        App.Current!.Exit += (o, e) => Utils.HandleException(pipe.Shutdown);
+        Common.OnShutdown += _ => Err.Handle(pipe.Shutdown);
 
         return (main_thr_pool, pipe);
     }
@@ -105,12 +107,12 @@ public partial class MainWindow : Window
     private void SetUpJobCount(CustomThreadPool main_thr_pool)
     {
         slider_want_job_count.ValueChanged += (o, e) =>
-            Utils.HandleException(() => main_thr_pool.SetJobCount((int)e.NewValue));
+            Err.Handle(() => main_thr_pool.SetJobCount((int)e.NewValue));
         slider_want_job_count.Value = Settings.Root.MaxJobCount;
 
         slider_active_job_count.Maximum = main_thr_pool.MaxJobCount;
         main_thr_pool.ActiveJobsCountChanged += () =>
-            Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
+            Dispatcher.BeginInvoke(() => Err.Handle(() =>
                 slider_active_job_count.Value = main_thr_pool.ActiveJobsCount
             ));
 
@@ -124,9 +126,9 @@ public partial class MainWindow : Window
             pending_jobs_count_updater.Trigger(TimeSpan.FromSeconds(1.0/60), false);
 
         b_view_jobs.Click += (o, e) =>
-            Utils.HandleException(() => new JobList(main_thr_pool).Show());
+            Err.Handle(() => new JobList(main_thr_pool).Show());
 
-        void update_log_count() => Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
+        void update_log_count() => Dispatcher.BeginInvoke(() => Err.Handle(() =>
         {
             var s = "Log";
             var c = Log.Count;
@@ -138,7 +140,7 @@ public partial class MainWindow : Window
         Log.CountUpdated += update_log_count;
         update_log_count();
         b_view_log.Click += (o, e) =>
-            Utils.HandleException(Log.Show);
+            Err.Handle(Log.Show);
 
     }
 
@@ -147,12 +149,12 @@ public partial class MainWindow : Window
         main_thr_pool.AddJob("Init ThumbGenerator", change_subjob =>
         {
             var thumb_gen = new ThumbGenerator(main_thr_pool, "cache", change_subjob);
-            if (App.Current!.IsShuttingDown) return;
+            if (Common.IsShuttingDown) return;
 
             change_subjob($"Apply ThumbGenerator");
             Dispatcher.Invoke(() =>
             {
-                App.Current.Exit += (o, e) => Utils.HandleException(thumb_gen.Shutdown);
+                Common.OnShutdown += _ => Err.Handle(thumb_gen.Shutdown);
                 on_load(thumb_gen);
             });
             change_subjob(null);
@@ -190,7 +192,7 @@ public partial class MainWindow : Window
         tb_cache_cap_v.Commited += recalculate_cache_cap;
         recalculate_cache_cap();
 
-        cb_cache_cap_scale.SelectionChanged += (o, e) => Utils.HandleException(() =>
+        cb_cache_cap_scale.SelectionChanged += (o, e) => Err.Handle(() =>
         {
             Settings.Root.MaxCacheSize = ByteCount.Compose(Settings.Root.MaxCacheSize.Split().v, cb_cache_cap_scale.SelectedIndex);
             recalculate_cache_cap();
@@ -199,9 +201,9 @@ public partial class MainWindow : Window
 
     private void SetUpCacheFillInfo(ThumbGenerator thumb_gen, CustomThreadPool main_thr_pool)
     {
-        b_cache_clear.Click += (o, e) => Utils.HandleException(() => main_thr_pool.AddJob("Clearing cache", thumb_gen.ClearAll));
+        b_cache_clear.Click += (o, e) => Err.Handle(() => main_thr_pool.AddJob("Clearing cache", thumb_gen.ClearAll));
 
-        b_cache_regen.Click += (o, e) => Utils.HandleException(() => thumb_gen.RegenAll(true));
+        b_cache_regen.Click += (o, e) => Err.Handle(() => thumb_gen.RegenAll(true));
 
         ByteCount cache_fill = 0;
         void update_cache_info() =>
@@ -226,12 +228,12 @@ public partial class MainWindow : Window
             }
 
         }, $"cache size recalculation");
-        IsVisibleChanged += (o, e) => Utils.HandleException(() =>
+        IsVisibleChanged += (o, e) => Err.Handle(() =>
         {
             if (!IsVisible) return;
             cache_info_updater.Trigger(TimeSpan.Zero, false);
         });
-        thumb_gen.CacheSizeChanged += byte_change => Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
+        thumb_gen.CacheSizeChanged += byte_change => Dispatcher.BeginInvoke(() => Err.Handle(() =>
         {
             cache_fill += byte_change;
             update_cache_info();
@@ -253,7 +255,7 @@ public partial class MainWindow : Window
         {
             if (progress>1) progress = 1;
             if (progress<0) progress = 0;
-            Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
+            Dispatcher.BeginInvoke(() => Err.Handle(() =>
                 pb_vid_pregen.Value = progress
             ));
         }
@@ -281,7 +283,7 @@ public partial class MainWindow : Window
             curr_compare_fname = null;
             System.Threading.Interlocked.Exchange(ref last_cache_use, null)?.Dispose();
         }
-        void begin_thumb_compare(string fname) => Utils.HandleException(() =>
+        void begin_thumb_compare(string fname) => Err.Handle(() =>
         {
             clear_thumb_compare_file();
             // Increament in the clear_thumb_compare_file
@@ -293,7 +295,7 @@ public partial class MainWindow : Window
                 bool is_outdated() => compare_id != current_compare_id;
                 if (is_outdated()) return;
                 var new_cache_use = cfi.BeginUse("continuous thumb compare", is_outdated);
-                Dispatcher.BeginInvoke(() => Utils.HandleException(() =>
+                Dispatcher.BeginInvoke(() => Err.Handle(() =>
                 {
                     System.Threading.Interlocked.Exchange(ref last_cache_use, new_cache_use)?.Dispose();
                     if (is_outdated()) return;
@@ -342,7 +344,7 @@ public partial class MainWindow : Window
                         var old_ind = cfi.ChosenThumbOptionInd;
                         cfi.ApplySourceAt(true, _ => { }, new_ind, null, out var initial_pos, set_pregen_progress);
                         // invoke sync in thump_compare_updater thread
-                        Dispatcher.Invoke(() => Utils.HandleException(() =>
+                        Dispatcher.Invoke(() => Err.Handle(() =>
                         {
                             slider_vid_timestamp.Value = initial_pos;
                             thumb_compare_gen.Set(cfi.CurrentThumbBmp);
@@ -483,11 +485,11 @@ public partial class MainWindow : Window
         pipe.AddLoadCompareHandler(inp =>
         {
             var lst = extract_file_lst(inp);
-            Dispatcher.BeginInvoke(() => Utils.HandleException(() => apply_file_lst(lst)));
+            Dispatcher.BeginInvoke(() => Err.Handle(() => apply_file_lst(lst)));
         });
 
         foreach (var tcv in thumb_compare_all)
-            tcv.MouseDown += (o, e) => Utils.HandleException(() =>
+            tcv.MouseDown += (o, e) => Err.Handle(() =>
             {
                 if (e.ChangedButton == MouseButton.Left)
                 {
@@ -507,7 +509,7 @@ public partial class MainWindow : Window
                 }
             });
 
-        b_swap_compare.Click += (o, e) => Utils.HandleException(() =>
+        b_swap_compare.Click += (o, e) => Err.Handle(() =>
         {
 
             var t = (c_thumb_compare_2.Child, c_thumb_compare_1.Child);
@@ -518,7 +520,7 @@ public partial class MainWindow : Window
 
         });
 
-        b_reload_compare.Click += (o, e) => Utils.HandleException(() =>
+        b_reload_compare.Click += (o, e) => Err.Handle(() =>
         {
             if (curr_compare_fname is null) return;
             begin_thumb_compare(curr_compare_fname);
@@ -546,14 +548,14 @@ public partial class MainWindow : Window
         grid_thumb_compare.DragEnter += drag_handler;
         grid_thumb_compare.DragOver += drag_handler;
 
-        grid_thumb_compare.Drop += (o, e) => Utils.HandleException(() =>
+        grid_thumb_compare.Drop += (o, e) => Err.Handle(() =>
         {
             var lst = drag_cache!.Value.lst;
             apply_file_lst(lst);
             e.Handled = true;
         });
 
-        Closing += (o, e) => Utils.HandleException(clear_thumb_compare_file);
+        Closing += (o, e) => Err.Handle(clear_thumb_compare_file);
         grid_thumb_compare.AllowDrop = true;
     }
 

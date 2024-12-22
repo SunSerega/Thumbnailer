@@ -5,6 +5,10 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 
+using SunSharpUtils;
+using SunSharpUtils.WPF;
+using SunSharpUtils.Threading;
+
 namespace Dashboard;
 
 public sealed class RootSettings : Settings
@@ -164,7 +168,7 @@ public abstract class Settings
                 if (prop is null)
                 {
                     if (!CustomMessageBox.ShowYesNo($"Settings property [{key}] not found", "Continue without it?"))
-                        App.Current!.Shutdown();
+                        Common.Shutdown();
                     continue;
                 }
 
@@ -191,7 +195,7 @@ public abstract class Settings
                 {
                     if (CustomMessageBox.ShowYesNo($"Key=[{key}], val=[{s_val}] could not be loaded as [{t}]", $"Continue anyway?"))
                         continue;
-                    App.Current!.Shutdown();
+                    Common.Shutdown();
                     throw new LoadCanceledException();
                 }
                 settings[key] = o_val;

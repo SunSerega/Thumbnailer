@@ -6,6 +6,9 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 
+using SunSharpUtils;
+using SunSharpUtils.Threading;
+
 namespace Dashboard;
 
 public sealed class CustomThreadPool
@@ -201,7 +204,7 @@ public sealed class CustomThreadPool
         ~ThreadPoolObserverImpl()
         {
             if (disposed) return;
-            CustomMessageBox.Show("ThreadPoolObserver wasn't properly disposed off");
+            Err.Handle(new MessageException("ThreadPoolObserver wasn't properly disposed off"));
         }
 
     }
@@ -381,7 +384,7 @@ public sealed class CustomThreadPool
                     }
                     root.InvokePendingJobCountChanged();
 
-                    if (App.Current?.IsShuttingDown??false)
+                    if (Common.IsShuttingDown)
                         break;
 
                     if (!ChangeState(job))
@@ -400,7 +403,7 @@ public sealed class CustomThreadPool
                 }
                 catch (Exception e)
                 {
-                    Utils.HandleException(e);
+                    Err.Handle(e);
                 }
         }
 

@@ -16,6 +16,10 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
+using SunSharpUtils;
+using SunSharpUtils.WPF;
+using SunSharpUtils.Threading;
+
 namespace Dashboard;
 
 public class ThumbGenerator
@@ -47,6 +51,7 @@ public class ThumbGenerator
 
         for (var i = 0; i < dirs.Length; ++i)
         {
+            if (Common.IsShuttingDown) return;
             change_subjob($"Loaded {i}/{dirs.Length}");
             var dir = dirs[i];
             Action? purge_act = () => dir.Delete(true);
@@ -135,12 +140,12 @@ public class ThumbGenerator
             ))
                 // File deletion can be suspended by the system,
                 // while explorer is waiting for thumb
-                before_cleanup_loop += ()=>Utils.HandleException(() =>
+                before_cleanup_loop += () => Err.Handle(() =>
                 {
                     foreach (var purge_act in purge_acts) purge_act();
                 });
             else
-                App.Current!.Dispatcher.Invoke(() => App.Current.Shutdown(-1));
+                Common.Shutdown(-1);
 
             change_subjob(null);
         }
@@ -157,7 +162,7 @@ public class ThumbGenerator
                 }
                 catch (Exception e)
                 {
-                    Utils.HandleException(e);
+                    Err.Handle(e);
                 }
         })
         {
@@ -661,10 +666,10 @@ public class ThumbGenerator
                 }
                 catch (Exception e)
                 {
-                    Utils.HandleException(e);
+                    Err.Handle(e);
                     // unrecoverable, but also unimaginable
                     Console.Beep(); Console.Beep(); Console.Beep();
-                    App.Current!.Dispatcher.Invoke(() => App.Current.Shutdown(-1));
+                    Common.Shutdown(-1);
                 }
             }
 
@@ -1145,7 +1150,7 @@ public class ThumbGenerator
                                     catch (Exception e)
                                     {
                                         Log.Append($"Error making thumb for [{inp_fname}]: {e}");
-                                        //Utils.HandleException(e);
+                                        //Err.Handle(e);
                                         error_generating = true;
                                         return CommonThumbSources.Broken.Extract(false, 0, null!, null);
                                     }
@@ -1232,7 +1237,7 @@ public class ThumbGenerator
                         }
                         catch (Exception e)
                         {
-                            Utils.HandleException(e);
+                            Err.Handle(e);
                         }
                     } while (0!=Interlocked.Decrement(ref gen_jobs_assigned));
                     this.gen_job_obj = null;
@@ -1427,13 +1432,13 @@ public class ThumbGenerator
             }
             catch (Exception e)
             {
-                Utils.HandleException(e);
+                Err.Handle(e);
             }
         last_used_id = 0;
         InvokeCacheSizeChanged(0);
         Console.Beep();
-        //App.Current.Dispatcher.Invoke(() =>
-        //    CustomMessageBox.Show("Done clearing cache!", App.Current.MainWindow)
+        //Common.CurrentApp.Dispatcher.Invoke(() =>
+        //    CustomMessageBox.Show("Done clearing cache!", Common.CurrentApp.MainWindow)
         //);
     }, with_priority: true);
 
