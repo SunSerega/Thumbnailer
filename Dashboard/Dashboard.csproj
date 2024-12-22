@@ -4,7 +4,7 @@
 		<OutputType>WinExe</OutputType>
 		<UseWPF>true</UseWPF>
 		<AssemblyName>Dashboard for Thumbnailer</AssemblyName>
-		<ApplicationIcon>Icon.ico</ApplicationIcon>
+		<ApplicationIcon>Assets\Icon.ico</ApplicationIcon>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 	
@@ -25,7 +25,7 @@
 	</ItemGroup>
 	
 	<ItemGroup>
-		<Resource Include="Icon.ico" />
+		<Resource Include="Assets\Icon.ico" />
 	</ItemGroup>
 	
 	<ItemGroup>

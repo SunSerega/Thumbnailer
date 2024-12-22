@@ -22,7 +22,7 @@ public sealed class TrayIcon : TaskbarIcon
 
         ToolTipText = w.Title;
 
-        var icon = new BitmapImage(new("pack://application:,,,/Icon.ico"));
+        var icon = new BitmapImage(new("pack://application:,,,/Assets/Icon.ico"));
         IconSource = icon;
 
         ContextMenu = new();
