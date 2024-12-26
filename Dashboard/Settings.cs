@@ -111,7 +111,7 @@ public sealed class FileSettings(string cache_file_path)
         }
 
         public static ChosenStreamPositionsInfo Parse(string s) =>
-            new(Array.ConvertAll(s.Split(';'), double.Parse));
+            new(s.Split(';').ConvertAll(double.Parse));
 
         public override string ToString() => string.Join(';', pos);
 
@@ -220,7 +220,7 @@ public abstract class Settings
 
             if (!File.Exists(main_save_fname))
             {
-                CustomMessageBox.Show("Error!", "Settings file was not created while meld-ing");
+                CustomMessageBox.ShowOK("Error!", "Settings file was not created while meld-ing");
                 throw new InvalidOperationException();
             }
         }

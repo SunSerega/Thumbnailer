@@ -81,7 +81,7 @@ public partial class COMManip
         catch (COMException e) when (e.HResult == WTS_E_FAILEDEXTRACTION)
         {
             //TODO WTS_E_FAILEDEXTRACTION for "C:\Users\SunSerega\Desktop"
-            //CustomMessageBox.Show(nameof(WTS_E_FAILEDEXTRACTION), path);
+            //CustomMessageBox.ShowOK(nameof(WTS_E_FAILEDEXTRACTION), path);
             return false;
         }
 

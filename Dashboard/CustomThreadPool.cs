@@ -56,15 +56,15 @@ public sealed class CustomThreadPool
         public ThreadPoolObserverImpl(CustomThreadPool root, Action update)
         {
             this.update = update;
-            threads = Array.ConvertAll(root.items, item => item.Thread);
+            threads = root.items.ConvertAll(item => item.Thread);
 
             new_pending_jobs = new(root.pending_jobs);
             if (!new_pending_jobs.IsEmpty)
                 update();
 
-            newly_started_jobs = Array.ConvertAll(root.items, item => item.CurrentJob);
+            newly_started_jobs = root.items.ConvertAll(item => item.CurrentJob);
 
-            changed_subjobs = Array.ConvertAll(newly_started_jobs, job =>
+            changed_subjobs = newly_started_jobs.ConvertAll(job =>
             {
                 if (job?.CurrentSubJob is null) return default(ValueTuple<string?>?);
                 this.update();

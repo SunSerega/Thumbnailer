@@ -475,7 +475,7 @@ public class ThumbGenerator
                     catch (Exception e)
                     {
                         if (i%100 == 0)
-                            CustomMessageBox.Show($"Struggling to delete [{path}]", e.ToString());
+                            CustomMessageBox.ShowOK($"Struggling to delete [{path}]", e.ToString());
                         Thread.Sleep(10);
                     }
             }
@@ -1438,7 +1438,7 @@ public class ThumbGenerator
         InvokeCacheSizeChanged(0);
         Console.Beep();
         //Common.CurrentApp.Dispatcher.Invoke(() =>
-        //    CustomMessageBox.Show("Done clearing cache!", Common.CurrentApp.MainWindow)
+        //    CustomMessageBox.ShowOK("Done clearing cache!", Common.CurrentApp.MainWindow)
         //);
     }, with_priority: true);
 

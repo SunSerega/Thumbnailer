@@ -89,7 +89,7 @@ public partial class FileChooser : Window
 
                 if (!File.Exists(path) && !Directory.Exists(path))
                 {
-                    CustomMessageBox.Show("File/Dir does not exist", path, owner: this);
+                    CustomMessageBox.ShowOK("File/Dir does not exist", path, owner: this);
                     return;
                 }
 

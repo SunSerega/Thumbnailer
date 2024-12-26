@@ -297,7 +297,7 @@ public static class FFmpeg
             been_killed = true;
             p.Kill();
             var (otp, err) = t.Result;
-            CustomMessageBox.Show(
+            CustomMessageBox.ShowOK(
                 $"[{p.StartInfo.FileName} {p.StartInfo.Arguments}] hanged. Output:",
                 otp + "\n\n===================\n\n" + err
             );

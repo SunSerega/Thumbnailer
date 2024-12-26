@@ -193,7 +193,7 @@ public sealed class WorkingJobList : FrameworkElement
 
         hor_lines = Enumerable.Range(0, max_jobs-1).Select(_ => MakeLine()).ToArray();
         ver_lines = Enumerable.Range(0, 2).Select(_ => MakeLine()).ToArray();
-        header_rects = Array.ConvertAll(header_brushes, b => new Rectangle { Fill = b });
+        header_rects = header_brushes.ConvertAll(b => new Rectangle { Fill = b });
         content_tbs = Enumerable.Range(0, max_jobs).Select(_ => (MakeTB(), MakeTB())).ToArray();
 
         all_visuals = Enumerable.Empty<UIElement>()
