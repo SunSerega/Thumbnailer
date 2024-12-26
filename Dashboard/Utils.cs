@@ -360,7 +360,7 @@ public static class FFmpeg
         });
 
         var res = new InvokeState(p, t);
-        delayed_kill_switch.Trigger(res, TimeSpan.FromSeconds(600), null);
+        delayed_kill_switch.TriggerUrgent(res, TimeSpan.FromSeconds(600));
         return res;
     }
 

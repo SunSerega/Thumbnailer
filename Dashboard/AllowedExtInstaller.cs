@@ -116,6 +116,6 @@ public static class AllowedExtInstaller
         if (trigger) Trigger();
     }
 
-    public static void Trigger() => updater.Trigger(TimeSpan.Zero, false);
+    public static void Trigger() => updater.TriggerNow();
 
 }

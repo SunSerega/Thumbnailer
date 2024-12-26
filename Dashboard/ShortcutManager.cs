@@ -106,7 +106,7 @@ public class ShortcutManager
     public static void UpdateFor(string target)
     {
         targets_waiting.Add(target);
-        lnk_updater.Trigger(TimeSpan.Zero, false);
+        lnk_updater.TriggerNow();
     }
 
 }

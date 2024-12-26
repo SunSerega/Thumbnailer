@@ -123,7 +123,7 @@ public partial class MainWindow : Window
             Dispatcher.Invoke(() => tb_pending_jobs_count.Text = $"{c1} ({c2})");
         }, "Pending jobs count update");
         main_thr_pool.PendingJobCountChanged += () =>
-            pending_jobs_count_updater.Trigger(TimeSpan.FromSeconds(1.0/60), false);
+            pending_jobs_count_updater.TriggerUrgent(TimeSpan.FromSeconds(1.0/60));
 
         b_view_jobs.Click += (o, e) =>
             Err.Handle(() => new JobList(main_thr_pool).Show());
@@ -231,15 +231,15 @@ public partial class MainWindow : Window
         IsVisibleChanged += (o, e) => Err.Handle(() =>
         {
             if (!IsVisible) return;
-            cache_info_updater.Trigger(TimeSpan.Zero, false);
+            cache_info_updater.TriggerNow();
         });
         thumb_gen.CacheSizeChanged += byte_change => Dispatcher.BeginInvoke(() => Err.Handle(() =>
         {
             cache_fill += byte_change;
             update_cache_info();
-            cache_info_updater.Trigger(TimeSpan.FromSeconds(0.5), true);
+            cache_info_updater.TriggerPostpone(TimeSpan.FromSeconds(0.5));
         }));
-        cache_info_updater.Trigger(TimeSpan.Zero, false);
+        cache_info_updater.TriggerNow();
 
     }
 
@@ -320,7 +320,7 @@ public partial class MainWindow : Window
                             bts[i].Click += (_, _) =>
                             {
                                 next_thumb_compare_update = () => select_source(ind);
-                                thump_compare_updater.Trigger(TimeSpan.Zero, false);
+                                thump_compare_updater.TriggerNow();
                             };
                         }
                         sp_vid_stream_buttons.Children.Add(bts[i]);
@@ -339,7 +339,7 @@ public partial class MainWindow : Window
                                     thumb_compare_gen.Set(cfi.CurrentThumbBmp)
                                 );
                             };
-                            thump_compare_updater.Trigger(TimeSpan.Zero, false);
+                            thump_compare_updater.TriggerNow();
                         };
                         var old_ind = cfi.ChosenThumbOptionInd;
                         cfi.ApplySourceAt(true, _ => { }, new_ind, null, out var initial_pos, set_pregen_progress);
@@ -392,7 +392,7 @@ public partial class MainWindow : Window
 
             lock (awaiting_mass_gen_lst)
                 awaiting_mass_gen_lst.AddRange(lst);
-            delayed_mass_gen.Trigger(TimeSpan.Zero, false);
+            delayed_mass_gen.TriggerNow();
         }
 
         string[] extract_file_lst(IEnumerable<string> inp)

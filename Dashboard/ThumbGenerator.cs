@@ -797,7 +797,7 @@ public class ThumbGenerator
                     settings.CurrentThumbIsFinal = false;
                     SetTempSource(CommonThumbSources.Waiting);
                     delayed_gen_args = (cause, on_regenerated, force_regen);
-                    delayed_gen.Trigger(this, total_wait-waited, true);
+                    delayed_gen.TriggerPostpone(this, total_wait-waited);
                     return make_cache_use();
                 }
             }

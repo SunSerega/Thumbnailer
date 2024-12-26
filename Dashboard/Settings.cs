@@ -268,7 +268,7 @@ public abstract class Settings
     }, "Settings resaving");
     private void RequestResave(TimeSpan delay)
     {
-        resave_updater.Trigger(this, delay, true);
+        resave_updater.TriggerPostpone(this, delay);
     }
 
     protected static (T1, T2) ParseSep<T1,T2>(string s, Func<string, T1> parse1, Func<string, T2> parse2, char sep = ':')
