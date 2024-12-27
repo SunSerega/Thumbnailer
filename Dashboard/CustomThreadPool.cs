@@ -430,7 +430,7 @@ public sealed class CustomThreadPool
         for (int i = c; i < want_job_count; i++)
             items[i].suspended_wh.Reset();
 
-        Settings.Root.MaxJobCount = c;
+        GlobalSettings.Instance.MaxJobCount = c;
         want_job_count = c;
     }
 

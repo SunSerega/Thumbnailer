@@ -108,7 +108,7 @@ public partial class MainWindow : Window
     {
         slider_want_job_count.ValueChanged += (o, e) =>
             Err.Handle(() => main_thr_pool.SetJobCount((int)e.NewValue));
-        slider_want_job_count.Value = Settings.Root.MaxJobCount;
+        slider_want_job_count.Value = GlobalSettings.Instance.MaxJobCount;
 
         slider_active_job_count.Maximum = main_thr_pool.MaxJobCount;
         main_thr_pool.ActiveJobsCountChanged += () =>
@@ -174,14 +174,14 @@ public partial class MainWindow : Window
             double.TryParse(s, NumberStyles.AllowDecimalPoint | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out v);
         var tb_cache_cap_v = new FilteredTextBox<double>(
             try_parse_cache_cap,
-            v => Settings.Root.MaxCacheSize = ByteCount.Compose(v, cb_cache_cap_scale.SelectedIndex),
+            v => GlobalSettings.Instance.MaxCacheSize = ByteCount.Compose(v, cb_cache_cap_scale.SelectedIndex),
             ("Invalid size", "Expected a non-negative float")
         );
         c_cache_cap_v.Content = tb_cache_cap_v;
 
         void recalculate_cache_cap()
         {
-            var (size_v, size_scale_ind) = Settings.Root.MaxCacheSize.Split();
+            var (size_v, size_scale_ind) = GlobalSettings.Instance.MaxCacheSize.Split();
             if (!tb_cache_cap_v.Edited)
             {
                 var cap_v = Math.Round(size_v, 2, MidpointRounding.AwayFromZero).ToString("N2");
@@ -194,7 +194,7 @@ public partial class MainWindow : Window
 
         cb_cache_cap_scale.SelectionChanged += (o, e) => Err.Handle(() =>
         {
-            Settings.Root.MaxCacheSize = ByteCount.Compose(Settings.Root.MaxCacheSize.Split().v, cb_cache_cap_scale.SelectedIndex);
+            GlobalSettings.Instance.MaxCacheSize = ByteCount.Compose(GlobalSettings.Instance.MaxCacheSize.Split().v, cb_cache_cap_scale.SelectedIndex);
             recalculate_cache_cap();
         });
     }
@@ -218,13 +218,13 @@ public partial class MainWindow : Window
             cache_fill = get_cache_fill();
             Dispatcher.Invoke(update_cache_info);
 
-            if (cache_fill > Settings.Root.MaxCacheSize)
+            if (cache_fill > GlobalSettings.Instance.MaxCacheSize)
             {
                 if (thumb_gen.ClearInvalid()!=0) return;
                 if (thumb_gen.ClearExtraFiles()!=0) return;
                 // recalc needed size change here, in case it changed
                 cache_fill = get_cache_fill();
-                thumb_gen.ClearOldest(size_to_clear: cache_fill-Settings.Root.MaxCacheSize);
+                thumb_gen.ClearOldest(size_to_clear: cache_fill-GlobalSettings.Instance.MaxCacheSize);
             }
 
         }, $"cache size recalculation");
@@ -365,7 +365,7 @@ public partial class MainWindow : Window
             grid_thumb_compare.HorizontalAlignment = HorizontalAlignment.Center;
             c_thumb_compare_1.VerticalAlignment = VerticalAlignment.Bottom;
             c_thumb_compare_2.VerticalAlignment = VerticalAlignment.Top;
-            Settings.Root.LastComparedFile = fname;
+            GlobalSettings.Instance.LastComparedFile = fname;
             curr_compare_fname = fname;
             b_reload_compare.IsEnabled = true;
         });
@@ -441,7 +441,7 @@ public partial class MainWindow : Window
                 return res!;
             }
 
-            var exts = Settings.Root.AllowedExts;
+            var exts = GlobalSettings.Instance.AllowedExts;
             var es_arg = "ext:" + string.Join(';', exts);
 
             return inp.AsParallel().SelectMany(path =>

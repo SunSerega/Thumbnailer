@@ -316,7 +316,7 @@ public class ThumbGenerator
         private bool error_generating = false;
         public bool IsDeletable =>
             !File.Exists(InpPath) ||
-            !Settings.Root.AllowedExts.MatchesFile(InpPath) ||
+            !GlobalSettings.Instance.AllowedExts.MatchesFile(InpPath) ||
             (error_generating && LastCacheUseTime+TimeSpan.FromSeconds(30) < DateTime.UtcNow);
 
         #endregion
@@ -334,9 +334,8 @@ public class ThumbGenerator
         }
         private void SetSources(Action<string?> change_subjob, ThumbSource[] thumb_sources)
         {
-            var chosen_poss = settings.ChosenStreamPositions;
-            if (chosen_poss is null || chosen_poss.Count != thumb_sources.Length)
-                settings.ChosenStreamPositions = chosen_poss = new FileSettings.ChosenStreamPositionsInfo(thumb_sources.Length);
+            if (settings.ChosenStreamPositions.Count != 0 && settings.ChosenStreamPositions.Count != thumb_sources.Length)
+                settings.ChosenStreamPositions = FileSettings.ChosenStreamPositionsInfo.Empty;
             this.thumb_sources = thumb_sources;
             ApplySourceAt(true, change_subjob, settings.ChosenThumbOptionInd??thumb_sources.Length-1, null, out _, null);
         }
@@ -349,8 +348,6 @@ public class ThumbGenerator
         public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos, Action<double>? on_pre_extract_progress)
         {
             using var this_locker = new ObjectLocker(this);
-            if (settings.ChosenStreamPositions is null)
-                throw new InvalidOperationException();
             var source = ThumbSources[ind];
 
             double pos = in_pos ?? settings.ChosenStreamPositions[ind];
@@ -368,12 +365,7 @@ public class ThumbGenerator
 
             settings.ChosenThumbOptionInd = ind;
             if (settings.ChosenStreamPositions[ind] != pos)
-            {
-                var poss = settings.ChosenStreamPositions;
-                poss[ind] = pos;
-                settings.ChosenStreamPositions = null;
-                settings.ChosenStreamPositions = poss;
-            }
+                settings.ChosenStreamPositions = settings.ChosenStreamPositions.WithPos(ThumbSources.Count, ind, pos);
 
             var base_path = settings.GetSettingsDir() + @"\";
             if (res.StartsWith(base_path))
@@ -1271,7 +1263,6 @@ public class ThumbGenerator
             using var this_locker = new ObjectLocker(this);
             if (has_shut_down) throw new InvalidOperationException();
             has_shut_down = true;
-            settings.Shutdown();
         }
 
         #endregion

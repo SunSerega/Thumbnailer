@@ -15,11 +15,12 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 using SunSharpUtils.WPF;
+using SunSharpUtils.Settings;
 using SunSharpUtils.Threading;
 
 namespace Dashboard;
 
-public readonly struct ByteCount(long in_bytes) : IEquatable<ByteCount>
+public readonly struct ByteCount(long in_bytes) : IEquatable<ByteCount>, ISettingsSaveable<ByteCount>
 {
     private readonly long in_bytes = in_bytes;
 
@@ -96,6 +97,9 @@ public readonly struct ByteCount(long in_bytes) : IEquatable<ByteCount>
     }
 
     public override int GetHashCode() => in_bytes.GetHashCode();
+
+    static string ISettingsSaveable<ByteCount>.SerializeSetting(ByteCount setting) => setting.ToString();
+    static ByteCount ISettingsSaveable<ByteCount>.DeserializeSetting(string setting) => Parse(setting);
 
 }
 
@@ -188,7 +192,7 @@ public sealed class OneToManyLock
 
 }
 
-public readonly struct FileExtList : ICollection<string>, IEquatable<FileExtList>
+public readonly struct FileExtList : ICollection<string>, IEquatable<FileExtList>, ISettingsSaveable<FileExtList>
 {
     private readonly HashSet<string> l = new(StringComparer.OrdinalIgnoreCase);
 
@@ -241,6 +245,9 @@ public readonly struct FileExtList : ICollection<string>, IEquatable<FileExtList
     IEnumerator IEnumerable.GetEnumerator() => l.GetEnumerator();
 
     public override string ToString() => string.Join(';', l.Order());
+
+    static string ISettingsSaveable<FileExtList>.SerializeSetting(FileExtList setting) => setting.ToString();
+    static FileExtList ISettingsSaveable<FileExtList>.DeserializeSetting(string setting) => Parse(setting);
 
 }
 

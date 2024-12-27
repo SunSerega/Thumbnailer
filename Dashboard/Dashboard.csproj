@@ -32,6 +32,7 @@
 		<PackageReference Include="CopyOnWrite" Version="0.5.0" />
 		<PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
 		<PackageReference Include="SunSharpUtils" Version="1.0.0" />
+		<PackageReference Include="SunSharpUtils.Settings" Version="1.0.0" />
 		<PackageReference Include="SunSharpUtils.Threading" Version="1.0.0" />
 		<PackageReference Include="SunSharpUtils.WPF" Version="1.0.0" />
 		<PackageReference Include="System.Speech" Version="9.0.0" />

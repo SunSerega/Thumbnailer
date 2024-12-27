@@ -32,11 +32,11 @@ public partial class FileChooser : Window
         SizeChanged += (o, e) => Err.Handle(reset_dialog_location);
         LocationChanged += (o, e) => Err.Handle(reset_dialog_location);
 
-        if (!File.Exists(Settings.Root.LastComparedFile))
-            Settings.Root.LastComparedFile = null;
-        if (Settings.Root.LastComparedFile != null)
+        if (!File.Exists(GlobalSettings.Instance.LastComparedFile))
+            GlobalSettings.Instance.LastComparedFile = null;
+        if (GlobalSettings.Instance.LastComparedFile != null)
         {
-            tb_choise.Text = Settings.Root.LastComparedFile;
+            tb_choise.Text = GlobalSettings.Instance.LastComparedFile;
             tb_choise.SelectAll();
         }
         tb_choise.Focus();
@@ -52,7 +52,7 @@ public partial class FileChooser : Window
             var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "Open File",
-                Filter = $"Supported files|{string.Join(';', Settings.Root.AllowedExts.Select(ext => "*."+ext))}|All files|*.*",
+                Filter = $"Supported files|{string.Join(';', GlobalSettings.Instance.AllowedExts.Select(ext => "*."+ext))}|All files|*.*",
                 Multiselect = true,
             };
 
@@ -63,7 +63,7 @@ public partial class FileChooser : Window
                     path = Path.GetDirectoryName(path);
                     if (path is null)
                     {
-                        openFileDialog.InitialDirectory = Path.GetDirectoryName(Settings.Root.LastComparedFile);
+                        openFileDialog.InitialDirectory = Path.GetDirectoryName(GlobalSettings.Instance.LastComparedFile);
                         break;
                     }
                     if (Directory.Exists(path))

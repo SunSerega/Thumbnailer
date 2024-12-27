@@ -81,7 +81,7 @@ public partial class AllowedExtList : UserControl
 
     public void AddFromSettings()
     {
-        foreach (var ext in Settings.Root.AllowedExts)
+        foreach (var ext in GlobalSettings.Instance.AllowedExts)
         {
             if (!selected_exts.Add(ext))
                 throw new InvalidOperationException();
@@ -118,9 +118,9 @@ public partial class AllowedExtList : UserControl
     {
         if (!selected_exts.Add(ext))
             throw new InvalidOperationException();
-        b_check_n_commit.IsEnabled = selected_exts != Settings.Root.AllowedExts;
+        b_check_n_commit.IsEnabled = selected_exts != GlobalSettings.Instance.AllowedExts;
 
-        if (Settings.Root.AllowedExts.Contains(ext))
+        if (GlobalSettings.Instance.AllowedExts.Contains(ext))
         {
             var vis = ext_vis_map[ext];
             vis.b_body.Background = b_ext_commited;
@@ -143,9 +143,9 @@ public partial class AllowedExtList : UserControl
     {
         if (!selected_exts.Remove(ext))
             throw new InvalidOperationException();
-        b_check_n_commit.IsEnabled = selected_exts != Settings.Root.AllowedExts;
+        b_check_n_commit.IsEnabled = selected_exts != GlobalSettings.Instance.AllowedExts;
 
-        if (Settings.Root.AllowedExts.Contains(ext))
+        if (GlobalSettings.Instance.AllowedExts.Contains(ext))
         {
             var vis = ext_vis_map[ext];
             vis.b_body.Background = b_ext_removed;
@@ -177,8 +177,8 @@ public partial class AllowedExtList : UserControl
 
     public void CommitAll()
     {
-        var add = selected_exts.Where(ext => !Settings.Root.AllowedExts.Contains(ext)).ToArray();
-        var rem = Settings.Root.AllowedExts.Where(ext => !selected_exts.Contains(ext)).ToArray();
+        var add = selected_exts.Where(ext => !GlobalSettings.Instance.AllowedExts.Contains(ext)).ToArray();
+        var rem = GlobalSettings.Instance.AllowedExts.Where(ext => !selected_exts.Contains(ext)).ToArray();
 
         if (add.Length==0 && rem.Length == 0)
             throw new InvalidOperationException();
@@ -234,7 +234,7 @@ public partial class AllowedExtList : UserControl
         }
         AllowedExtInstaller.Trigger();
 
-        Settings.Root.AllowedExts = new(selected_exts);
+        GlobalSettings.Instance.AllowedExts = new(selected_exts);
         b_check_n_commit.IsEnabled = false;
     }
 
