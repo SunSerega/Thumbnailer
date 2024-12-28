@@ -9,6 +9,8 @@ using System.Windows.Controls;
 using SunSharpUtils;
 using SunSharpUtils.WPF;
 
+using Dashboard.Settings;
+
 namespace Dashboard;
 
 public partial class AllowedExtList : UserControl
@@ -170,7 +172,7 @@ public partial class AllowedExtList : UserControl
             return ExtRegenType.Skip;
         return CustomMessageBox.Show(
             title,
-            string.Join(';', exts) + "\n\nPress Escape to cancel",
+            exts.JoinToString(';') + "\n\nPress Escape to cancel",
             options
         );
     }

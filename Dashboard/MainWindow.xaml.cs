@@ -11,7 +11,10 @@ using System.Windows.Input;
 
 using SunSharpUtils;
 using SunSharpUtils.WPF;
+using SunSharpUtils.Settings;
 using SunSharpUtils.Threading;
+
+using Dashboard.Settings;
 
 namespace Dashboard;
 
@@ -55,7 +58,7 @@ public partial class MainWindow : Window
             });
 
         }
-        catch (LoadCanceledException)
+        catch (SettingsLoadUserAbortedException)
         {
             Environment.Exit(-1);
         }
@@ -106,8 +109,12 @@ public partial class MainWindow : Window
 
     private void SetUpJobCount(CustomThreadPool main_thr_pool)
     {
-        slider_want_job_count.ValueChanged += (o, e) =>
-            Err.Handle(() => main_thr_pool.SetJobCount((int)e.NewValue));
+        slider_want_job_count.ValueChanged += (o, e) => Err.Handle(() =>
+        {
+            var c = (int)e.NewValue;
+            main_thr_pool.SetJobCount(c);
+            GlobalSettings.Instance.MaxJobCount = c;
+        });
         slider_want_job_count.Value = GlobalSettings.Instance.MaxJobCount;
 
         slider_active_job_count.Maximum = main_thr_pool.MaxJobCount;
@@ -370,20 +377,20 @@ public partial class MainWindow : Window
             b_reload_compare.IsEnabled = true;
         });
 
-        var awaiting_mass_gen_lst = new List<string>();
+        var awaiting_mass_gen_lst = new List<(string fname, bool force_regen)>();
         var delayed_mass_gen = new DelayedUpdater(() =>
         {
-            string[] lst;
+            (string, bool)[] gen_lst;
             lock (awaiting_mass_gen_lst)
             {
-                lst = [.. awaiting_mass_gen_lst];
+                gen_lst = [.. awaiting_mass_gen_lst];
                 awaiting_mass_gen_lst.Clear();
             }
-            thumb_gen.MassGenerate(lst, true);
+            thumb_gen.MassGenerate(gen_lst);
         }, "Thumb compare => mass gen");
-        void apply_file_lst(string[] lst)
+        void apply_file_lst(bool force_regen, string[] lst)
         {
-            if (lst.Length==1)
+            if (lst.Length==1 && force_regen)
             {
                 tray_icon.ShowWin();
                 begin_thumb_compare(lst.Single());
@@ -391,7 +398,7 @@ public partial class MainWindow : Window
             }
 
             lock (awaiting_mass_gen_lst)
-                awaiting_mass_gen_lst.AddRange(lst);
+                awaiting_mass_gen_lst.AddRange(lst.Select(fname=>(fname, force_regen)));
             delayed_mass_gen.TriggerNow();
         }
 
@@ -442,7 +449,7 @@ public partial class MainWindow : Window
             }
 
             var exts = GlobalSettings.Instance.AllowedExts;
-            var es_arg = "ext:" + string.Join(';', exts);
+            var es_arg = "ext:" + exts.JoinToString(';');
 
             return inp.AsParallel().SelectMany(path =>
             {
@@ -482,10 +489,10 @@ public partial class MainWindow : Window
             }).ToArray();
         }
 
-        pipe.AddLoadCompareHandler(inp =>
+        pipe.AddRefreshAndCompareHandler((force_regen, inp) =>
         {
             var lst = extract_file_lst(inp);
-            Dispatcher.BeginInvoke(() => Err.Handle(() => apply_file_lst(lst)));
+            Dispatcher.BeginInvoke(() => Err.Handle(() => apply_file_lst(force_regen, lst)));
         });
 
         foreach (var tcv in thumb_compare_all)
@@ -493,7 +500,7 @@ public partial class MainWindow : Window
             {
                 if (e.ChangedButton == MouseButton.Left)
                 {
-                    new FileChooser(inp => apply_file_lst(extract_file_lst(inp))).ShowDialog();
+                    new FileChooser(inp => apply_file_lst(force_regen: true, extract_file_lst(inp))).ShowDialog();
                     e.Handled = true;
                 }
                 else if (e.ChangedButton == MouseButton.Right)
@@ -551,7 +558,7 @@ public partial class MainWindow : Window
         grid_thumb_compare.Drop += (o, e) => Err.Handle(() =>
         {
             var lst = drag_cache!.Value.lst;
-            apply_file_lst(lst);
+            apply_file_lst(force_regen: true, lst);
             e.Handled = true;
         });
 

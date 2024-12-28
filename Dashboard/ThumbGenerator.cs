@@ -18,7 +18,10 @@ using System.Windows.Media.Imaging;
 
 using SunSharpUtils;
 using SunSharpUtils.WPF;
+using SunSharpUtils.Settings;
 using SunSharpUtils.Threading;
+
+using Dashboard.Settings;
 
 namespace Dashboard;
 
@@ -120,7 +123,7 @@ public class ThumbGenerator
                 {
                     var message = g.Key;
                     var ids = g.Select(t => t.id).Order();
-                    lns.Add($"{string.Join(',', ids)}: {message}");
+                    lns.Add($"{ids.JoinToString(',')}: {message}");
                 }
                 lns.Add(new string('=', 30));
             }
@@ -129,14 +132,14 @@ public class ThumbGenerator
             {
                 header("Id-s referred to the same file");
                 foreach (var (path, ids) in conflicting_caches)
-                    lns.Add($"[{path}]: {string.Join(',', ids)}");
+                    lns.Add($"[{path}]: {ids.JoinToString(',')}");
                 lns.Add(new string('=', 30));
             }
 
             header("Purge all the deviants?");
 
             if (CustomMessageBox.ShowYesNo("Settings load failed",
-                string.Join(Environment.NewLine, lns)
+                lns.JoinToString(Environment.NewLine)
             ))
                 // File deletion can be suspended by the system,
                 // while explorer is waiting for thumb
@@ -207,7 +210,7 @@ public class ThumbGenerator
             get
             {
                 using var this_locker = new ObjectLocker(this);
-                return Utils.LoadUncachedBitmap(CurrentThumbPath);
+                return BitmapUtils.LoadUncached(CurrentThumbPath);
             }
         }
 
@@ -286,7 +289,14 @@ public class ThumbGenerator
             this.gen = gen;
             this.id = id;
             CacheSizeChanged += on_cache_changed;
-            settings = new(cache_path);
+            try
+            {
+                settings = new(cache_path);
+            }
+            catch (SettingsLoadUserAbortedException)
+            {
+                Environment.Exit(-1);
+            }
             temps = new(this);
             temps.InitRoot();
         }
@@ -335,7 +345,7 @@ public class ThumbGenerator
         private void SetSources(Action<string?> change_subjob, ThumbSource[] thumb_sources)
         {
             if (settings.ChosenStreamPositions.Count != 0 && settings.ChosenStreamPositions.Count != thumb_sources.Length)
-                settings.ChosenStreamPositions = FileSettings.ChosenStreamPositionsInfo.Empty;
+                settings.ChosenStreamPositions = ChosenStreamPositionsInfo.Empty;
             this.thumb_sources = thumb_sources;
             ApplySourceAt(true, change_subjob, settings.ChosenThumbOptionInd??thumb_sources.Length-1, null, out _, null);
         }
@@ -511,24 +521,36 @@ public class ThumbGenerator
             {
                 if (!IsRoot) return;
                 var common_path = cfi.settings.GetSettingsDir() + @"\";
-                var d_as_s = string.Join(';', d
+                cfi.settings.TempsList = new(d
                     .Where(kvp => kvp.Value.IsDeletable)
                     .Select(kvp =>
                     {
                         var path = kvp.Value.Path;
                         if (!path.StartsWith(common_path))
                             throw new InvalidOperationException(path);
-                        path = path.Remove(0, common_path.Length);
-                        return $"{kvp.Key}={path}";
+                        path = path[common_path.Length..];
+                        return (kvp.Key, path);
                     })
+                    .ToArray()
                 );
-                cfi.settings.TempsListStr = d_as_s=="" ? null : d_as_s;
+                //var has_thumb_temp = false;
+                //cfi.settings.TempsList.ForEach((name,path) =>
+                //{
+                //    if (name != "thumb file") return;
+                //    has_thumb_temp = true;
+                //});
+                //if (!has_thumb_temp && File.Exists(Path.Combine(cfi.settings.GetSettingsDir(), "thump.png")))
+                //{
+                //    throw new InvalidOperationException("Thumb temp was deleted for some reason");
+                //}
             }
 
             private GenerationTemp AddExisting(string temp_name, GenerationTemp temp)
             {
                 if ("=;".Any(temp_name.Contains))
                     throw new FormatException(temp_name);
+                if (";".Any(temp.Path.Contains))
+                    throw new FormatException(temp.Path);
                 d.Add(temp_name, temp);
                 OnChanged();
                 return temp;
@@ -542,22 +564,19 @@ public class ThumbGenerator
             public void InitRoot()
             {
                 if (!IsRoot) throw new InvalidOperationException();
+
                 if (d.Count!=0) throw new InvalidOperationException();
                 d.Add("settings", new GenerationTemp(cfi.settings.GetSettingsFile(), null));
                 d.Add("settings backup", new GenerationTemp(cfi.settings.GetSettingsBackupFile(), null));
-                var tls = cfi.settings.TempsListStr;
-                if (tls is null) return;
-                foreach (var tle in tls.Split(';'))
+
+                cfi.settings.TempsList.ForEach((temp_name, temp_path) =>
                 {
-                    var tle_spl = tle.Split(['='], 2);
-                    if (tle_spl.Length!=2) throw new FormatException(tle);
-                    var temp_name = tle_spl[0];
-                    var temp_path = Path.Combine(cfi.settings.GetSettingsDir(), tle_spl[1]);
+                    temp_path = Path.Combine(cfi.settings.GetSettingsDir(), temp_path);
                     if (d.TryGetValue(temp_name, out var old_temp))
                     {
                         if (old_temp.IsDeletable || old_temp.Path != temp_path)
                             throw new InvalidOperationException($"{cfi.settings.GetSettingsDir()}: {temp_name}");
-                        continue;
+                        return;
                     }
                     GenerationTemp temp;
                     if (File.Exists(temp_path))
@@ -565,9 +584,18 @@ public class ThumbGenerator
                     else if (Directory.Exists(temp_path))
                         temp = new(temp_path, dir => cfi.DeleteDir(dir));
                     else
-                        continue;
+                        return;
                     d.Add(temp_name, temp);
-                }
+                });
+
+                //if (!d.ContainsKey("thumb file"))
+                //{
+                //    var fname = Path.Combine(cfi.settings.GetSettingsDir(), "thump.png");
+                //    if (File.Exists(fname))
+                //        throw new InvalidOperationException($"Thumb temp was deleted for some reason:\n{cfi.settings.GetSettingsFile()}");
+                //        //d.Add("thumb file", new GenerationTemp(fname, fname => cfi.DeleteFile(fname)));
+                //}
+
                 OnChanged();
             }
             public GenerationTemp AddFile(string temp_name, string fname) => AddNew(temp_name, new GenerationTemp(
@@ -1055,7 +1083,7 @@ public class ThumbGenerator
                                         args.Add($"-nostdin");
 
                                         change_subjob("extract thumb");
-                                        FFmpeg.Invoke(string.Join(' ', args), () => File.Exists(otp_fname),
+                                        FFmpeg.Invoke(args.JoinToString(' '), () => File.Exists(otp_fname),
                                             execute_in: ffmpeg_path,
                                             handle_inp: handle_inp
                                         ).Wait();
@@ -1068,7 +1096,7 @@ public class ThumbGenerator
                                             Size sz;
                                             var bg_im = new Image();
                                             {
-                                                var bg_im_source = Utils.LoadUncachedBitmap(otp_fname);
+                                                var bg_im_source = BitmapUtils.LoadUncached(otp_fname);
                                                 sz = new(bg_im_source.Width, bg_im_source.Height);
                                                 if (sz.Width>256 || sz.Height>256)
                                                     throw new InvalidOperationException();
@@ -1321,9 +1349,9 @@ public class ThumbGenerator
         bool force_regen
     ) => purge_lock.ManyLocked(() => InternalGen(fname, cause, is_unused_check, on_regenerated, force_regen));
 
-    public void MassGenerate(IEnumerable<string> fnames, bool force_regen) => purge_lock.ManyLocked(() =>
+    public void MassGenerate(IEnumerable<(string fname, bool force_regen)> lst) => purge_lock.ManyLocked(() =>
     {
-        foreach (var fname in fnames)
+        foreach (var (fname, force_regen) in lst)
             InternalGen(fname, nameof(MassGenerate), null, null, force_regen);
     });
 

@@ -1,12 +1,13 @@
 ﻿using System;
-using System.Linq;
-using SunSharpUtils;
+
 using SunSharpUtils.Settings;
 
-namespace Dashboard;
+namespace Dashboard.Settings;
 
-public sealed class GlobalSettings() : SettingsContainer<GlobalSettings.Data>("Settings (Dashboard)")
+public sealed class GlobalSettings() : SettingsContainer<GlobalSettings, GlobalSettings.Data>("Settings (Dashboard)")
 {
+    static GlobalSettings() { }
+
     public struct Data
     {
         public int MaxJobCount;
@@ -46,71 +47,18 @@ public sealed class GlobalSettings() : SettingsContainer<GlobalSettings.Data>("S
     public static GlobalSettings Instance { get; } = new();
 }
 
-public sealed class FileSettings(string cache_path) : SettingsContainer<FileSettings.Data>(System.IO.Path.Combine(cache_path, "Settings"))
+public sealed class FileSettings(string cache_path) : SettingsContainer<FileSettings, FileSettings.Data>(System.IO.Path.Combine(cache_path, "Settings"))
 {
-    // Generated static constructor doesn't run when creating instances,
-    // so we need to define it explicitly, otherwise tokens will not be allocated in time
-    static FileSettings() { }
-
-    public readonly struct ChosenStreamPositionsInfo : IEquatable<ChosenStreamPositionsInfo>, ISettingsSaveable<ChosenStreamPositionsInfo>
+    static FileSettings()
     {
-        private readonly double[] pos;
-        private const double default_pos = 0.3;
-
-        private ChosenStreamPositionsInfo(double[] pos) => this.pos=pos;
-        public static readonly ChosenStreamPositionsInfo Empty = new([]);
-
-        public int Count => pos.Length;
-        public double this[int ind] => Count==0 ? default_pos : pos[ind];
-
-        public ChosenStreamPositionsInfo WithPos(int c, int ind, double val)
-        {
-            var res = pos.ToArray();
-            if (Count == 0)
-            {
-                res = new double[c];
-                Array.Fill(res, default_pos);
-            }
-            res[ind] = val;
-            return new(res);
-        }
-
-        public static ChosenStreamPositionsInfo Parse(string s) =>
-            new(s.Split(';').ConvertAll(double.Parse));
-        public override string ToString() => pos.JoinToString(';');
-
-        public static bool operator ==(ChosenStreamPositionsInfo a, ChosenStreamPositionsInfo b)
-        {
-            if (ReferenceEquals(a.pos, b.pos))
-                return true;
-            if (a.Count != b.Count)
-            {
-                if (b.Count == 0)
-                    return a.pos.All(p => p == default_pos);
-                if (a.Count == 0)
-                    return b.pos.All(p => p == default_pos);
-                return false;
-            }
-            for (var i = 0; i < a.Count; ++i)
-                if (a[i] != b[i])
-                    return false;
-            return true;
-
-        }
-        public static bool operator !=(ChosenStreamPositionsInfo left, ChosenStreamPositionsInfo right) => !(left==right);
-        public bool Equals(ChosenStreamPositionsInfo other) => this == other;
-        public override bool Equals(object? obj) => obj is ChosenStreamPositionsInfo other && Equals(other);
-
-        static string ISettingsSaveable<ChosenStreamPositionsInfo>.SerializeSetting(ChosenStreamPositionsInfo setting) => setting.ToString();
-        static ChosenStreamPositionsInfo ISettingsSaveable<ChosenStreamPositionsInfo>.DeserializeSetting(string setting) => Parse(setting);
-
-        public override int GetHashCode() => HashCode.Combine(pos);
-
+        RegisterUpgradeAct("TempsListStr", (ref FieldUpgradeContext ctx) => ctx.Set(TTempsList,
+            ctx.Value is null ? TempsListInfo.Empty : TempsListInfo.Parse(ctx.Value)
+        ));
     }
 
     public struct Data
     {
-        public string? TempsListStr; //TODO Declare new type for this
+        public TempsListInfo TempsList;
         public string? InpPath;
         public DateTime LastInpChangeTime;
         public DateTime LastCacheUseTime;
@@ -120,13 +68,13 @@ public sealed class FileSettings(string cache_path) : SettingsContainer<FileSett
         public SettingsNullable<int> ChosenThumbOptionInd;
     }
 
-    private static readonly SettingsFieldSaver<DateTime> date_time_saver = (dt => dt.Ticks.ToString(), s => new(Int64.Parse(s)));
+    private static readonly SettingsFieldSaver<DateTime> date_time_saver = (dt => dt.Ticks.ToString(), s => new(long.Parse(s)));
 
-    private static readonly FieldToken<string?> TTempsListStr = MakeFieldToken(d => d.TempsListStr, null);
-    public string? TempsListStr
+    private static readonly FieldToken<TempsListInfo> TTempsList = MakeFieldToken(d => d.TempsList, TempsListInfo.Empty);
+    public TempsListInfo TempsList
     {
-        get => TTempsListStr.Get(this);
-        set => TTempsListStr.Set(this, value);
+        get => TTempsList.Get(this);
+        set => TTempsList.Set(this, value);
     }
 
     private static readonly FieldToken<string?> TInpPath = MakeFieldToken(d => d.InpPath, null);

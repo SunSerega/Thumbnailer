@@ -21,7 +21,7 @@ public class CommandsPipe
     {
         public const int NewerKillsOlder = 1;
         public const int GimmiThumb = 2;
-        public const int LoadCompare = 3;
+        public const int RefreshAndCompare = 3;
     }
 
     private readonly Dictionary<int, Action<Stream>> command_handlers = new()
@@ -39,15 +39,16 @@ public class CommandsPipe
             if (cfi_use != null) bw.Write(cfi_use.CFI.CurrentThumbPath);
 
         });
-    public void AddLoadCompareHandler(Action<string[]> handler) =>
-        command_handlers.Add(Commands.LoadCompare, str =>
+    public void AddRefreshAndCompareHandler(Action<bool, string[]> handler) =>
+        command_handlers.Add(Commands.RefreshAndCompare, str =>
         {
             var br = new BinaryReader(str);
+            var force_regen = br.ReadBoolean();
             var c = br.ReadInt32();
             var file_list = new string[c];
             for (var i = 0; i < file_list.Length; ++i)
                 file_list[i] = br.ReadString();
-            handler(file_list);
+            handler(force_regen, file_list);
         });
 
     public CommandsPipe()

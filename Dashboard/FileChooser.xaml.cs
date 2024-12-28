@@ -12,6 +12,8 @@ using System.Windows.Controls;
 using SunSharpUtils;
 using SunSharpUtils.WPF;
 
+using Dashboard.Settings;
+
 namespace Dashboard;
 
 public partial class FileChooser : Window
@@ -52,7 +54,7 @@ public partial class FileChooser : Window
             var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "Open File",
-                Filter = $"Supported files|{string.Join(';', GlobalSettings.Instance.AllowedExts.Select(ext => "*."+ext))}|All files|*.*",
+                Filter = $"Supported files|{GlobalSettings.Instance.AllowedExts.Select(ext => "*."+ext).JoinToString(';')}|All files|*.*",
                 Multiselect = true,
             };
 

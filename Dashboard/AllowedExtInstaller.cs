@@ -4,6 +4,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 
+using SunSharpUtils;
 using SunSharpUtils.Threading;
 
 using static Dashboard.AllowedExtList;
@@ -42,11 +43,11 @@ public static class AllowedExtInstaller
         var rem = collect_from_bag(waiting_rem);
 
         var reg_ext_args = new List<string>();
-        if (rem.Length!=0) reg_ext_args.Add("rem:"+string.Join(';', rem.Select(info => info.Ext)));
-        if (add.Length!=0) reg_ext_args.Add("add:"+string.Join(';', add.Select(info => info.Ext)));
+        if (rem.Length!=0) reg_ext_args.Add("rem:"+rem.Select(info => info.Ext).JoinToString(';'));
+        if (add.Length!=0) reg_ext_args.Add("add:"+add.Select(info => info.Ext).JoinToString(';'));
         if (reg_ext_args.Count == 0)
             return;
-        var psi = new System.Diagnostics.ProcessStartInfo(@"RegExtController.exe", string.Join(' ', reg_ext_args))
+        var psi = new System.Diagnostics.ProcessStartInfo(@"RegExtController.exe", reg_ext_args.JoinToString(' '))
         {
             UseShellExecute = true,
             Verb = "runas",
@@ -92,7 +93,7 @@ public static class AllowedExtInstaller
             }
 
         static IEnumerable<string> QueryExts(List<string> exts) =>
-            exts.Count == 0 ? [] : new ESQuary("ext:"+string.Join(';', exts));
+            exts.Count == 0 ? [] : new ESQuary("ext:"+exts.JoinToString(';'));
 
         foreach (var fname in QueryExts(reset_exts))
         {
@@ -100,8 +101,7 @@ public static class AllowedExtInstaller
             COMManip.ResetThumbFor(fname, TimeSpan.Zero);
         }
 
-        thumb_gen.MassGenerate(QueryExts(regen_exts), true);
-
+        thumb_gen.MassGenerate(QueryExts(regen_exts).Select(fname=>(fname, force_regen: true)));
     }, $"{nameof(AllowedExtInstaller)}: Install/uninstall of extension handlers in registry");
 
     public static void Install(string ext, ExtRegenType gen_type, bool trigger = true)
