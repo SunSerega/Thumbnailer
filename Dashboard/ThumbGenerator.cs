@@ -592,8 +592,8 @@ public class ThumbGenerator
                 //{
                 //    var fname = Path.Combine(cfi.settings.GetSettingsDir(), "thumb.png");
                 //    if (File.Exists(fname))
-                //        throw new InvalidOperationException($"Thumb temp was deleted for some reason:\n{cfi.settings.GetSettingsFile()}");
-                //        //d.Add("thumb file", new GenerationTemp(fname, fname => cfi.DeleteFile(fname)));
+                //        //throw new InvalidOperationException($"Thumb temp was deleted for some reason:\n{cfi.settings.GetSettingsFile()}");
+                //        d.Add("thumb file", new GenerationTemp(fname, fname => cfi.DeleteFile(fname)));
                 //}
 
                 OnChanged();
@@ -801,6 +801,9 @@ public class ThumbGenerator
                 //File.GetLastAccessTimeUtc(inp_fname),
                 new FileInfo(inp_fname).CreationTimeUtc,
             }.Max();
+
+            if (settings.CurrentThumbIsFinal && !File.Exists(CurrentThumbPath))
+                settings.CurrentThumbIsFinal = false;
 
             if (!force_regen && settings.LastInpChangeTime == write_time && settings.CurrentThumbIsFinal)
                 return make_cache_use();
