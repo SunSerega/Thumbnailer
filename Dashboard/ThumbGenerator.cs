@@ -539,7 +539,7 @@ public class ThumbGenerator
                 //    if (name != "thumb file") return;
                 //    has_thumb_temp = true;
                 //});
-                //if (!has_thumb_temp && File.Exists(Path.Combine(cfi.settings.GetSettingsDir(), "thump.png")))
+                //if (!has_thumb_temp && File.Exists(Path.Combine(cfi.settings.GetSettingsDir(), "thumb.png")))
                 //{
                 //    throw new InvalidOperationException("Thumb temp was deleted for some reason");
                 //}
@@ -590,7 +590,7 @@ public class ThumbGenerator
 
                 //if (!d.ContainsKey("thumb file"))
                 //{
-                //    var fname = Path.Combine(cfi.settings.GetSettingsDir(), "thump.png");
+                //    var fname = Path.Combine(cfi.settings.GetSettingsDir(), "thumb.png");
                 //    if (File.Exists(fname))
                 //        throw new InvalidOperationException($"Thumb temp was deleted for some reason:\n{cfi.settings.GetSettingsFile()}");
                 //        //d.Add("thumb file", new GenerationTemp(fname, fname => cfi.DeleteFile(fname)));
@@ -1030,7 +1030,7 @@ public class ThumbGenerator
                                         var args = new List<string>();
 
                                         temps.TryRemove(otp_temp_name);
-                                        var otp_temp = l_temps.AddFile(otp_temp_name, "thump.png");
+                                        var otp_temp = l_temps.AddFile(otp_temp_name, "thumb.png");
                                         var otp_fname = otp_temp.Path;
 
                                         //TODO https://trac.ffmpeg.org/ticket/10512

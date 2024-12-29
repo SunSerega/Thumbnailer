@@ -268,7 +268,7 @@ public partial class MainWindow : Window
         }
 
         Action? next_thumb_compare_update = null;
-        var thump_compare_updater = new DelayedUpdater(
+        var thumb_compare_updater = new DelayedUpdater(
             () => next_thumb_compare_update?.Invoke(),
             "thumb compare update"
         );
@@ -327,7 +327,7 @@ public partial class MainWindow : Window
                             bts[i].Click += (_, _) =>
                             {
                                 next_thumb_compare_update = () => select_source(ind);
-                                thump_compare_updater.TriggerNow();
+                                thumb_compare_updater.TriggerNow();
                             };
                         }
                         sp_vid_stream_buttons.Children.Add(bts[i]);
@@ -341,16 +341,16 @@ public partial class MainWindow : Window
                             next_thumb_compare_update = () =>
                             {
                                 cfi.ApplySourceAt(false, _ => { }, new_ind, pos, out _, set_pregen_progress);
-                                // invoke sync in thump_compare_updater thread
+                                // invoke blocking in thumb_compare_updater thread
                                 Dispatcher.Invoke(() =>
                                     thumb_compare_gen.Set(cfi.CurrentThumbBmp)
                                 );
                             };
-                            thump_compare_updater.TriggerNow();
+                            thumb_compare_updater.TriggerNow();
                         };
                         var old_ind = cfi.ChosenThumbOptionInd;
                         cfi.ApplySourceAt(true, _ => { }, new_ind, null, out var initial_pos, set_pregen_progress);
-                        // invoke sync in thump_compare_updater thread
+                        // invoke blocking in thumb_compare_updater thread
                         Dispatcher.Invoke(() => Err.Handle(() =>
                         {
                             slider_vid_timestamp.Value = initial_pos;
