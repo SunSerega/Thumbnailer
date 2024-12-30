@@ -802,7 +802,7 @@ public class ThumbGenerator
                 new FileInfo(inp_fname).CreationTimeUtc,
             }.Max();
 
-            if (settings.CurrentThumbIsFinal && !File.Exists(CurrentThumbPath))
+            if (settings.CurrentThumbIsFinal && (settings.CurrentThumb==null || !File.Exists(CurrentThumbPath)))
                 settings.CurrentThumbIsFinal = false;
 
             if (!force_regen && settings.LastInpChangeTime == write_time && settings.CurrentThumbIsFinal)
