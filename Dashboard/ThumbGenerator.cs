@@ -1172,7 +1172,8 @@ public class ThumbGenerator
                                     }
                                     catch (Exception e)
                                     {
-                                        Log.Append($"Error making thumb for [{inp_fname}]: {e}");
+                                        if (File.Exists(inp_fname))
+                                            Log.Append($"Error making thumb for [{inp_fname}]: {e}");
                                         //Err.Handle(e);
                                         error_generating = true;
                                         return CommonThumbSources.Broken.Extract(false, 0, null!, null);
@@ -1260,7 +1261,8 @@ public class ThumbGenerator
                         }
                         catch (Exception e)
                         {
-                            Err.Handle(e);
+                            if (File.Exists(inp_fname))
+                                Err.Handle(e);
                         }
                     } while (0!=Interlocked.Decrement(ref gen_jobs_assigned));
                     this.gen_job_obj = null;

@@ -3,8 +3,8 @@
 using System.Linq;
 using System.Collections.Generic;
 
-using SunSharpUtils.Settings;
 using SunSharpUtils;
+using SunSharpUtils.Settings;
 
 namespace Dashboard.Settings;
 
