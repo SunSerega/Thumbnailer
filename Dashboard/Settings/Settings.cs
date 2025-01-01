@@ -4,7 +4,7 @@ using SunSharpUtils.Settings;
 
 namespace Dashboard.Settings;
 
-public sealed class GlobalSettings() : SettingsContainer<GlobalSettings, GlobalSettings.Data>("Settings (Dashboard)")
+public sealed class GlobalSettings() : SettingsContainer<GlobalSettings, GlobalSettings.Data>("Settings (Dashboard)", save_all: true)
 {
     static GlobalSettings() { }
 
@@ -47,7 +47,7 @@ public sealed class GlobalSettings() : SettingsContainer<GlobalSettings, GlobalS
     public static GlobalSettings Instance { get; } = new();
 }
 
-public sealed class FileSettings(string cache_path) : SettingsContainer<FileSettings, FileSettings.Data>(System.IO.Path.Combine(cache_path, "Settings"))
+public sealed class FileSettings(string cache_path) : SettingsContainer<FileSettings, FileSettings.Data>(System.IO.Path.Combine(cache_path, "Settings"), save_all: false)
 {
     static FileSettings()
     {
