@@ -744,7 +744,7 @@ public class ThumbGenerator
             if (cause is null) return;
             cfi.delayed_gen_args = default;
             cfi.GenerateThumb($"{cause} (delayed)", null, on_regenerated, force_regen, false);
-        }, "Thumb gen wait (input recently modified)");
+        }, "Thumb gen wait (input recently modified)", is_background: false);
 
         private volatile int gen_jobs_assigned = 0;
         private CustomThreadPool.ThreadPoolJobHeader? gen_job_obj = null;
@@ -1433,6 +1433,8 @@ public class ThumbGenerator
 
             foreach (var cfi in files.Values.AsParallel().Where(cfi => cfi.CanClearTemps).OrderBy(cfi => cfi.LastCacheUseTime))
             {
+                if (Common.IsShuttingDown)
+                    break;
                 if (cfi.TryClearTemps() && size_to_clear<=0)
                     break;
             }

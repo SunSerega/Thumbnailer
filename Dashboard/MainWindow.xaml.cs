@@ -54,7 +54,7 @@ public partial class MainWindow : Window
 
                 SetUpThumbCompare(thumb_gen, pipe);
 
-                pipe.StartAccepting();
+                pipe.StartThrowingUndefinedCommand();
             });
 
         }
@@ -102,7 +102,17 @@ public partial class MainWindow : Window
         /**/
 
         var pipe = new CommandsPipe();
-        Common.OnShutdown += _ => Err.Handle(pipe.Shutdown);
+
+        // After initing pipe, to make sure older process is already dead
+        {
+            const string file_lock_name = @".lock";
+            var file_lock = File.Create(file_lock_name);
+            Common.OnShutdown += _ => Err.Handle(() =>
+            {
+                file_lock.Close();
+                File.Delete(file_lock_name);
+            });
+        }
 
         return (main_thr_pool, pipe);
     }
@@ -128,7 +138,7 @@ public partial class MainWindow : Window
             var c2 = main_thr_pool.PendingUniqueJobCount;
             var c1 = main_thr_pool.PendingJobCount;
             Dispatcher.Invoke(() => tb_pending_jobs_count.Text = $"{c1} ({c2})");
-        }, "Pending jobs count update");
+        }, "Pending jobs count update", is_background: true);
         main_thr_pool.PendingJobCountChanged += () =>
             pending_jobs_count_updater.TriggerUrgent(TimeSpan.FromSeconds(1.0/60));
 
@@ -231,10 +241,13 @@ public partial class MainWindow : Window
                 if (thumb_gen.ClearExtraFiles()!=0) return;
                 // recalc needed size change here, in case it changed
                 cache_fill = get_cache_fill();
-                thumb_gen.ClearOldest(size_to_clear: cache_fill-GlobalSettings.Instance.MaxCacheSize);
+                ThreadingCommon.RunWithBackgroundReset(() =>
+                    thumb_gen.ClearOldest(size_to_clear: cache_fill-GlobalSettings.Instance.MaxCacheSize),
+                    new_is_background: false
+                );
             }
 
-        }, $"cache size recalculation");
+        }, $"cache size recalculation", is_background: true);
         IsVisibleChanged += (o, e) => Err.Handle(() =>
         {
             if (!IsVisible) return;
@@ -270,7 +283,8 @@ public partial class MainWindow : Window
         Action? next_thumb_compare_update = null;
         var thumb_compare_updater = new DelayedUpdater(
             () => next_thumb_compare_update?.Invoke(),
-            "thumb compare update"
+            "thumb compare update",
+            is_background: false
         );
 
         int current_compare_id = 0;
@@ -387,7 +401,7 @@ public partial class MainWindow : Window
                 awaiting_mass_gen_lst.Clear();
             }
             thumb_gen.MassGenerate(gen_lst);
-        }, "Thumb compare => mass gen");
+        }, "Thumb compare => mass gen", is_background: false);
         void apply_file_lst(bool force_regen, string[] lst)
         {
             if (lst.Length==1 && force_regen)

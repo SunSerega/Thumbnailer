@@ -102,7 +102,7 @@ public static class AllowedExtInstaller
         }
 
         thumb_gen.MassGenerate(QueryExts(regen_exts).Select(fname=>(fname, force_regen: true)));
-    }, $"{nameof(AllowedExtInstaller)}: Install/uninstall of extension handlers in registry");
+    }, $"{nameof(AllowedExtInstaller)}: Install/uninstall of extension handlers in registry", is_background: false);
 
     public static void Install(string ext, ExtRegenType gen_type, bool trigger = true)
     {

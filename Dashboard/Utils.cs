@@ -260,7 +260,7 @@ public static class FFmpeg
     }
 
     private static readonly DelayedMultiUpdater<InvokeState> delayed_kill_switch =
-        new(state => state.Kill(), "FFmpeg kill switch");
+        new(state => state.Kill(), "FFmpeg kill switch", is_background: false);
 
     public static InvokeState Invoke(string args, Func<bool> verify_res,
         string? execute_in = null, string exe = "mpeg",

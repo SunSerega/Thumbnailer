@@ -101,7 +101,7 @@ public partial class COMManip
     }
 
     private static readonly DelayedMultiUpdater<string> delayed_thumb_reseter = new(
-        path=>DeleteThumbFor(path), "Thumb reset"
+        path=>DeleteThumbFor(path), "Thumb reset", is_background: false
     );
     public static void ResetThumbFor(string? path, TimeSpan delay)
     {

@@ -51,7 +51,9 @@ public sealed class TrayIcon : TaskbarIcon
         });
         // On Win10, the icon remains in the tray after the process shuts down
         // On Win11 this is no longer an issue, but might as well dispose properly
-        Common.OnShutdown += _ => Err.Handle(Dispose);
+        //TODO https://github.com/hardcodet/wpf-notifyicon/issues/122
+        // - Remove Dispatcher call
+        Common.OnShutdown += _ => Dispatcher.BeginInvoke(() => Err.Handle(Dispose));
 
         NoLeftClickDelay = true;
         LeftClickCommand = new DummyCommand(ShowWin);

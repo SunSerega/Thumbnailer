@@ -102,7 +102,7 @@ public class ShortcutManager
 
         //Console.Beep();
         //TTS.Speak($"Updated {lnk_upd.Count} shortcuts: {lnk_upd.JoinToString("; ")}");
-    }, nameof(ShortcutManager));
+    }, nameof(ShortcutManager), is_background: false);
 
     public static void UpdateFor(string target)
     {
