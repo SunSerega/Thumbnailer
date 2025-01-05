@@ -182,16 +182,29 @@ public class ThumbGenerator
     public sealed class ThumbSource(
         string name,
         TimeSpan len,
-        Func<bool, double, Action<string?>, Action<double>?, string> extract
+        Func<double, Action<string?>, Action<double>?, string> extract
     ) {
         public string Name => name;
 
         public TimeSpan Length => len;
 
+        private double last_pos = double.NaN;
+        private string? last_otp_fname = null;
+
         public string Extract(bool force_regen, double pos, Action<string?> change_subjob, Action<double>? on_pre_extract_progress)
         {
-            if (pos<0 || pos>1) throw new InvalidOperationException();
-            return extract(force_regen, pos, change_subjob, on_pre_extract_progress);
+            if (pos<0 || pos>1)
+                throw new InvalidOperationException();
+
+            if (!force_regen && pos==last_pos)
+                return last_otp_fname ?? throw null!;
+
+            var otp_fname = extract(pos, change_subjob, on_pre_extract_progress);
+
+            last_otp_fname = otp_fname;
+            last_pos = pos;
+
+            return otp_fname;
         }
 
     }
@@ -261,7 +274,7 @@ public class ThumbGenerator
         public string? InpPath => fname;
         public string CurrentThumbPath => fname;
 
-        public IReadOnlyList<ThumbSource> ThumbSources => [new ThumbSource(fname, default, (_,_,_,_)=>fname)];
+        public IReadOnlyList<ThumbSource> ThumbSources => [new ThumbSource(fname, default, (_,_,_)=>fname)];
         public int ChosenThumbOptionInd => 0;
 
         public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos, Action<double>? on_pre_extract_progress) =>
@@ -484,7 +497,7 @@ public class ThumbGenerator
 
         }
 
-        private long FileSize(string fname) => new FileInfo(fname).Length;
+        private static long FileSize(string fname) => new FileInfo(fname).Length;
         private bool DeleteFile(string fname)
         {
             if (!fname.StartsWith(settings.GetSettingsDir()))
@@ -498,7 +511,7 @@ public class ThumbGenerator
             return true;
         }
 
-        private long DirSize(string dir) => Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).Sum(FileSize);
+        private static long DirSize(string dir) => Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).Sum(FileSize);
         private bool DeleteDir(string dir)
         {
             if (!dir.StartsWith(settings.GetSettingsDir()))
@@ -726,7 +739,7 @@ public class ThumbGenerator
                 var full_path = Path.GetFullPath($"Dashboard-Default.{name}.bmp");
                 if (!File.Exists(full_path))
                     throw new InvalidOperationException(name);
-                return new(name, TimeSpan.Zero, (_,_,_,_)=>full_path);
+                return new(name, TimeSpan.Zero, (_,_,_)=>full_path);
             }
 
             public static ThumbSource Ungenerated { get; } = Make("Ungenerated");
@@ -844,6 +857,80 @@ public class ThumbGenerator
                     var metadata_s = ffmpeg.Output!;
                     change_subjob(null);
 
+                    // Set below, after processing all streams
+                    // Because sanity checks of format xml rely on sources list
+                    TimeSpan? global_dur = null;
+                    var global_dur_s = "";
+                    void apply_dur(string inp_fname, Action? inp_dispose, string otp_fname, Action<string?> change_subjob)
+                    {
+                        change_subjob("apply dur: load bg image");
+                        Size sz;
+                        var bg_im = new Image();
+                        {
+                            var bg_im_source = BitmapUtils.LoadUncached(inp_fname);
+                            sz = new(bg_im_source.Width, bg_im_source.Height);
+                            if (sz.Width>256 || sz.Height>256)
+                                throw new InvalidOperationException();
+                            bg_im.Source = bg_im_source;
+                        }
+                        inp_dispose?.Invoke();
+                        change_subjob(null);
+
+                        change_subjob("apply dur: compose output");
+                        var res_c = new Grid();
+                        res_c.Children.Add(bg_im);
+                        res_c.Children.Add(new Viewbox
+                        {
+                            Opacity = 0.6,
+                            Width = sz.Width,
+                            Height = sz.Height*0.2,
+                            HorizontalAlignment = HorizontalAlignment.Right,
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Child = new Image
+                            {
+                                Source = new DrawingImage
+                                {
+                                    Drawing = new GeometryDrawing
+                                    {
+                                        Brush = Brushes.Black,
+                                        Pen = new Pen(Brushes.White, 0.08),
+                                        Geometry = new FormattedText(
+                                            global_dur_s,
+                                            System.Globalization.CultureInfo.InvariantCulture,
+                                            FlowDirection.LeftToRight,
+                                            new Typeface(
+                                                new TextBlock().FontFamily,
+                                                FontStyles.Normal,
+                                                FontWeights.ExtraBold,
+                                                FontStretches.Normal
+                                            ),
+                                            1,
+                                            Brushes.Black,
+                                            96
+                                        ).BuildGeometry(default)
+                                    }
+                                }
+                            },
+                        });
+                        change_subjob(null);
+
+                        change_subjob("apply dur: render output");
+                        var bitmap = new RenderTargetBitmap((int)sz.Width, (int)sz.Height, 96, 96, PixelFormats.Pbgra32);
+                        res_c.Measure(sz);
+                        res_c.Arrange(new(sz));
+                        bitmap.Render(res_c);
+                        change_subjob(null);
+
+                        change_subjob("apply dur: save output");
+                        var enc = new PngBitmapEncoder();
+                        enc.Frames.Add(BitmapFrame.Create(bitmap));
+                        using (Stream fs = File.Create(otp_fname))
+                            enc.Save(fs);
+                        InvokeCacheSizeChanged(+FileSize(otp_fname));
+                        change_subjob(null);
+
+                    }
+
                     try
                     {
                         change_subjob("parsing metadata XML");
@@ -851,7 +938,6 @@ public class ThumbGenerator
                         change_subjob(null);
 
                         var any_dur = false; // be it video or audio
-                        var dur_s = "";
                         if (metadata_xml.Descendants("streams").SingleOrDefault() is XElement streams_xml)
                             foreach (var stream_xml in streams_xml.Descendants("stream"))
                             {
@@ -953,7 +1039,7 @@ public class ThumbGenerator
 
                                 var last_pos = double.NaN;
                                 var last_otp_fname = default(string);
-                                sources.Add(new(source_name, l_dur, (force_regen, pos, change_subjob, pre_extract_progress) =>
+                                sources.Add(new(source_name, l_dur, (pos, change_subjob, pre_extract_progress) =>
                                 {
                                     using var this_locker = new ObjectLocker(this);
                                     try
@@ -1026,9 +1112,6 @@ public class ThumbGenerator
                                         }
                                         #endregion
 
-                                        if (!force_regen && pos==last_pos)
-                                            return last_otp_fname ?? throw null!;
-
                                         using var l_temps = new LocalTempsList(this);
                                         var args = new List<string>();
 
@@ -1093,75 +1176,8 @@ public class ThumbGenerator
                                         InvokeCacheSizeChanged(+FileSize(otp_fname));
                                         change_subjob(null);
 
-                                        if (dur_s!="")
-                                        {
-                                            change_subjob("load bg image");
-                                            Size sz;
-                                            var bg_im = new Image();
-                                            {
-                                                var bg_im_source = BitmapUtils.LoadUncached(otp_fname);
-                                                sz = new(bg_im_source.Width, bg_im_source.Height);
-                                                if (sz.Width>256 || sz.Height>256)
-                                                    throw new InvalidOperationException();
-                                                bg_im.Source = bg_im_source;
-                                            }
-                                            otp_temp.Dispose();
-                                            change_subjob(null);
-
-                                            change_subjob("compose output");
-                                            var res_c = new Grid();
-                                            res_c.Children.Add(bg_im);
-                                            res_c.Children.Add(new Viewbox
-                                            {
-                                                Opacity = 0.6,
-                                                Width = sz.Width,
-                                                Height = sz.Height*0.2,
-                                                HorizontalAlignment = HorizontalAlignment.Right,
-                                                VerticalAlignment = VerticalAlignment.Center,
-                                                Child = new Image
-                                                {
-                                                    Source = new DrawingImage
-                                                    {
-                                                        Drawing = new GeometryDrawing
-                                                        {
-                                                            Brush = Brushes.Black,
-                                                            Pen = new Pen(Brushes.White, 0.08),
-                                                            Geometry = new FormattedText(
-                                                                dur_s,
-                                                                System.Globalization.CultureInfo.InvariantCulture,
-                                                                FlowDirection.LeftToRight,
-                                                                new Typeface(
-                                                                    new TextBlock().FontFamily,
-                                                                    FontStyles.Normal,
-                                                                    FontWeights.ExtraBold,
-                                                                    FontStretches.Normal
-                                                                ),
-                                                                1,
-                                                                Brushes.Black,
-                                                                96
-                                                            ).BuildGeometry(default)
-                                                        }
-                                                    }
-                                                },
-                                            });
-                                            change_subjob(null);
-
-                                            change_subjob("render output");
-                                            var bitmap = new RenderTargetBitmap((int)sz.Width, (int)sz.Height, 96, 96, PixelFormats.Pbgra32);
-                                            res_c.Measure(sz);
-                                            res_c.Arrange(new(sz));
-                                            bitmap.Render(res_c);
-                                            change_subjob(null);
-
-                                            change_subjob("save output");
-                                            var enc = new PngBitmapEncoder();
-                                            enc.Frames.Add(BitmapFrame.Create(bitmap));
-                                            using (Stream fs = File.Create(otp_fname))
-                                                enc.Save(fs);
-                                            InvokeCacheSizeChanged(+FileSize(otp_fname));
-                                            change_subjob(null);
-
-                                        }
+                                        if (global_dur_s!="")
+                                            apply_dur(otp_fname, otp_temp.Dispose, otp_fname, change_subjob);
 
                                         l_temps.GiveToCFI(otp_temp_name);
                                         l_temps.VerifyEmpty();
@@ -1195,20 +1211,20 @@ public class ThumbGenerator
                         else if (any_dur && format_xml.Attribute("duration") is XAttribute global_dur_xml)
                         {
                             change_subjob("make dur string");
-                            var global_dur = TimeSpan.FromSeconds(double.Parse(global_dur_xml.Value));
+                            global_dur = TimeSpan.FromSeconds(double.Parse(global_dur_xml.Value));
 
-                            if (dur_s!="" || global_dur.TotalHours>=1)
-                                dur_s += Math.Truncate(global_dur.TotalHours).ToString() + ':';
-                            if (dur_s!="" || global_dur.Minutes!=0)
-                                dur_s += global_dur.Minutes.ToString("00") + ':';
-                            if (dur_s!="" || global_dur.Seconds!=0)
-                                dur_s += global_dur.Seconds.ToString("00");
-                            if (dur_s.Length<5)
+                            if (global_dur_s!="" || global_dur.Value.TotalHours>=1)
+                                global_dur_s += Math.Truncate(global_dur.Value.TotalHours).ToString() + ':';
+                            if (global_dur_s!="" || global_dur.Value.Minutes!=0)
+                                global_dur_s += global_dur.Value.Minutes.ToString("00") + ':';
+                            if (global_dur_s!="" || global_dur.Value.Seconds!=0)
+                                global_dur_s += global_dur.Value.Seconds.ToString("00");
+                            if (global_dur_s.Length<5)
                             {
-                                var s = global_dur.TotalSeconds;
+                                var s = global_dur.Value.TotalSeconds;
                                 s -= Math.Truncate(s);
-                                var frac_s = s.ToString("N"+(5-dur_s.Length))[2..].TrimEnd('0');
-                                if (frac_s!="") dur_s += '_'+frac_s;
+                                var frac_s = s.ToString("N"+(5-global_dur_s.Length))[2..].TrimEnd('0');
+                                if (frac_s!="") global_dur_s += '_'+frac_s;
                             }
 
                             change_subjob(null);
@@ -1233,7 +1249,32 @@ public class ThumbGenerator
                     }
 
                     if (sources.Count==0)
-                        sources.Add(CommonThumbSources.SoundOnly);
+                    {
+                        if (global_dur_s=="")
+                            sources.Add(CommonThumbSources.SoundOnly);
+                        else
+                        {
+                            sources.Add(new("sound+dur", TimeSpan.Zero, (pos, change_subjob, pre_extract_progress) =>
+                            {
+                                var inp_fname = CommonThumbSources.SoundOnly.Extract(false, 0, null!, null);
+
+                                using var l_temps = new LocalTempsList(this);
+                                var args = new List<string>();
+
+                                temps.TryRemove(otp_temp_name);
+                                var otp_temp = l_temps.AddFile(otp_temp_name, "thumb.png");
+                                var otp_fname = otp_temp.Path;
+
+                                apply_dur(inp_fname, null, otp_fname, change_subjob);
+
+                                l_temps.GiveToCFI(otp_temp_name);
+                                l_temps.VerifyEmpty();
+
+                                return otp_fname;
+                            }));
+                        }
+
+                    }
 
                     using var init_source_use = BeginUse("Initial source use", () => false);
                     curr_gen_thumb_sources = [.. sources];
