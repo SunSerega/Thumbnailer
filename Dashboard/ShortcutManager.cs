@@ -40,7 +40,7 @@ public class ShortcutManager
 
         static bool try_get_cached_lnk_target(string lnk, out string? target)
         {
-            target = default;
+            target = null;
             if (!lnk_target_cache.TryGetValue(lnk, out var cached))
                 return false;
             if (cached.dt != get_lnk_change_time(lnk))
@@ -104,7 +104,7 @@ public class ShortcutManager
         //TTS.Speak($"Updated {lnk_upd.Count} shortcuts: {lnk_upd.JoinToString("; ")}");
     }, nameof(ShortcutManager), is_background: false);
 
-    public static void UpdateFor(string target)
+    public static void ResetFor(string target)
     {
         targets_waiting.Add(target);
         lnk_updater.TriggerNow();

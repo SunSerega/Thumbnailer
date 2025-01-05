@@ -96,7 +96,8 @@ public partial class COMManip
         }
 
         SHChangeNotify(HChangeNotifyEventID.SHCNE_UPDATEITEM, HChangeNotifyFlags.SHCNF_PATHW, path, IntPtr.Zero);
-        ShortcutManager.UpdateFor(path);
+        ShortcutManager.ResetFor(path);
+        ImageGlassCacheManager.ResetFor(path);
         return true;
     }
 

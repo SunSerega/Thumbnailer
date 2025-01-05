@@ -471,12 +471,8 @@ public class ThumbGenerator
 
             public bool IsDeletable => on_unload != null;
 
-            private bool dispose_disabled = false;
-            public void DisableDispose() => dispose_disabled = true;
-
             public void Dispose()
             {
-                if (dispose_disabled) return;
                 if (on_unload is null) return;
                 //TODO still broken sometimes
                 // - Reworked generation since then
