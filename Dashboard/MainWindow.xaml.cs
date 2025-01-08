@@ -58,10 +58,6 @@ public partial class MainWindow : Window
             });
 
         }
-        catch (SettingsLoadUserAbortedException)
-        {
-            Environment.Exit(-1);
-        }
         catch (Exception e)
         {
             Err.Handle(e);

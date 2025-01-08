@@ -92,6 +92,10 @@ public class ThumbGenerator
                     cfi.GenerateThumb("Init check", null, null, false, false);
                 purge_act = null;
             }
+            catch (SettingsLoadUserAbortedException)
+            {
+                Environment.Exit(-1);
+            }
             catch (CacheFileLoadCanceledException e)
             {
                 if (purge_act is null)
@@ -302,14 +306,8 @@ public class ThumbGenerator
             this.gen = gen;
             this.id = id;
             CacheSizeChanged += on_cache_changed;
-            try
-            {
-                settings = new(cache_path);
-            }
-            catch (SettingsLoadUserAbortedException)
-            {
-                Environment.Exit(-1);
-            }
+            settings = new(cache_path);
+
             temps = new(this);
             temps.InitRoot();
         }
