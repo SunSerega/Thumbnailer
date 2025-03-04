@@ -8,46 +8,46 @@ using SunSharpUtils.Settings;
 
 namespace Dashboard.Settings;
 
-public readonly struct FileExtList : ICollection<string>, IEquatable<FileExtList>, ISettingsSaveable<FileExtList>
+public readonly struct FileExtList : ICollection<String>, IEquatable<FileExtList>, ISettingsSaveable<FileExtList>
 {
-    private readonly HashSet<string> l = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<String> l = new(StringComparer.OrdinalIgnoreCase);
 
-    public int Count => l.Count;
+    public Int32 Count => l.Count;
 
-    bool ICollection<string>.IsReadOnly => false;
+    Boolean ICollection<String>.IsReadOnly => false;
 
     public FileExtList() { }
 
-    public FileExtList(IEnumerable<string> items) => l = new(items);
-    public static FileExtList Parse(string s) => new(s.Split(';'));
+    public FileExtList(IEnumerable<String> items) => l = new(items);
+    public static FileExtList Parse(String s) => new(s.Split(';'));
 
-    public static bool operator ==(FileExtList l1, FileExtList l2) => l1.l.SetEquals(l2.l);
-    public static bool operator !=(FileExtList l1, FileExtList l2) => !(l1==l2);
-    public bool Equals(FileExtList other) => this==other;
-    public override bool Equals(object? obj) => obj is FileExtList other && this==other;
-    public override int GetHashCode() => l.GetHashCode();
+    public static Boolean operator ==(FileExtList l1, FileExtList l2) => l1.l.SetEquals(l2.l);
+    public static Boolean operator !=(FileExtList l1, FileExtList l2) => !(l1==l2);
+    public Boolean Equals(FileExtList other) => this==other;
+    public override Boolean Equals(Object? obj) => obj is FileExtList other && this==other;
+    public override Int32 GetHashCode() => l.GetHashCode();
 
-    public static bool Validate(string ext)
+    public static Boolean Validate(String ext)
     {
         // implicit in the next check
         //if (ext.Contains(';'))
         //    return false;
         //if (ext.Contains('.'))
         //    return false;
-        return ext.Length!=0 && ext.All(char.IsLetterOrDigit);
+        return ext.Length!=0 && ext.All(Char.IsLetterOrDigit);
     }
-    private static string Validated(string ext) =>
+    private static String Validated(String ext) =>
         Validate(ext) ? ext : throw new FormatException(ext);
 
-    public bool Add(string ext) => l.Add(Validated(ext));
-    public bool Remove(string ext) => l.Remove(Validated(ext));
+    public Boolean Add(String ext) => l.Add(Validated(ext));
+    public Boolean Remove(String ext) => l.Remove(Validated(ext));
 
-    void ICollection<string>.Add(string ext) => Add(ext);
+    void ICollection<String>.Add(String ext) => Add(ext);
 
     public void Clear() => l.Clear();
 
-    public bool Contains(string ext) => l.Contains(ext);
-    public bool MatchesFile(string? fname)
+    public Boolean Contains(String ext) => l.Contains(ext);
+    public Boolean MatchesFile(String? fname)
     {
         var ext = System.IO.Path.GetExtension(fname);
         if (ext is null) return false;
@@ -55,14 +55,14 @@ public readonly struct FileExtList : ICollection<string>, IEquatable<FileExtList
         return Contains(ext.Remove(0, 1));
     }
 
-    public void CopyTo(string[] array, int arrayIndex) => l.CopyTo(array, arrayIndex);
+    public void CopyTo(String[] array, Int32 arrayIndex) => l.CopyTo(array, arrayIndex);
 
-    public IEnumerator<string> GetEnumerator() => l.GetEnumerator();
+    public IEnumerator<String> GetEnumerator() => l.GetEnumerator();
     System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => l.GetEnumerator();
 
-    public override string ToString() => l.Order().JoinToString(';');
+    public override String ToString() => l.Order().JoinToString(';');
 
-    static string ISettingsSaveable<FileExtList>.SerializeSetting(FileExtList setting) => setting.ToString();
-    static FileExtList ISettingsSaveable<FileExtList>.DeserializeSetting(string setting) => Parse(setting);
+    static String ISettingsSaveable<FileExtList>.SerializeSetting(FileExtList setting) => setting.ToString();
+    static FileExtList ISettingsSaveable<FileExtList>.DeserializeSetting(String setting) => Parse(setting);
 
 }

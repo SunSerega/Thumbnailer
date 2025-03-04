@@ -28,8 +28,8 @@ public partial class ThumbCompareViewer : UserControl
     public void Reset()
     {
         b.Child = null;
-        b.MaxWidth = double.PositiveInfinity;
-        b.MaxHeight = double.PositiveInfinity;
+        b.MaxWidth = Double.PositiveInfinity;
+        b.MaxHeight = Double.PositiveInfinity;
         HorizontalAlignment = HorizontalAlignment.Stretch;
         VerticalAlignment = VerticalAlignment.Stretch;
     }

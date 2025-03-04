@@ -28,17 +28,17 @@ namespace Dashboard;
 public class ThumbGenerator
 {
     private readonly CustomThreadPool thr_pool;
-    private readonly string internal_files_base;
+    private readonly String internal_files_base;
     private readonly DirectoryInfo cache_dir;
     private readonly FileStream lock_file;
 
-    private readonly ConcurrentDictionary<string, CachedFileInfo> files = new();
+    private readonly ConcurrentDictionary<String, CachedFileInfo> files = new();
 
     #region Load
 
-    private sealed class CacheFileLoadCanceledException(string? message) : Exception(message) { }
+    private sealed class CacheFileLoadCanceledException(String? message) : Exception(message) { }
 
-    public ThumbGenerator(CustomThreadPool thr_pool, string cache_dir, Action<string?> change_subjob)
+    public ThumbGenerator(CustomThreadPool thr_pool, String cache_dir, Action<String?> change_subjob)
     {
         this.thr_pool = thr_pool;
         this.cache_dir = Directory.CreateDirectory(cache_dir);
@@ -47,10 +47,10 @@ public class ThumbGenerator
 
         var dirs = this.cache_dir.GetDirectories();
 
-        var all_file_paths = new HashSet<string>();
+        var all_file_paths = new HashSet<String>();
         var purge_acts = new List<Action>();
-        var failed_load = new List<(string id, string message)>();
-        var conflicting_caches = new Dictionary<string, List<uint>>();
+        var failed_load = new List<(String id, String message)>();
+        var conflicting_caches = new Dictionary<String, List<UInt32>>();
 
         for (var i = 0; i < dirs.Length; ++i)
         {
@@ -60,7 +60,7 @@ public class ThumbGenerator
             Action? purge_act = () => dir.Delete(true);
             try
             {
-                if (!uint.TryParse(dir.Name, out var id))
+                if (!UInt32.TryParse(dir.Name, out var id))
                     throw new CacheFileLoadCanceledException($"1!Invalid ID");
                 var cfi = new CachedFileInfo(this, id, dir.FullName, InvokeCacheSizeChanged);
                 purge_act = cfi.Erase;
@@ -101,7 +101,7 @@ public class ThumbGenerator
                 if (purge_act is null)
                     throw new InvalidOperationException();
                 purge_acts.Add(purge_act);
-                if (!string.IsNullOrEmpty(e.Message))
+                if (!String.IsNullOrEmpty(e.Message))
                     failed_load.Add((dir.Name, e.Message));
             }
         }
@@ -112,8 +112,8 @@ public class ThumbGenerator
         {
             change_subjob("Purge");
 
-            var lns = new List<string>();
-            void header(string h)
+            var lns = new List<String>();
+            void header(String h)
             {
                 if (lns.Count!=0)
                     lns.Add("");
@@ -129,7 +129,7 @@ public class ThumbGenerator
                     var ids = g.Select(t => t.id).Order();
                     lns.Add($"{ids.JoinToString(',')}: {message}");
                 }
-                lns.Add(new string('=', 30));
+                lns.Add(new String('=', 30));
             }
 
             if (conflicting_caches.Count!=0)
@@ -137,7 +137,7 @@ public class ThumbGenerator
                 header("Id-s referred to the same file");
                 foreach (var (path, ids) in conflicting_caches)
                     lns.Add($"[{path}]: {ids.JoinToString(',')}");
-                lns.Add(new string('=', 30));
+                lns.Add(new String('=', 30));
             }
 
             header("Purge all the deviants?");
@@ -184,18 +184,18 @@ public class ThumbGenerator
     #region ThumbSource
 
     public sealed class ThumbSource(
-        string name,
+        String name,
         TimeSpan len,
-        Func<double, Action<string?>, Action<double>?, string> extract
+        Func<Double, Action<String?>, Action<Double>?, String> extract
     ) {
-        public string Name => name;
+        public String Name => name;
 
         public TimeSpan Length => len;
 
-        private double last_pos = double.NaN;
-        private string? last_otp_fname = null;
+        private Double last_pos = Double.NaN;
+        private String? last_otp_fname = null;
 
-        public string Extract(bool force_regen, double pos, Action<string?> change_subjob, Action<double>? on_pre_extract_progress)
+        public String Extract(Boolean force_regen, Double pos, Action<String?> change_subjob, Action<Double>? on_pre_extract_progress)
         {
             if (pos<0 || pos>1)
                 throw new InvalidOperationException();
@@ -220,8 +220,8 @@ public class ThumbGenerator
     public interface ICachedFileInfo
     {
 
-        public string? InpPath { get; }
-        public string CurrentThumbPath { get; }
+        public String? InpPath { get; }
+        public String CurrentThumbPath { get; }
 
         public BitmapImage CurrentThumbBmp {
             get
@@ -232,24 +232,24 @@ public class ThumbGenerator
         }
 
         public IReadOnlyList<ThumbSource> ThumbSources { get; }
-        public int ChosenThumbOptionInd { get; }
+        public Int32 ChosenThumbOptionInd { get; }
 
-        public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos, Action<double>? on_pre_extract_progress);
+        public void ApplySourceAt(Boolean force_regen, Action<String?> change_subjob, Int32 ind, in Double? in_pos, out Double out_pos, Action<Double>? on_pre_extract_progress);
 
         public sealed class CacheUse(
             ICachedFileInfo cfi,
-            string cause,
-            Func<bool> is_freed_check
+            String cause,
+            Func<Boolean> is_freed_check
         ) : IDisposable
         {
             public CacheUse Dupe() => cfi.BeginUse(cause, is_freed_check);
 
             public ICachedFileInfo CFI => cfi;
-            public string Cause => cause;
+            public String Cause => cause;
 
-            public bool IsFreed => disposed || is_freed_check();
+            public Boolean IsFreed => disposed || is_freed_check();
 
-            private bool disposed = false;
+            private Boolean disposed = false;
             public void Dispose() => cfi.EndUse(this, () =>
             {
                 if (disposed)
@@ -257,7 +257,7 @@ public class ThumbGenerator
                 disposed = true;
             });
 
-            public bool TryLetGoUndisposed()
+            public Boolean TryLetGoUndisposed()
             {
                 if (disposed) throw new InvalidOperationException();
                 if (!IsFreed) return false;
@@ -265,26 +265,26 @@ public class ThumbGenerator
                 return true;
             }
 
-            public override string ToString() => $"CacheUse[{cause}] for [{cfi.InpPath}]";
+            public override String ToString() => $"CacheUse[{cause}] for [{cfi.InpPath}]";
 
         }
-        public CacheUse BeginUse(string cause, Func<bool> is_freed_check);
+        public CacheUse BeginUse(String cause, Func<Boolean> is_freed_check);
         public void EndUse(CacheUse use, Action? finish_while_locked);
 
     }
 
-    private sealed class IdentityCFI(string fname) : ICachedFileInfo
+    private sealed class IdentityCFI(String fname) : ICachedFileInfo
     {
-        public string? InpPath => fname;
-        public string CurrentThumbPath => fname;
+        public String? InpPath => fname;
+        public String CurrentThumbPath => fname;
 
         public IReadOnlyList<ThumbSource> ThumbSources => [new ThumbSource(fname, default, (_,_,_)=>fname)];
-        public int ChosenThumbOptionInd => 0;
+        public Int32 ChosenThumbOptionInd => 0;
 
-        public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos, Action<double>? on_pre_extract_progress) =>
+        public void ApplySourceAt(Boolean force_regen, Action<String?> change_subjob, Int32 ind, in Double? in_pos, out Double out_pos, Action<Double>? on_pre_extract_progress) =>
             throw new NotImplementedException();
 
-        public ICachedFileInfo.CacheUse BeginUse(string cause, Func<bool> is_freed_check) => new(this, cause, is_freed_check);
+        public ICachedFileInfo.CacheUse BeginUse(String cause, Func<Boolean> is_freed_check) => new(this, cause, is_freed_check);
         public void EndUse(ICachedFileInfo.CacheUse use, Action? finish_while_locked) => finish_while_locked?.Invoke();
 
     }
@@ -292,12 +292,12 @@ public class ThumbGenerator
     private sealed class CachedFileInfo : ICachedFileInfo
     {
         private readonly ThumbGenerator gen;
-        private readonly uint id;
+        private readonly UInt32 id;
         private readonly FileSettings settings;
 
         #region Constructors
 
-        public CachedFileInfo(ThumbGenerator gen, uint id, string cache_path, Action<long> on_cache_changed)
+        public CachedFileInfo(ThumbGenerator gen, UInt32 id, String cache_path, Action<Int64> on_cache_changed)
         {
             if (!Path.IsPathRooted(cache_path))
                 throw new ArgumentException($"Path [{cache_path}] was not rooted", nameof(cache_path));
@@ -312,7 +312,7 @@ public class ThumbGenerator
             temps.InitRoot();
         }
 
-        public CachedFileInfo(ThumbGenerator gen, uint id, string cache_path, Action<long> on_cache_changed, string target_fname)
+        public CachedFileInfo(ThumbGenerator gen, UInt32 id, String cache_path, Action<Int64> on_cache_changed, String target_fname)
             : this(gen, id, cache_path, on_cache_changed)
         {
             if (!Path.IsPathRooted(target_fname))
@@ -324,18 +324,18 @@ public class ThumbGenerator
 
         #region Properties
 
-        public uint Id => id;
-        public string? InpPath => settings.InpPath;
-        public bool CanClearTemps => temps.CanClear;
+        public UInt32 Id => id;
+        public String? InpPath => settings.InpPath;
+        public Boolean CanClearTemps => temps.CanClear;
         public DateTime LastCacheUseTime => settings.LastCacheUseTime;
-        public string CurrentThumbPath => Path.Combine(settings.GetSettingsDir(), settings.CurrentThumb ??
+        public String CurrentThumbPath => Path.Combine(settings.GetSettingsDir(), settings.CurrentThumb ??
             throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb")
         );
-        public bool CurrentThumbIsFinal => settings.CurrentThumbIsFinal;
-        public int ChosenThumbOptionInd => settings.ChosenThumbOptionInd ??
+        public Boolean CurrentThumbIsFinal => settings.CurrentThumbIsFinal;
+        public Int32 ChosenThumbOptionInd => settings.ChosenThumbOptionInd ??
             throw new InvalidOperationException("Should not have been called before exiting .GenerateThumb");
-        private bool error_generating = false;
-        public bool IsDeletable =>
+        private Boolean error_generating = false;
+        public Boolean IsDeletable =>
             !File.Exists(InpPath) ||
             !GlobalSettings.Instance.AllowedExts.MatchesFile(InpPath) ||
             (error_generating && LastCacheUseTime+TimeSpan.FromSeconds(30) < DateTime.UtcNow);
@@ -353,7 +353,7 @@ public class ThumbGenerator
             settings.CurrentThumb = source.Extract(false,0.3, null!, null);
             COMManip.ResetThumbFor(InpPath, TimeSpan.Zero);
         }
-        private void SetSources(Action<string?> change_subjob, ThumbSource[] thumb_sources)
+        private void SetSources(Action<String?> change_subjob, ThumbSource[] thumb_sources)
         {
             if (settings.ChosenStreamPositions.Count != 0 && settings.ChosenStreamPositions.Count != thumb_sources.Length)
                 settings.ChosenStreamPositions = ChosenStreamPositionsInfo.Empty;
@@ -366,15 +366,15 @@ public class ThumbGenerator
             //if (run_gc) GC.Collect();
         }
 
-        public void ApplySourceAt(bool force_regen, Action<string?> change_subjob, int ind, in double? in_pos, out double out_pos, Action<double>? on_pre_extract_progress)
+        public void ApplySourceAt(Boolean force_regen, Action<String?> change_subjob, Int32 ind, in Double? in_pos, out Double out_pos, Action<Double>? on_pre_extract_progress)
         {
             using var this_locker = new ObjectLocker(this);
             var source = ThumbSources[ind];
 
-            double pos = in_pos ?? settings.ChosenStreamPositions[ind];
+            Double pos = in_pos ?? settings.ChosenStreamPositions[ind];
             out_pos = pos;
 
-            string res;
+            String res;
             try
             {
                 res = source.Extract(force_regen, pos, change_subjob, on_pre_extract_progress);
@@ -400,10 +400,10 @@ public class ThumbGenerator
 
         #region UseList
 
-        private ConcurrentDictionary<ICachedFileInfo.CacheUse, byte> use_list = new();
+        private ConcurrentDictionary<ICachedFileInfo.CacheUse, Byte> use_list = new();
         private readonly OneToManyLock use_list_lock = new();
 
-        public ICachedFileInfo.CacheUse BeginUse(string cause, Func<bool> is_freed_check) => use_list_lock.ManyLocked(() =>
+        public ICachedFileInfo.CacheUse BeginUse(String cause, Func<Boolean> is_freed_check) => use_list_lock.ManyLocked(() =>
         {
             var use = new ICachedFileInfo.CacheUse(this, cause, is_freed_check);
             if (!use_list.TryAdd(use, 0))
@@ -425,7 +425,7 @@ public class ThumbGenerator
             }
         });
 
-        private bool TryEmptyUseList(Action act) => use_list_lock.OneLocked(() =>
+        private Boolean TryEmptyUseList(Action act) => use_list_lock.OneLocked(() =>
         {
 
             var use_list = new List<ICachedFileInfo.CacheUse>(this.use_list.Count);
@@ -459,15 +459,15 @@ public class ThumbGenerator
 
         #region Temps
 
-        public event Action<long>? CacheSizeChanged;
-        private void InvokeCacheSizeChanged(long change) =>
+        public event Action<Int64>? CacheSizeChanged;
+        private void InvokeCacheSizeChanged(Int64 change) =>
             CacheSizeChanged?.Invoke(change);
 
-        private sealed class GenerationTemp(string path, Action<string>? on_unload) : IDisposable
+        private sealed class GenerationTemp(String path, Action<String>? on_unload) : IDisposable
         {
-            public string Path => path;
+            public String Path => path;
 
-            public bool IsDeletable => on_unload != null;
+            public Boolean IsDeletable => on_unload != null;
 
             public void Dispose()
             {
@@ -475,7 +475,7 @@ public class ThumbGenerator
                 //TODO still broken sometimes
                 // - Reworked generation since then
                 //on_unload(path);
-                for (int i = 1; ; ++i)
+                for (Int32 i = 1; ; ++i)
                     try
                     {
                         on_unload(path);
@@ -491,8 +491,8 @@ public class ThumbGenerator
 
         }
 
-        private static long FileSize(string fname) => new FileInfo(fname).Length;
-        private bool DeleteFile(string fname)
+        private static Int64 FileSize(String fname) => new FileInfo(fname).Length;
+        private Boolean DeleteFile(String fname)
         {
             if (!fname.StartsWith(settings.GetSettingsDir()))
                 throw new InvalidOperationException(fname);
@@ -505,8 +505,8 @@ public class ThumbGenerator
             return true;
         }
 
-        private static long DirSize(string dir) => Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).Sum(FileSize);
-        private bool DeleteDir(string dir)
+        private static Int64 DirSize(String dir) => Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).Sum(FileSize);
+        private Boolean DeleteDir(String dir)
         {
             if (!dir.StartsWith(settings.GetSettingsDir()))
                 throw new InvalidOperationException(dir);
@@ -521,9 +521,9 @@ public class ThumbGenerator
 
         private sealed class LocalTempsList(CachedFileInfo cfi) : IDisposable
         {
-            private readonly Dictionary<string, GenerationTemp> d = [];
+            private readonly Dictionary<String, GenerationTemp> d = [];
 
-            private bool IsRoot => cfi.temps == this;
+            private Boolean IsRoot => cfi.temps == this;
             private void OnChanged()
             {
                 if (!IsRoot) return;
@@ -552,7 +552,7 @@ public class ThumbGenerator
                 //}
             }
 
-            private GenerationTemp AddExisting(string temp_name, GenerationTemp temp)
+            private GenerationTemp AddExisting(String temp_name, GenerationTemp temp)
             {
                 if ("=;".Any(temp_name.Contains))
                     throw new FormatException(temp_name);
@@ -562,7 +562,7 @@ public class ThumbGenerator
                 OnChanged();
                 return temp;
             }
-            private GenerationTemp AddNew(string temp_name, GenerationTemp temp)
+            private GenerationTemp AddNew(String temp_name, GenerationTemp temp)
             {
                 // delete last gen leftovers
                 temp.Dispose();
@@ -605,16 +605,16 @@ public class ThumbGenerator
 
                 OnChanged();
             }
-            public GenerationTemp AddFile(string temp_name, string fname) => AddNew(temp_name, new GenerationTemp(
+            public GenerationTemp AddFile(String temp_name, String fname) => AddNew(temp_name, new GenerationTemp(
                 Path.Combine(cfi.settings.GetSettingsDir(), fname),
                 fname => cfi.DeleteFile(fname)
             ));
-            public GenerationTemp AddDir(string temp_name, string dir) => AddNew(temp_name, new GenerationTemp(
+            public GenerationTemp AddDir(String temp_name, String dir) => AddNew(temp_name, new GenerationTemp(
                 Path.Combine(cfi.settings.GetSettingsDir(), dir),
                 dir => cfi.DeleteDir(dir)
             ));
 
-            public GenerationTemp? TryRemove(string temp_name)
+            public GenerationTemp? TryRemove(String temp_name)
             {
                 if (!d.Remove(temp_name, out var t))
                     return null;
@@ -623,16 +623,16 @@ public class ThumbGenerator
                 return t;
             }
 
-            public int DeleteExtraFiles()
+            public Int32 DeleteExtraFiles()
             {
                 if (!IsRoot) throw new InvalidOperationException();
                 d.TrimExcess();
-                var non_del = new HashSet<string>(d.Count);
+                var non_del = new HashSet<String>(d.Count);
                 foreach (var t in d.Values)
                     if (!non_del.Add(t.Path))
                         throw new InvalidOperationException();
 
-                int on_dir(string dir)
+                Int32 on_dir(String dir)
                 {
                     var res = 0;
 
@@ -657,7 +657,7 @@ public class ThumbGenerator
                 return on_dir(cfi.settings.GetSettingsDir());
             }
 
-            public void GiveToCFI(string temp_name)
+            public void GiveToCFI(String temp_name)
             {
                 if (IsRoot) throw new InvalidOperationException();
                 if (!d.Remove(temp_name, out var t))
@@ -665,7 +665,7 @@ public class ThumbGenerator
                 cfi.temps.AddExisting(temp_name, t);
             }
 
-            public bool CanClear => d.Values.Any(t=>t.IsDeletable);
+            public Boolean CanClear => d.Values.Any(t=>t.IsDeletable);
             public void Clear()
             {
                 foreach (var (temp_name,_) in d.Where(kvp=>kvp.Value.IsDeletable).ToArray())
@@ -703,14 +703,14 @@ public class ThumbGenerator
         }
         private readonly LocalTempsList temps;
 
-        public int DeleteExtraFiles()
+        public Int32 DeleteExtraFiles()
         {
             using var this_locker = ObjectLocker.TryLock(this);
             if (this_locker is null) return 0;
             return temps.DeleteExtraFiles();
         }
 
-        public bool TryClearTemps()
+        public Boolean TryClearTemps()
         {
             using var this_locker = ObjectLocker.TryLock(this);
             if (this_locker is null) return false;
@@ -729,7 +729,7 @@ public class ThumbGenerator
 
         private static class CommonThumbSources
         {
-            private static ThumbSource Make(string name) {
+            private static ThumbSource Make(String name) {
                 var full_path = Path.GetFullPath($"Dashboard-Default.{name}.bmp");
                 if (!File.Exists(full_path))
                     throw new InvalidOperationException(name);
@@ -744,7 +744,7 @@ public class ThumbGenerator
 
         }
 
-        private (string? cause, Action<ICachedFileInfo>? on_regenerated, bool force_regen) delayed_gen_args = default;
+        private (String? cause, Action<ICachedFileInfo>? on_regenerated, Boolean force_regen) delayed_gen_args = default;
         private static readonly DelayedMultiUpdater<CachedFileInfo> delayed_gen = new(cfi =>
         {
             var (cause, on_regenerated, force_regen) = cfi.delayed_gen_args;
@@ -753,14 +753,14 @@ public class ThumbGenerator
             cfi.GenerateThumb($"{cause} (delayed)", null, on_regenerated, force_regen, false);
         }, "Thumb gen wait (input recently modified)", is_background: false);
 
-        private volatile int gen_jobs_assigned = 0;
+        private volatile Int32 gen_jobs_assigned = 0;
         private CustomThreadPool.ThreadPoolJobHeader? gen_job_obj = null;
-        private readonly ConcurrentQueue<Action<Action<string?>>> gen_acts = new();
+        private readonly ConcurrentQueue<Action<Action<String?>>> gen_acts = new();
 
         public ICachedFileInfo.CacheUse? GenerateThumb(
-            string cause, Func<bool>? is_unused_check,
+            String cause, Func<Boolean>? is_unused_check,
             Action<ICachedFileInfo>? on_regenerated,
-            bool force_regen, bool set_cache_use_time)
+            Boolean force_regen, Boolean set_cache_use_time)
         {
             ObjectLocker? TryLockThis()
             {
@@ -855,7 +855,7 @@ public class ThumbGenerator
                     // Because sanity checks of format xml rely on sources list
                     TimeSpan? global_dur = null;
                     var global_dur_s = "";
-                    void apply_dur(string inp_fname, Action? inp_dispose, string otp_fname, Action<string?> change_subjob)
+                    void apply_dur(String inp_fname, Action? inp_dispose, String otp_fname, Action<String?> change_subjob)
                     {
                         change_subjob("apply dur: load bg image");
                         Size sz;
@@ -909,7 +909,7 @@ public class ThumbGenerator
                         change_subjob(null);
 
                         change_subjob("apply dur: render output");
-                        var bitmap = new RenderTargetBitmap((int)sz.Width, (int)sz.Height, 96, 96, PixelFormats.Pbgra32);
+                        var bitmap = new RenderTargetBitmap((Int32)sz.Width, (Int32)sz.Height, 96, 96, PixelFormats.Pbgra32);
                         res_c.Measure(sz);
                         res_c.Arrange(new(sz));
                         bitmap.Render(res_c);
@@ -935,12 +935,12 @@ public class ThumbGenerator
                         if (metadata_xml.Descendants("streams").SingleOrDefault() is XElement streams_xml)
                             foreach (var stream_xml in streams_xml.Descendants("stream"))
                             {
-                                var ind = int.Parse(stream_xml.Attribute("index")!.Value);
+                                var ind = Int32.Parse(stream_xml.Attribute("index")!.Value);
                                 change_subjob($"checking stream#{ind}");
 
                                 var codec_type_s = stream_xml.Attribute("codec_type")!.Value;
 
-                                string? get_tag(string key) =>
+                                String? get_tag(String key) =>
                                     stream_xml.Descendants("tag").SingleOrDefault(n => n.Attribute("key")!.Value == key)?.Attribute("value")!.Value;
 
                                 var tag_mimetype = get_tag("mimetype");
@@ -963,7 +963,7 @@ public class ThumbGenerator
                                 if (mimetype_is_image==false && is_attachment) continue;
 
                                 var frame_count_s = stream_xml.Attribute("nb_read_packets")?.Value;
-                                int frame_count;
+                                Int32 frame_count;
                                 if (is_attachment)
                                 {
                                     if (frame_count_s != null)
@@ -974,7 +974,7 @@ public class ThumbGenerator
                                 {
                                     if (frame_count_s is null)
                                         continue;
-                                    frame_count = int.Parse(frame_count_s);
+                                    frame_count = Int32.Parse(frame_count_s);
                                 }
 
                                 var stream_is_image = frame_count == 1;
@@ -986,7 +986,7 @@ public class ThumbGenerator
                                 // torrent subs stream can have boths
                                 //if ((l_dur_s1 != null) && (l_dur_s2 != null))
                                 //    throw new NotImplementedException($"[{inp_fname}]: [{metadata_s}]");
-                                string source_name;
+                                String source_name;
                                 TimeSpan l_dur;
                                 if (stream_is_image)
                                 {
@@ -996,7 +996,7 @@ public class ThumbGenerator
                                 else if (l_dur_s1 != null)
                                 {
                                     source_name = $"FStream:{ind}";
-                                    l_dur = TimeSpan.FromSeconds(double.Parse(l_dur_s1));
+                                    l_dur = TimeSpan.FromSeconds(Double.Parse(l_dur_s1));
                                 }
                                 else if (l_dur_s2 != null)
                                 {
@@ -1027,22 +1027,22 @@ public class ThumbGenerator
                                     _ => throw new FormatException(codec_type_s),
                                 }) continue;
 
-                                var pre_extracted_strong_ref = default(byte[]?[]?);
-                                var pre_extracted_weak_ref = new WeakReference<byte[]?[]?>(pre_extracted_strong_ref);
+                                var pre_extracted_strong_ref = default(Byte[]?[]?);
+                                var pre_extracted_weak_ref = new WeakReference<Byte[]?[]?>(pre_extracted_strong_ref);
                                 var can_pre_extract = !stream_is_image;
 
-                                var last_pos = double.NaN;
-                                var last_otp_fname = default(string);
+                                var last_pos = Double.NaN;
+                                var last_otp_fname = default(String);
                                 sources.Add(new(source_name, l_dur, (pos, change_subjob, pre_extract_progress) =>
                                 {
                                     using var this_locker = new ObjectLocker(this);
                                     try
                                     {
-                                        byte[]?[]? pre_extracted = null;
+                                        Byte[]?[]? pre_extracted = null;
                                         #region Pre-extraction
                                         if (can_pre_extract && pre_extract_progress!=null && (!pre_extracted_weak_ref.TryGetTarget(out pre_extracted) || pre_extracted is null))
                                         {
-                                            pre_extracted_strong_ref = new byte[]?[frame_count];
+                                            pre_extracted_strong_ref = new Byte[]?[frame_count];
                                             pre_extracted_weak_ref.SetTarget(pre_extracted_strong_ref);
 
                                             gen.thr_pool.AddJob($"pre extract [{ind}] for [{inp_fname}]", change_subjob =>
@@ -1052,9 +1052,9 @@ public class ThumbGenerator
 
                                                 var res_i = 0;
                                                 var buff_initial_size = 1024*1024;
-                                                var buff = new byte[buff_initial_size];
+                                                var buff = new Byte[buff_initial_size];
                                                 var buff_fill = 0;
-                                                void flush_frame(int size)
+                                                void flush_frame(Int32 size)
                                                 {
                                                     if (res_i < frame_count)
                                                         res[res_i] = buff[0..size];
@@ -1064,7 +1064,7 @@ public class ThumbGenerator
                                                     buff_fill = new_fill;
 
                                                     res_i += 1;
-                                                    var p = res_i/(double)frame_count;
+                                                    var p = res_i/(Double)frame_count;
                                                     pre_extract_progress(p);
                                                     change_subjob($"done: {res_i}/{frame_count} ({p:P2})");
                                                 }
@@ -1074,7 +1074,7 @@ public class ThumbGenerator
                                                     handle_otp: sr =>
                                                     {
                                                         frame_str = sr.BaseStream;
-                                                        return System.Threading.Tasks.Task.FromResult<string?>(null);
+                                                        return System.Threading.Tasks.Task.FromResult<String?>(null);
                                                     }
                                                 );
                                                 if (frame_str is null) throw new InvalidOperationException();
@@ -1107,7 +1107,7 @@ public class ThumbGenerator
                                         #endregion
 
                                         using var l_temps = new LocalTempsList(this);
-                                        var args = new List<string>();
+                                        var args = new List<String>();
 
                                         temps.TryRemove(otp_temp_name);
                                         var otp_temp = l_temps.AddFile(otp_temp_name, "thumb.png");
@@ -1115,11 +1115,11 @@ public class ThumbGenerator
 
                                         //TODO https://trac.ffmpeg.org/ticket/10512
                                         // - Need to cd into input folder for conversion to work
-                                        string? ffmpeg_path = null;
+                                        String? ffmpeg_path = null;
 
                                         Func<StreamWriter, System.Threading.Tasks.Task>? handle_inp = null;
 
-                                        if (pre_extracted != null && pre_extracted[(int)(pos * (pre_extracted.Length-1))] is byte[] data)
+                                        if (pre_extracted != null && pre_extracted[(Int32)(pos * (pre_extracted.Length-1))] is Byte[] data)
                                         {
                                             handle_inp = sw => sw.BaseStream.WriteAsync(data, 0, data.Length);
                                             args.Add($"-i -");
@@ -1140,7 +1140,7 @@ public class ThumbGenerator
                                                     handle_otp: sr =>
                                                     {
                                                         handle_inp = sw => sr.BaseStream.CopyToAsync(sw.BaseStream);
-                                                        return System.Threading.Tasks.Task.FromResult<string?>(null);
+                                                        return System.Threading.Tasks.Task.FromResult<String?>(null);
                                                     }
                                                 );
                                                 if (handle_inp is null) throw new InvalidOperationException();
@@ -1205,7 +1205,7 @@ public class ThumbGenerator
                         else if (any_dur && format_xml.Attribute("duration") is XAttribute global_dur_xml)
                         {
                             change_subjob("make dur string");
-                            global_dur = TimeSpan.FromSeconds(double.Parse(global_dur_xml.Value));
+                            global_dur = TimeSpan.FromSeconds(Double.Parse(global_dur_xml.Value));
 
                             if (global_dur_s!="" || global_dur.Value.TotalHours>=1)
                                 global_dur_s += Math.Truncate(global_dur.Value.TotalHours).ToString() + ':';
@@ -1253,7 +1253,7 @@ public class ThumbGenerator
                                 var inp_fname = CommonThumbSources.SoundOnly.Extract(false, 0, null!, null);
 
                                 using var l_temps = new LocalTempsList(this);
-                                var args = new List<string>();
+                                var args = new List<String>();
 
                                 temps.TryRemove(otp_temp_name);
                                 var otp_temp = l_temps.AddFile(otp_temp_name, "thumb.png");
@@ -1312,7 +1312,7 @@ public class ThumbGenerator
 
         #region Shutdown
 
-        private bool is_erased = false;
+        private Boolean is_erased = false;
         public void Erase()
         {
             using var this_locker = new ObjectLocker(this);
@@ -1325,7 +1325,7 @@ public class ThumbGenerator
         }
 
         // Shutdown without erasing (when exiting)
-        private bool has_shut_down = false;
+        private Boolean has_shut_down = false;
         public void Shutdown()
         {
             using var this_locker = new ObjectLocker(this);
@@ -1339,16 +1339,16 @@ public class ThumbGenerator
 
     #endregion
 
-    public event Action<long>? CacheSizeChanged;
-    private void InvokeCacheSizeChanged(long byte_change) =>
+    public event Action<Int64>? CacheSizeChanged;
+    private void InvokeCacheSizeChanged(Int64 byte_change) =>
         CacheSizeChanged?.Invoke(byte_change);
 
     private readonly OneToManyLock purge_lock = new();
 
     #region Generate
 
-    private volatile uint last_used_id = 0;
-    private CachedFileInfo GetCFI(string fname)
+    private volatile UInt32 last_used_id = 0;
+    private CachedFileInfo GetCFI(String fname)
     {
         // Cannot add concurently, because .GetOrAdd can create
         // multiple instances of cfi for the same fname in different threads
@@ -1368,10 +1368,10 @@ public class ThumbGenerator
     }
 
     private ICachedFileInfo.CacheUse? InternalGen(
-        string fname,
-        string cause, Func<bool>? is_unused_check,
+        String fname,
+        String cause, Func<Boolean>? is_unused_check,
         Action<ICachedFileInfo>? on_regenerated,
-        bool force_regen
+        Boolean force_regen
     )
     {
         fname = Path.GetFullPath(fname);
@@ -1383,24 +1383,24 @@ public class ThumbGenerator
     }
 
     public ICachedFileInfo.CacheUse? Generate(
-        string fname,
-        string cause, Func<bool> is_unused_check,
+        String fname,
+        String cause, Func<Boolean> is_unused_check,
         Action<ICachedFileInfo>? on_regenerated,
-        bool force_regen
+        Boolean force_regen
     ) => purge_lock.ManyLocked(() => InternalGen(fname, cause, is_unused_check, on_regenerated, force_regen));
 
-    public void MassGenerate(IEnumerable<(string fname, bool force_regen)> lst) => purge_lock.ManyLocked(() =>
+    public void MassGenerate(IEnumerable<(String fname, Boolean force_regen)> lst) => purge_lock.ManyLocked(() =>
     {
         foreach (var (fname, force_regen) in lst)
             InternalGen(fname, nameof(MassGenerate), null, null, force_regen);
     });
 
-    public void RegenAll(bool force_regen) => thr_pool.AddJob(nameof(RegenAll), change_subjob => purge_lock.ManyLocked(() =>
+    public void RegenAll(Boolean force_regen) => thr_pool.AddJob(nameof(RegenAll), change_subjob => purge_lock.ManyLocked(() =>
     {
         var cfis = files.Values.ToArray();
         for (var i = 0; i<cfis.Length; i++)
         {
-            change_subjob($"{i}/{cfis.Length} ({i/(double)cfis.Length:P2})");
+            change_subjob($"{i}/{cfis.Length} ({i/(Double)cfis.Length:P2})");
             var cfi = cfis[i];
             if (cfi.CurrentThumbIsFinal && cfi.LastCacheUseTime==default) continue;
             cfi.GenerateThumb("Regen", null, null, force_regen, false);
@@ -1411,17 +1411,17 @@ public class ThumbGenerator
 
     #region Clear
 
-    public bool ClearOne(string fname)
+    public Boolean ClearOne(String fname)
     {
         if (!files.TryRemove(fname, out var cfi)) return false;
         cfi.Erase();
         return true;
     }
 
-    public int ClearInvalid() {
+    public Int32 ClearInvalid() {
         var c = purge_lock.OneLocked(() =>
         {
-            var to_remove = new List<KeyValuePair<string, CachedFileInfo>>(files.Count);
+            var to_remove = new List<KeyValuePair<String, CachedFileInfo>>(files.Count);
             foreach (var kvp in files)
                 if (kvp.Value.IsDeletable)
                     to_remove.Add(kvp);
@@ -1446,7 +1446,7 @@ public class ThumbGenerator
         return c;
     }
 
-    public int ClearExtraFiles()
+    public Int32 ClearExtraFiles()
     {
         var c = purge_lock.OneLocked(() =>
         {
@@ -1459,9 +1459,9 @@ public class ThumbGenerator
         return c;
     }
 
-    public void ClearOldest(long size_to_clear) => purge_lock.OneLocked(() =>
+    public void ClearOldest(Int64 size_to_clear) => purge_lock.OneLocked(() =>
     {
-        void size_change_handler(long size_change) => size_to_clear += size_change;
+        void size_change_handler(Int64 size_change) => size_to_clear += size_change;
         CacheSizeChanged += size_change_handler;
         try
         {
@@ -1481,7 +1481,7 @@ public class ThumbGenerator
         }
     }, with_priority: false);
 
-    public void ClearAll(Action<string?> change_subjob) => purge_lock.OneLocked(() =>
+    public void ClearAll(Action<String?> change_subjob) => purge_lock.OneLocked(() =>
     {
         while (!files.IsEmpty)
             try

@@ -115,7 +115,7 @@ public partial class JobList : Window
                                 pending_tb_map.Add(new_pending, new Stack<TextBlock>([tb]));
                             sp_pending.Children.Insert(0, tb);
 
-                            tb.Measure(new(double.PositiveInfinity, double.PositiveInfinity));
+                            tb.Measure(new(Double.PositiveInfinity, Double.PositiveInfinity));
                             var anim = new DoubleAnimation
                             {
                                 EasingFunction = new ExponentialEase()
@@ -184,11 +184,11 @@ public sealed class WorkingJobList : FrameworkElement
         Background = Brushes.LightGray,
     };
 
-    public WorkingJobList(int max_jobs)
+    public WorkingJobList(Int32 max_jobs)
     {
         
         header_brushes = Enumerable.Range(0, max_jobs).Select(i => new SolidColorBrush(
-            ColorExtensions.FromAhsb(255, i/(double)max_jobs, 1, 1)
+            ColorExtensions.FromAhsb(255, i/(Double)max_jobs, 1, 1)
         )).ToArray();
 
         hor_lines = Enumerable.Range(0, max_jobs-1).Select(_ => MakeLine()).ToArray();
@@ -218,9 +218,9 @@ public sealed class WorkingJobList : FrameworkElement
     {
         private readonly SolidColorBrush[] a = root.header_brushes;
 
-        public readonly SolidColorBrush this[int i] => a[i];
+        public readonly SolidColorBrush this[Int32 i] => a[i];
 
-        public readonly int Count => a.Length;
+        public readonly Int32 Count => a.Length;
 
         public readonly IEnumerator<SolidColorBrush> GetEnumerator() => a.AsEnumerable().GetEnumerator();
 
@@ -229,7 +229,7 @@ public sealed class WorkingJobList : FrameworkElement
     }
     public HeaderBrushList HeaderBrush => new(this);
 
-    public void ChangeJob(int ind, string? name)
+    public void ChangeJob(Int32 ind, String? name)
     {
         if (content_tbs[ind].name.DesiredSize.Width >= max_name_w)
             InvalidateMeasure();
@@ -239,7 +239,7 @@ public sealed class WorkingJobList : FrameworkElement
         if (name is null) ChangeSubJob(ind, null);
     }
 
-    public void ChangeSubJob(int ind, string? subjob)
+    public void ChangeSubJob(Int32 ind, String? subjob)
     {
         if (content_tbs[ind].subjob.DesiredSize.Width >= max_subjob_w)
             InvalidateMeasure();
@@ -248,16 +248,16 @@ public sealed class WorkingJobList : FrameworkElement
             subjob is null ? Brushes.LightGray : Brushes.Transparent;
     }
 
-    protected override int VisualChildrenCount => all_visuals.Length;
-    protected override Visual GetVisualChild(int i) => all_visuals[i];
+    protected override Int32 VisualChildrenCount => all_visuals.Length;
+    protected override Visual GetVisualChild(Int32 i) => all_visuals[i];
 
-    private int max_header_w = 0;
-    private double max_name_w = 0;
-    private double max_subjob_w = 0;
+    private Int32 max_header_w = 0;
+    private Double max_name_w = 0;
+    private Double max_subjob_w = 0;
     protected override Size MeasureOverride(Size sz)
     {
         //var sw = Stopwatch.StartNew();
-        var inf_sz = new Size(double.PositiveInfinity, double.PositiveInfinity);
+        var inf_sz = new Size(Double.PositiveInfinity, Double.PositiveInfinity);
 
         max_header_w = 0;
         max_name_w = 0;
@@ -274,7 +274,7 @@ public sealed class WorkingJobList : FrameworkElement
             if (subjob_tb.DesiredSize.Width>max_subjob_w)
                 max_subjob_w = subjob_tb.DesiredSize.Width;
 
-            var h = (int)Math.Ceiling(Math.Max(name_tb.DesiredSize.Height, subjob_tb.DesiredSize.Height));
+            var h = (Int32)Math.Ceiling(Math.Max(name_tb.DesiredSize.Height, subjob_tb.DesiredSize.Height));
             if (h > max_header_w)
                 max_header_w = h;
 

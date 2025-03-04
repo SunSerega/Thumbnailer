@@ -16,8 +16,8 @@ namespace Dashboard;
 
 public class ShortcutManager
 {
-    private static readonly Dictionary<string, (string? target, DateTime dt)> lnk_target_cache = [];
-    private static readonly ConcurrentBag<string> targets_waiting = [];
+    private static readonly Dictionary<String, (String? target, DateTime dt)> lnk_target_cache = [];
+    private static readonly ConcurrentBag<String> targets_waiting = [];
 
     private static readonly DelayedUpdater lnk_updater = new(() =>
     {
@@ -26,7 +26,7 @@ public class ShortcutManager
         // prev iteration took out all in wait after extra .Trigger call
         if (targets_waiting.IsEmpty) return;
 
-        static DateTime get_lnk_change_time(string lnk)
+        static DateTime get_lnk_change_time(String lnk)
         {
             try
             {
@@ -38,7 +38,7 @@ public class ShortcutManager
             }
         }
 
-        static bool try_get_cached_lnk_target(string lnk, out string? target)
+        static Boolean try_get_cached_lnk_target(String lnk, out String? target)
         {
             target = null;
             if (!lnk_target_cache.TryGetValue(lnk, out var cached))
@@ -49,7 +49,7 @@ public class ShortcutManager
             return true;
         }
 
-        var upd = new HashSet<string?>();
+        var upd = new HashSet<String?>();
         while (targets_waiting.TryTake(out var target))
             upd.Add(target);
 
@@ -58,7 +58,7 @@ public class ShortcutManager
         foreach (var lnk in new ESQuary("ext:lnk"))
         {
             if (lnk.Contains('$')) continue;
-            string? lnk_target = null;
+            String? lnk_target = null;
             try
             {
                 if (try_get_cached_lnk_target(lnk, out lnk_target) && !upd.Contains(lnk_target))
@@ -104,7 +104,7 @@ public class ShortcutManager
         //TTS.Speak($"Updated {lnk_upd.Count} shortcuts: {lnk_upd.JoinToString("; ")}");
     }, nameof(ShortcutManager), is_background: false);
 
-    public static void ResetFor(string target)
+    public static void ResetFor(String target)
     {
         targets_waiting.Add(target);
         lnk_updater.TriggerNow();

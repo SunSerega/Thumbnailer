@@ -20,52 +20,52 @@ using SunSharpUtils.Threading;
 
 namespace Dashboard;
 
-public readonly struct ByteCount(long in_bytes) : IEquatable<ByteCount>, ISettingsSaveable<ByteCount>
+public readonly struct ByteCount(Int64 in_bytes) : IEquatable<ByteCount>, ISettingsSaveable<ByteCount>
 {
-    private readonly long in_bytes = in_bytes;
+    private readonly Int64 in_bytes = in_bytes;
 
-    private static readonly string[] byte_scales = [ "B", "KB", "MB", "GB" ];
-    private const int scale_factor = 1024;
-    private const int scale_up_threshold = 5000;
+    private static readonly String[] byte_scales = [ "B", "KB", "MB", "GB" ];
+    private const Int32 scale_factor = 1024;
+    private const Int32 scale_up_threshold = 5000;
 
-    public static ByteCount Compose(double v, int scale_ind)
+    public static ByteCount Compose(Double v, Int32 scale_ind)
     {
         v *= Math.Pow(scale_factor, scale_ind);
-        return (long)v;
+        return (Int64)v;
     }
 
-    public static void ForEachScale(Action<string> act) => Array.ForEach(byte_scales, act);
+    public static void ForEachScale(Action<String> act) => Array.ForEach(byte_scales, act);
 
-    public static implicit operator ByteCount(long in_bytes) => new(in_bytes);
+    public static implicit operator ByteCount(Int64 in_bytes) => new(in_bytes);
 
-    public static ByteCount Parse(string s)
+    public static ByteCount Parse(String s)
     {
         var spl = s.Split([' '], 2);
-        if (spl.Length==1) return long.Parse(s);
+        if (spl.Length==1) return Int64.Parse(s);
 
-        var c = double.Parse(spl[0]);
+        var c = Double.Parse(spl[0]);
         var scale_i = byte_scales.AsReadOnly().IndexOf(spl[1]);
         if (scale_i==-1) throw new FormatException($"[{spl[1]}] is not a byte scale");
         for (var i = 0; i< scale_i; ++i)
             c *= scale_factor;
 
-        return (long)c;
+        return (Int64)c;
     }
 
-    public static bool operator ==(ByteCount c1, ByteCount c2) => c1.in_bytes == c2.in_bytes;
-    public static bool operator !=(ByteCount c1, ByteCount c2) => c1.in_bytes != c2.in_bytes;
-    public bool Equals(ByteCount other) => this == other;
-    public override bool Equals(object? other_obj) => other_obj is ByteCount other && this == other;
+    public static Boolean operator ==(ByteCount c1, ByteCount c2) => c1.in_bytes == c2.in_bytes;
+    public static Boolean operator !=(ByteCount c1, ByteCount c2) => c1.in_bytes != c2.in_bytes;
+    public Boolean Equals(ByteCount other) => this == other;
+    public override Boolean Equals(Object? other_obj) => other_obj is ByteCount other && this == other;
 
-    public static bool operator <(ByteCount c1, ByteCount c2) => c1.in_bytes < c2.in_bytes;
-    public static bool operator >(ByteCount c1, ByteCount c2) => c1.in_bytes > c2.in_bytes;
+    public static Boolean operator <(ByteCount c1, ByteCount c2) => c1.in_bytes < c2.in_bytes;
+    public static Boolean operator >(ByteCount c1, ByteCount c2) => c1.in_bytes > c2.in_bytes;
 
-    public static long operator +(ByteCount c1, ByteCount c2) => c1.in_bytes + c2.in_bytes;
-    public static long operator -(ByteCount c1, ByteCount c2) => c1.in_bytes - c2.in_bytes;
+    public static Int64 operator +(ByteCount c1, ByteCount c2) => c1.in_bytes + c2.in_bytes;
+    public static Int64 operator -(ByteCount c1, ByteCount c2) => c1.in_bytes - c2.in_bytes;
 
-    public (double v, int scale_ind) Split()
+    public (Double v, Int32 scale_ind) Split()
     {
-        var v = (double)in_bytes;
+        var v = (Double)in_bytes;
         
         if (byte_scales.Length==0)
             throw new NotImplementedException();
@@ -82,7 +82,7 @@ public readonly struct ByteCount(long in_bytes) : IEquatable<ByteCount>, ISettin
         return (v, scale_ind);
     }
 
-    public override string ToString()
+    public override String ToString()
     {
         var (v, scale_ind) = Split();
 
@@ -96,25 +96,25 @@ public readonly struct ByteCount(long in_bytes) : IEquatable<ByteCount>, ISettin
         return $"{sign}{v:0.##} {byte_scales[scale_ind]}";
     }
 
-    public override int GetHashCode() => in_bytes.GetHashCode();
+    public override Int32 GetHashCode() => in_bytes.GetHashCode();
 
-    static string ISettingsSaveable<ByteCount>.SerializeSetting(ByteCount setting) => setting.ToString();
-    static ByteCount ISettingsSaveable<ByteCount>.DeserializeSetting(string setting) => Parse(setting);
+    static String ISettingsSaveable<ByteCount>.SerializeSetting(ByteCount setting) => setting.ToString();
+    static ByteCount ISettingsSaveable<ByteCount>.DeserializeSetting(String setting) => Parse(setting);
 
 }
 
 public sealed class OneToManyLock
 {
-    private readonly object sync_lock = new();
+    private readonly Object sync_lock = new();
     private readonly ManualResetEventSlim one_wh = new(true);
     private readonly ManualResetEventSlim many_wh = new(true);
-    private volatile int doing_one = 0;
-    private volatile int doing_many = 0;
+    private volatile Int32 doing_one = 0;
+    private volatile Int32 doing_many = 0;
 
     public OneToManyLock() { }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public T OneLocked<T>(Func<T> act, bool with_priority)
+    public T OneLocked<T>(Func<T> act, Boolean with_priority)
     {
         one_wh.Reset();
         var need_dec = false;
@@ -148,7 +148,7 @@ public sealed class OneToManyLock
         }
     }
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void OneLocked(Action act, bool with_priority) => OneLocked(() => { act(); return 0; }, with_priority);
+    public void OneLocked(Action act, Boolean with_priority) => OneLocked(() => { act(); return 0; }, with_priority);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public T ManyLocked<T>(Func<T> act)
@@ -195,7 +195,7 @@ public sealed class OneToManyLock
 public static class ColorExtensions
 {
 
-    public static Color FromAhsb(byte a, double h, double s, double b)
+    public static Color FromAhsb(Byte a, Double h, Double s, Double b)
     {
         //h %= 1;
         if (h < 0 || 1 < h) throw new ArgumentOutOfRangeException(nameof(h), "hue must be between 0 and 1");
@@ -203,11 +203,11 @@ public static class ColorExtensions
         if (s < 0 || 1 < s) throw new ArgumentOutOfRangeException(nameof(s), "saturation must be between 0 and 1");
         if (b < 0 || 1 < b) throw new ArgumentOutOfRangeException(nameof(b), "brightness must be between 0 and 1");
 
-        double hueSector = h * 6;
-        int hueSectorIntegerPart = (int)hueSector;
-        double hueSectorFractionalPart = hueSector - hueSectorIntegerPart;
+        Double hueSector = h * 6;
+        Int32 hueSectorIntegerPart = (Int32)hueSector;
+        Double hueSectorFractionalPart = hueSector - hueSectorIntegerPart;
 
-        double
+        Double
             p = b * (1 - s),
             q = b * (1 - hueSectorFractionalPart * s),
             t = b * (1 - (1 - hueSectorFractionalPart) * s);
@@ -235,9 +235,9 @@ public static class FFmpeg
 
     public sealed class InvokeState(
         System.Diagnostics.Process p,
-        Task<(string? otp, string? err)> t
+        Task<(String? otp, String? err)> t
     ) {
-        private bool been_killed = false;
+        private Boolean been_killed = false;
 
         public void Kill()
         {
@@ -253,20 +253,20 @@ public static class FFmpeg
 
         public void Wait() => t.Wait();
 
-        public string? Output => t.Result.otp;
+        public String? Output => t.Result.otp;
 
-        public bool BeenKilled => been_killed;
+        public Boolean BeenKilled => been_killed;
 
     }
 
     private static readonly DelayedMultiUpdater<InvokeState> delayed_kill_switch =
         new(state => state.Kill(), "FFmpeg kill switch", is_background: false);
 
-    public static InvokeState Invoke(string args, Func<bool> verify_res,
-        string? execute_in = null, string exe = "mpeg",
+    public static InvokeState Invoke(String args, Func<Boolean> verify_res,
+        String? execute_in = null, String exe = "mpeg",
         Func<StreamWriter, Task>? handle_inp = null,
-        Func<StreamReader, Task<string?>>? handle_otp = null,
-        Func<StreamReader, Task<string?>>? handle_err = null
+        Func<StreamReader, Task<String?>>? handle_otp = null,
+        Func<StreamReader, Task<String?>>? handle_err = null
     )
     {
         var p = new System.Diagnostics.Process
@@ -314,25 +314,25 @@ public static class FFmpeg
 
 }
 
-public sealed class ESQuary : IEnumerable<string>
+public sealed class ESQuary : IEnumerable<String>
 {
-    private readonly string args;
+    private readonly String args;
 
-    public ESQuary(string args) => this.args = args;
-    public ESQuary(string path, string arg)
+    public ESQuary(String args) => this.args = args;
+    public ESQuary(String path, String arg)
     {
         if (!Directory.Exists(path))
             throw new InvalidOperationException();
         args = $"\"{path}\" {arg}";
     }
 
-    private sealed class ESProcess : IEnumerator<string>
+    private sealed class ESProcess : IEnumerator<String>
     {
-        private static readonly string es_path = Path.GetFullPath("Dashboard-es.exe");
+        private static readonly String es_path = Path.GetFullPath("Dashboard-es.exe");
         private readonly System.Diagnostics.Process p;
-        private readonly Task<string> t_err;
+        private readonly Task<String> t_err;
 
-        public ESProcess(string args)
+        public ESProcess(String args)
         {
             var psi = new System.Diagnostics.ProcessStartInfo(es_path, args)
             {
@@ -345,13 +345,13 @@ public sealed class ESQuary : IEnumerable<string>
             t_err = p.StandardError.ReadToEndAsync();
         }
 
-        private string? l;
-        public string Current => l ?? throw new InvalidOperationException();
-        object IEnumerator.Current => Current;
+        private String? l;
+        public String Current => l ?? throw new InvalidOperationException();
+        Object IEnumerator.Current => Current;
 
-        public sealed class ESException(string message) : Exception(message) { }
+        public sealed class ESException(String message) : Exception(message) { }
 
-        public bool MoveNext()
+        public Boolean MoveNext()
         {
             l = p.StandardOutput.ReadLine();
             if (l is null && p.ExitCode!=0)
@@ -371,25 +371,25 @@ public sealed class ESQuary : IEnumerable<string>
 
     }
 
-    public IEnumerator<string> GetEnumerator() => new ESProcess(args);
+    public IEnumerator<String> GetEnumerator() => new ESProcess(args);
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
 }
 
 public static class Log
 {
-    private const string log_fname = "Dashboard.log";
-    private static readonly object log_lock = new();
+    private const String log_fname = "Dashboard.log";
+    private static readonly Object log_lock = new();
     private static readonly System.Text.Encoding enc = new System.Text.UTF8Encoding(true);
 
-    public static int Count { get; private set; } =
+    public static Int32 Count { get; private set; } =
         !File.Exists(log_fname) ? 0 : File.ReadLines(log_fname, enc).Count();
 
-    private static readonly string[] line_separators = [ "\r\n", "\n", "\r" ];
+    private static readonly String[] line_separators = [ "\r\n", "\n", "\r" ];
 
     public static event Action? CountUpdated;
 
-    public static void Append(string s)
+    public static void Append(String s)
     {
         using var log_locker = new ObjectLocker(log_lock);
         var lns = s.Split(line_separators, StringSplitOptions.None);
@@ -419,14 +419,14 @@ public static class TTS
         speaker.SelectVoiceByHints(System.Speech.Synthesis.VoiceGender.Female);
     }
 
-    public static void Speak(string s) => speaker.Speak(s);
+    public static void Speak(String s) => speaker.Speak(s);
 
 }
 
 public static class BitmapUtils
 {
 
-    public static BitmapImage LoadUncached(string fname)
+    public static BitmapImage LoadUncached(String fname)
     {
         using var str = File.OpenRead(fname);
         var res = new BitmapImage();

@@ -18,7 +18,7 @@ namespace Dashboard;
 
 public partial class FileChooser : Window
 {
-    public FileChooser(Action<IEnumerable<string>> on_confirm)
+    public FileChooser(Action<IEnumerable<String>> on_confirm)
     {
         InitializeComponent();
         Owner = WPFCommon.CurrentApp!.MainWindow;
@@ -43,7 +43,7 @@ public partial class FileChooser : Window
         }
         tb_choise.Focus();
 
-        void confirm(IEnumerable<string> res)
+        void confirm(IEnumerable<String> res)
         {
             on_confirm(res);
             Close();

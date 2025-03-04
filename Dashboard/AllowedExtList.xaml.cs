@@ -16,25 +16,25 @@ namespace Dashboard;
 public partial class AllowedExtList : UserControl
 {
     private readonly FileExtList selected_exts = [];
-    private readonly Dictionary<string, AllowedExt> ext_vis_map = [];
+    private readonly Dictionary<String, AllowedExt> ext_vis_map = [];
 
     private static readonly Brush b_ext_commited = Brushes.Transparent;
     private static readonly Brush b_ext_added = Brushes.YellowGreen;
     private static readonly Brush b_ext_removed = Brushes.Coral;
     private static readonly Brush b_ext_broken = Brushes.Violet;
 
-    private static bool CheckInstalled(string ext)
+    private static Boolean CheckInstalled(String ext)
     {
         var key = Microsoft.Win32.Registry.ClassesRoot.OpenSubKey('.'+ext+@"\ShellEx\{e357fccd-a995-4576-b01f-234630154e96}");
         if (key is null) return false;
-        return key.GetValue(null) is string guid && guid == "{E7CBDB01-06C9-4C8F-A061-2EDCE8598F99}";
+        return key.GetValue(null) is String guid && guid == "{E7CBDB01-06C9-4C8F-A061-2EDCE8598F99}";
     }
 
     public AllowedExtList()
     {
         InitializeComponent();
 
-        static bool parse_exts(string text, out string[] exts)
+        static Boolean parse_exts(String text, out String[] exts)
         {
             exts = [];
             if (text.Contains('.')) return false;
@@ -42,7 +42,7 @@ public partial class AllowedExtList : UserControl
             return exts.All(FileExtList.Validate);
         }
 
-        var tb_new_ext = new FilteredTextBox<string[]>(
+        var tb_new_ext = new FilteredTextBox<String[]>(
             parse_exts,
             exts =>
             {
@@ -61,7 +61,7 @@ public partial class AllowedExtList : UserControl
 
     }
 
-    private Action MakeExtReinstall(string ext) => () =>
+    private Action MakeExtReinstall(String ext) => () =>
     {
         var gen_type = AskRegenType(
             "What to do with files of reinstalled extension?", [ext],
@@ -71,14 +71,14 @@ public partial class AllowedExtList : UserControl
         AllowedExtInstaller.Install(ext, gen_type.Value);
         ext_vis_map[ext].b_body.Background = b_ext_commited;
     };
-    private Action MakeExtRemove(string ext) => () =>
+    private Action MakeExtRemove(String ext) => () =>
     {
         if (selected_exts.Contains(ext))
             RemoveExt(ext);
         else
             AddExt(ext);
     };
-    private AllowedExt MakeExtVis(string ext) =>
+    private AllowedExt MakeExtVis(String ext) =>
         new(ext, MakeExtReinstall(ext), MakeExtRemove(ext));
 
     public void AddFromSettings()
@@ -94,7 +94,7 @@ public partial class AllowedExtList : UserControl
         }
     }
 
-    private AllowedExt AddVisExt(string ext)
+    private AllowedExt AddVisExt(String ext)
     {
         var vis = MakeExtVis(ext);
         ext_vis_map.Add(ext, vis);
@@ -106,7 +106,7 @@ public partial class AllowedExtList : UserControl
             {
                 var m = (i1+i2) / 2;
                 var m_el = (AllowedExt)allowed_ext_container.Children[m];
-                if (string.CompareOrdinal(m_el.ExtName, ext) > 0)
+                if (String.CompareOrdinal(m_el.ExtName, ext) > 0)
                     i2 = m;
                 else
                     i1 = m+1;
@@ -116,7 +116,7 @@ public partial class AllowedExtList : UserControl
 
         return vis;
     }
-    public void AddExt(string ext)
+    public void AddExt(String ext)
     {
         if (!selected_exts.Add(ext))
             throw new InvalidOperationException();
@@ -135,13 +135,13 @@ public partial class AllowedExtList : UserControl
 
     }
 
-    private void RemoveVisExt(string ext)
+    private void RemoveVisExt(String ext)
     {
         if (!ext_vis_map.Remove(ext, out var vis))
             throw new InvalidOperationException();
         allowed_ext_container.Children.Remove(vis);
     }
-    public void RemoveExt(string ext)
+    public void RemoveExt(String ext)
     {
         if (!selected_exts.Remove(ext))
             throw new InvalidOperationException();
@@ -166,7 +166,7 @@ public partial class AllowedExtList : UserControl
         Generate = 2,
     }
 
-    public static ExtRegenType? AskRegenType(string title, string[] exts, params ExtRegenType[] options)
+    public static ExtRegenType? AskRegenType(String title, String[] exts, params ExtRegenType[] options)
     {
         if (exts.Length == 0)
             return ExtRegenType.Skip;

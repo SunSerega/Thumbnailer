@@ -18,7 +18,7 @@ namespace Dashboard;
 
 public class CommandsPipe
 {
-    private readonly string name = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name!;
+    private readonly String name = System.Reflection.Assembly.GetExecutingAssembly().GetName().Name!;
 
     private enum ECommand
     {
@@ -42,14 +42,14 @@ public class CommandsPipe
             if (cfi_use != null) bw.Write(cfi_use.CFI.CurrentThumbPath);
 
         });
-    public void AddRefreshAndCompareHandler(Action<bool, string[]> handler) =>
+    public void AddRefreshAndCompareHandler(Action<Boolean, String[]> handler) =>
         command_handlers.Add(ECommand.RefreshAndCompare, str =>
         {
             var br = new BinaryReader(str);
 
             var force_regen = br.ReadBoolean();
             var c = br.ReadInt32();
-            var file_list = new string[c];
+            var file_list = new String[c];
             for (var i = 0; i < file_list.Length; ++i)
                 file_list[i] = br.ReadString();
 
@@ -86,7 +86,7 @@ public class CommandsPipe
                     try
                     {
                         new BinaryWriter(client)
-                            .Write((int)ECommand.NewerKillsOlder);
+                            .Write((Int32)ECommand.NewerKillsOlder);
                         client.Flush();
                         client.WaitForPipeDrain();
                     }
@@ -220,7 +220,7 @@ public class CommandsPipe
             Name = $"Commands pipe",
         }.Start();
 
-    private bool can_throw_undefined_command = false;
+    private Boolean can_throw_undefined_command = false;
     public void StartThrowingUndefinedCommand() => can_throw_undefined_command = true;
 
 }

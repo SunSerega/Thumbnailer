@@ -9,9 +9,9 @@ namespace Dashboard.Settings;
 
 public readonly struct TempsListInfo : IEquatable<TempsListInfo>, ISettingsSaveable<TempsListInfo>
 {
-    private readonly (string name, string path)[] temps;
+    private readonly (String name, String path)[] temps;
 
-    public TempsListInfo((string name, string path)[] temps)
+    public TempsListInfo((String name, String path)[] temps)
     {
         this.temps = temps;
         ForEach((name, path) =>
@@ -24,13 +24,13 @@ public readonly struct TempsListInfo : IEquatable<TempsListInfo>, ISettingsSavea
     }
     public static TempsListInfo Empty { get; } = new([]);
 
-    public void ForEach(Action<string, string> act)
+    public void ForEach(Action<String, String> act)
     {
         foreach (var (name, path) in temps)
             act(name, path);
     }
 
-    public static bool operator ==(TempsListInfo a, TempsListInfo b)
+    public static Boolean operator ==(TempsListInfo a, TempsListInfo b)
     {
         if (ReferenceEquals(a.temps, b.temps))
             return true;
@@ -41,12 +41,12 @@ public readonly struct TempsListInfo : IEquatable<TempsListInfo>, ISettingsSavea
                 return false;
         return true;
     }
-    public static bool operator !=(TempsListInfo a, TempsListInfo b) => !(a==b);
-    public bool Equals(TempsListInfo other) => this==other;
-    public override bool Equals(object? obj) => obj is TempsListInfo other && this==other;
-    public override int GetHashCode() => HashCode.Combine(temps);
+    public static Boolean operator !=(TempsListInfo a, TempsListInfo b) => !(a==b);
+    public Boolean Equals(TempsListInfo other) => this==other;
+    public override Boolean Equals(Object? obj) => obj is TempsListInfo other && this==other;
+    public override Int32 GetHashCode() => HashCode.Combine(temps);
 
-    public static TempsListInfo Parse(string s) =>
+    public static TempsListInfo Parse(String s) =>
         new(s.Split(';').ConvertAll(p =>
         {
             var parts = p.Split('=');
@@ -54,9 +54,9 @@ public readonly struct TempsListInfo : IEquatable<TempsListInfo>, ISettingsSavea
                 throw new FormatException(p);
             return (parts[0], parts[1]);
         }));
-    public override string ToString() => temps.Select(t => $"{t.name}={t.path}").JoinToString(';');
+    public override String ToString() => temps.Select(t => $"{t.name}={t.path}").JoinToString(';');
 
-    static string ISettingsSaveable<TempsListInfo>.SerializeSetting(TempsListInfo setting) => setting.ToString();
-    static TempsListInfo ISettingsSaveable<TempsListInfo>.DeserializeSetting(string setting) => Parse(setting);
+    static String ISettingsSaveable<TempsListInfo>.SerializeSetting(TempsListInfo setting) => setting.ToString();
+    static TempsListInfo ISettingsSaveable<TempsListInfo>.DeserializeSetting(String setting) => Parse(setting);
 
 }

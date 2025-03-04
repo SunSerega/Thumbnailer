@@ -10,14 +10,14 @@ public sealed class GlobalSettings() : SettingsContainer<GlobalSettings, GlobalS
 
     public struct Data
     {
-        public int MaxJobCount;
+        public Int32 MaxJobCount;
         public FileExtList AllowedExts;
-        public string? LastComparedFile;
+        public String? LastComparedFile;
         public ByteCount MaxCacheSize;
     }
 
-    private static readonly FieldToken<int> TMaxJobCount = MakeFieldToken(d => d.MaxJobCount, 1);
-    public int MaxJobCount
+    private static readonly FieldToken<Int32> TMaxJobCount = MakeFieldToken(d => d.MaxJobCount, 1);
+    public Int32 MaxJobCount
     {
         get => TMaxJobCount.Get(this);
         set => TMaxJobCount.Set(this, value);
@@ -30,8 +30,8 @@ public sealed class GlobalSettings() : SettingsContainer<GlobalSettings, GlobalS
         set => TAllowedExts.Set(this, value);
     }
 
-    private static readonly FieldToken<string?> TLastComparedFile = MakeFieldToken(d => d.LastComparedFile, null);
-    public string? LastComparedFile
+    private static readonly FieldToken<String?> TLastComparedFile = MakeFieldToken(d => d.LastComparedFile, null);
+    public String? LastComparedFile
     {
         get => TLastComparedFile.Get(this);
         set => TLastComparedFile.Set(this, value);
@@ -47,7 +47,7 @@ public sealed class GlobalSettings() : SettingsContainer<GlobalSettings, GlobalS
     public static GlobalSettings Instance { get; } = new();
 }
 
-public sealed class FileSettings(string cache_path) : SettingsContainer<FileSettings, FileSettings.Data>(System.IO.Path.Combine(cache_path, "Settings"), save_all: false)
+public sealed class FileSettings(String cache_path) : SettingsContainer<FileSettings, FileSettings.Data>(System.IO.Path.Combine(cache_path, "Settings"), save_all: false)
 {
     static FileSettings()
     {
@@ -59,16 +59,16 @@ public sealed class FileSettings(string cache_path) : SettingsContainer<FileSett
     public struct Data
     {
         public TempsListInfo TempsList;
-        public string? InpPath;
+        public String? InpPath;
         public DateTime LastInpChangeTime;
         public DateTime LastCacheUseTime;
-        public string? CurrentThumb;
-        public bool CurrentThumbIsFinal;
+        public String? CurrentThumb;
+        public Boolean CurrentThumbIsFinal;
         public ChosenStreamPositionsInfo ChosenStreamPositions;
-        public SettingsNullable<int> ChosenThumbOptionInd;
+        public SettingsNullable<Int32> ChosenThumbOptionInd;
     }
 
-    private static readonly SettingsFieldSaver<DateTime> date_time_saver = (dt => dt.Ticks.ToString(), s => new(long.Parse(s)));
+    private static readonly SettingsFieldSaver<DateTime> date_time_saver = (dt => dt.Ticks.ToString(), s => new(Int64.Parse(s)));
 
     private static readonly FieldToken<TempsListInfo> TTempsList = MakeFieldToken(d => d.TempsList, TempsListInfo.Empty);
     public TempsListInfo TempsList
@@ -77,8 +77,8 @@ public sealed class FileSettings(string cache_path) : SettingsContainer<FileSett
         set => TTempsList.Set(this, value);
     }
 
-    private static readonly FieldToken<string?> TInpPath = MakeFieldToken(d => d.InpPath, null);
-    public string? InpPath
+    private static readonly FieldToken<String?> TInpPath = MakeFieldToken(d => d.InpPath, null);
+    public String? InpPath
     {
         get => TInpPath.Get(this);
         set => TInpPath.Set(this, value);
@@ -98,15 +98,15 @@ public sealed class FileSettings(string cache_path) : SettingsContainer<FileSett
         set => TLastCacheUseTime.Set(this, value);
     }
 
-    private static readonly FieldToken<string?> TCurrentThumb = MakeFieldToken(d => d.CurrentThumb, null);
-    public string? CurrentThumb
+    private static readonly FieldToken<String?> TCurrentThumb = MakeFieldToken(d => d.CurrentThumb, null);
+    public String? CurrentThumb
     {
         get => TCurrentThumb.Get(this);
         set => TCurrentThumb.Set(this, value);
     }
 
-    private static readonly FieldToken<bool> TCurrentThumbIsFinal = MakeFieldToken(d => d.CurrentThumbIsFinal, false);
-    public bool CurrentThumbIsFinal
+    private static readonly FieldToken<Boolean> TCurrentThumbIsFinal = MakeFieldToken(d => d.CurrentThumbIsFinal, false);
+    public Boolean CurrentThumbIsFinal
     {
         get => TCurrentThumbIsFinal.Get(this);
         set => TCurrentThumbIsFinal.Set(this, value);
@@ -119,8 +119,8 @@ public sealed class FileSettings(string cache_path) : SettingsContainer<FileSett
         set => TChosenStreamPositions.Set(this, value);
     }
 
-    private static readonly FieldToken<SettingsNullable<int>> TChosenThumbOptionInd = MakeFieldToken(d => d.ChosenThumbOptionInd, null);
-    public int? ChosenThumbOptionInd
+    private static readonly FieldToken<SettingsNullable<Int32>> TChosenThumbOptionInd = MakeFieldToken(d => d.ChosenThumbOptionInd, null);
+    public Int32? ChosenThumbOptionInd
     {
         get => TChosenThumbOptionInd.Get(this);
         set => TChosenThumbOptionInd.Set(this, value);

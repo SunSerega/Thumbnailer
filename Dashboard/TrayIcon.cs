@@ -78,9 +78,9 @@ public sealed class TrayIcon : TaskbarIcon
     {
         event EventHandler? ICommand.CanExecuteChanged { add { } remove { } }
 
-        bool ICommand.CanExecute(object? parameter) => true;
+        Boolean ICommand.CanExecute(Object? parameter) => true;
 
-        void ICommand.Execute(object? parameter) => body();
+        void ICommand.Execute(Object? parameter) => body();
     }
 
 }

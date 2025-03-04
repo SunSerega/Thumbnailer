@@ -10,7 +10,7 @@ namespace Dashboard;
 public static class CLArgs
 {
 
-    private static readonly Dictionary<string, Action<string?, MainWindow>> arg_handlers = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<String, Action<String?, MainWindow>> arg_handlers = new(StringComparer.OrdinalIgnoreCase)
     {
         { "DebugLaunchIn", (data,_)=>Environment.CurrentDirectory=data! },
         { "NoWindow",

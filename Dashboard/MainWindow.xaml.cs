@@ -21,7 +21,7 @@ namespace Dashboard;
 public partial class MainWindow : Window
 {
     public readonly TrayIcon tray_icon;
-    public bool shutdown_triggered = false;
+    public Boolean shutdown_triggered = false;
 
     public MainWindow()
     {
@@ -101,7 +101,7 @@ public partial class MainWindow : Window
 
         // After initing pipe, to make sure older process is already dead
         {
-            const string file_lock_name = @".lock";
+            const String file_lock_name = @".lock";
             var file_lock = File.Create(file_lock_name);
             Common.OnShutdown += _ => Err.Handle(() =>
             {
@@ -117,7 +117,7 @@ public partial class MainWindow : Window
     {
         slider_want_job_count.ValueChanged += (o, e) => Err.Handle(() =>
         {
-            var c = (int)e.NewValue;
+            var c = (Int32)e.NewValue;
             main_thr_pool.SetJobCount(c);
             GlobalSettings.Instance.MaxJobCount = c;
         });
@@ -183,9 +183,9 @@ public partial class MainWindow : Window
             cb_cache_cap_scale.Items.Add(scale_name);
         });
 
-        static bool try_parse_cache_cap(string s, out double v) =>
-            double.TryParse(s, NumberStyles.AllowDecimalPoint | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out v);
-        var tb_cache_cap_v = new FilteredTextBox<double>(
+        static Boolean try_parse_cache_cap(String s, out Double v) =>
+            Double.TryParse(s, NumberStyles.AllowDecimalPoint | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out v);
+        var tb_cache_cap_v = new FilteredTextBox<Double>(
             try_parse_cache_cap,
             v => GlobalSettings.Instance.MaxCacheSize = ByteCount.Compose(v, cb_cache_cap_scale.SelectedIndex),
             ("Invalid size", "Expected a non-negative float")
@@ -224,7 +224,7 @@ public partial class MainWindow : Window
 
         var cache_info_updater = new DelayedUpdater(() =>
         {
-            static long get_cache_fill() =>
+            static Int64 get_cache_fill() =>
                 new DirectoryInfo("cache")
                 .EnumerateFiles("*", SearchOption.AllDirectories)
                 .Sum(f => f.Length);
@@ -263,11 +263,11 @@ public partial class MainWindow : Window
     {
         var thumb_compare_all = new[] { thumb_compare_org, thumb_compare_gen };
 
-        Action<double>? vid_timestamp_handler = null;
+        Action<Double>? vid_timestamp_handler = null;
         slider_vid_timestamp.ValueChanged += (_, _) =>
             vid_timestamp_handler?.Invoke(slider_vid_timestamp.Value);
 
-        void set_pregen_progress(double progress)
+        void set_pregen_progress(Double progress)
         {
             if (progress>1) progress = 1;
             if (progress<0) progress = 0;
@@ -283,8 +283,8 @@ public partial class MainWindow : Window
             is_background: false
         );
 
-        int current_compare_id = 0;
-        string? curr_compare_fname = null;
+        Int32 current_compare_id = 0;
+        String? curr_compare_fname = null;
         ThumbGenerator.ICachedFileInfo.CacheUse? last_cache_use = null;
         void clear_thumb_compare_file()
         {
@@ -300,7 +300,7 @@ public partial class MainWindow : Window
             curr_compare_fname = null;
             System.Threading.Interlocked.Exchange(ref last_cache_use, null)?.Dispose();
         }
-        void begin_thumb_compare(string fname) => Err.Handle(() =>
+        void begin_thumb_compare(String fname) => Err.Handle(() =>
         {
             clear_thumb_compare_file();
             // Increament in the clear_thumb_compare_file
@@ -309,7 +309,7 @@ public partial class MainWindow : Window
             thumb_compare_org.Set(COMManip.GetExistingThumbFor(fname));
             using var cfi_use = thumb_gen.Generate(fname, nameof(begin_thumb_compare), ()=>false, cfi =>
             {
-                bool is_outdated() => compare_id != current_compare_id;
+                Boolean is_outdated() => compare_id != current_compare_id;
                 if (is_outdated()) return;
                 var new_cache_use = cfi.BeginUse("continuous thumb compare", is_outdated);
                 Dispatcher.BeginInvoke(() => Err.Handle(() =>
@@ -343,7 +343,7 @@ public partial class MainWindow : Window
                         sp_vid_stream_buttons.Children.Add(bts[i]);
                     }
 
-                    void select_source(int new_ind)
+                    void select_source(Int32 new_ind)
                     {
                         vid_timestamp_handler = pos =>
                         {
@@ -387,10 +387,10 @@ public partial class MainWindow : Window
             b_reload_compare.IsEnabled = true;
         });
 
-        var awaiting_mass_gen_lst = new List<(string fname, bool force_regen)>();
+        var awaiting_mass_gen_lst = new List<(String fname, Boolean force_regen)>();
         var delayed_mass_gen = new DelayedUpdater(() =>
         {
-            (string, bool)[] gen_lst;
+            (String, Boolean)[] gen_lst;
             lock (awaiting_mass_gen_lst)
             {
                 gen_lst = [.. awaiting_mass_gen_lst];
@@ -398,7 +398,7 @@ public partial class MainWindow : Window
             }
             thumb_gen.MassGenerate(gen_lst);
         }, "Thumb compare => mass gen", is_background: false);
-        void apply_file_lst(bool force_regen, string[] lst)
+        void apply_file_lst(Boolean force_regen, String[] lst)
         {
             if (lst.Length==1 && force_regen)
             {
@@ -412,18 +412,18 @@ public partial class MainWindow : Window
             delayed_mass_gen.TriggerNow();
         }
 
-        string[] extract_file_lst(IEnumerable<string> inp)
+        String[] extract_file_lst(IEnumerable<String> inp)
         {
-            static T execute_any<T>(string descr, params Func<Action, T>[] funcs)
+            static T execute_any<T>(String descr, params Func<Action, T>[] funcs)
             {
                 var wh = new System.Threading.ManualResetEventSlim(false);
                 var excs = new List<Exception>();
                 var left = funcs.Length;
 
                 T? res = default;
-                bool res_set = false;
+                Boolean res_set = false;
 
-                for (int i=0; i<funcs.Length; ++i)
+                for (Int32 i =0; i<funcs.Length; ++i)
                 {
                     var f = funcs[i];
                     new System.Threading.Thread(()=>
@@ -469,8 +469,8 @@ public partial class MainWindow : Window
                     return execute_any($"get files in [{path}]",
                         try_cancel =>
                         {
-                            var res = new List<string>();
-                            void on_dir(string dir)
+                            var res = new List<String>();
+                            void on_dir(String dir)
                             {
                                 foreach (var subdir in Directory.EnumerateDirectories(dir))
                                     on_dir(subdir);
@@ -486,7 +486,7 @@ public partial class MainWindow : Window
                         },
                         try_cancel =>
                         {
-                            var res = new List<string>();
+                            var res = new List<String>();
                             foreach (var fname in new ESQuary(path, es_arg))
                             {
                                 try_cancel();
@@ -543,13 +543,13 @@ public partial class MainWindow : Window
             begin_thumb_compare(curr_compare_fname);
         });
 
-        (string[] inp, string[] lst)? drag_cache = null;
-        void drag_handler(object o, DragEventArgs e)
+        (String[] inp, String[] lst)? drag_cache = null;
+        void drag_handler(Object o, DragEventArgs e)
         {
             e.Handled = true;
             e.Effects = DragDropEffects.None;
 
-            var inp = (string[])e.Data.GetData(DataFormats.FileDrop);
+            var inp = (String[])e.Data.GetData(DataFormats.FileDrop);
             if (inp is null) return;
 
             var lst = (drag_cache.HasValue && inp.SequenceEqual(drag_cache.Value.inp) ? drag_cache :

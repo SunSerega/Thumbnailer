@@ -11,7 +11,7 @@ public partial class AllowedExt : UserControl
     [Obsolete("Only for designer")]
     public AllowedExt() => InitializeComponent();
 
-    public AllowedExt(string ext, Action on_reinstalled, Action on_removed)
+    public AllowedExt(String ext, Action on_reinstalled, Action on_removed)
     {
         InitializeComponent();
         tb_name.Text = ext;
@@ -21,6 +21,6 @@ public partial class AllowedExt : UserControl
 
     }
 
-    public string ExtName => tb_name.Text;
+    public String ExtName => tb_name.Text;
 
 }

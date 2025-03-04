@@ -14,7 +14,7 @@ using System.Xml.Linq;
 
 partial class Test
 {
-    record struct RawData(string Source, string? Info) { }
+    record struct RawData(String Source, String? Info) { }
 
     static void Main()
     {
@@ -29,9 +29,9 @@ partial class Test
         var thr_pool = new CustomThreadPool(10);
         thr_pool.SetJobCount(6);
 
-        var raw_data = new ConcurrentDictionary<string, ConcurrentBag<RawData>>();
-        var errors = new ConcurrentDictionary<string, Exception>();
-        void add_xml_node(string key, XElement n, string source)
+        var raw_data = new ConcurrentDictionary<String, ConcurrentBag<RawData>>();
+        var errors = new ConcurrentDictionary<String, Exception>();
+        void add_xml_node(String key, XElement n, String source)
         {
 
             raw_data.GetOrAdd(key, _ => []).Add(new(source, null));
@@ -63,7 +63,7 @@ partial class Test
 
                 Console.SetCursorPosition(0, 0);
                 
-                static void Print(string s)
+                static void Print(String s)
                 {
                     foreach (var l in s.Replace("\r", "").Split('\n'))
                     {
@@ -73,17 +73,17 @@ partial class Test
                     }
                 }
 
-                Print($"{l_done_c}/{l_found_c} ({l_done_c/(double)l_found_c:P2})");
+                Print($"{l_done_c}/{l_found_c} ({l_done_c/(Double)l_found_c:P2})");
 
                 {
-                    static string done_time(Stopwatch sw, int done, int total)
+                    static String done_time(Stopwatch sw, Int32 done, Int32 total)
                     {
-                        string res = "?";
+                        String res = "?";
                         try
                         {
-                            var done_in_sec = sw.Elapsed.TotalSeconds * (total/(double)done - 1);
+                            var done_in_sec = sw.Elapsed.TotalSeconds * (total/(Double)done - 1);
                             res = done_in_sec.ToString();
-                            res = TimeSpan.FromSeconds((long)done_in_sec).ToString();
+                            res = TimeSpan.FromSeconds((Int64)done_in_sec).ToString();
                         }
                         catch (OverflowException) { }
                         return res;
@@ -156,7 +156,7 @@ partial class Test
 
         foreach (var (key, bag) in raw_data.OrderBy(kvp=>kvp.Key))
         {
-            tw.WriteLine(new string('=', 30));
+            tw.WriteLine(new String('=', 30));
             var lu = bag.ToLookup(d => d.Info, d => d.Source);
             tw.WriteLine($"{key}: {lu.Count}");
             foreach (var g in lu/**.Take(10)/**/)
@@ -170,7 +170,7 @@ partial class Test
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0060:Remove unused parameter", Justification = "Test")]
-    public static unsafe void ReplaceThumbnail(string filePath, string newThumbnailPath)
+    public static unsafe void ReplaceThumbnail(String filePath, String newThumbnailPath)
     {
         //var newThumbnail = new Bitmap(newThumbnailPath);
 
@@ -190,7 +190,7 @@ partial class Test
 
         try
         {
-            thumbnailCache.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out var sharedBitmap, out var cacheFlags, out var id);
+            thumbnailCache.GetThumbnail(item, Int32.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out var sharedBitmap, out var cacheFlags, out var id);
 
             var res1 = sharedBitmap.GetFormat(out var format);
 
@@ -210,7 +210,7 @@ partial class Test
             SHChangeNotify(HChangeNotifyEventID.SHCNE_UPDATEITEM, HChangeNotifyFlags.SHCNF_PATHW, filePath, IntPtr.Zero);
 
         }
-        catch (COMException e) when (e.HResult == unchecked((int)0x80030002))
+        catch (COMException e) when (e.HResult == unchecked((Int32)0x80030002))
         {
             Console.WriteLine("missing");
         }
@@ -228,7 +228,7 @@ partial class Test
 
         //Bitmap.FromHbitmap(hbmp3).Save(@"C:\0\Prog\Thumbnailer\Test\3.bmp");
 
-        thumbnailCache.GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_EXTRACT, out _, out _, out _);
+        thumbnailCache.GetThumbnail(item, Int32.MaxValue, WTS_FLAGS.WTS_EXTRACT, out _, out _, out _);
 
     }
 
@@ -252,7 +252,7 @@ partial class Test
         void MethodDummy4();
         void MethodDummy5();
 
-        uint DeleteThumbnail(WTS_THUMBNAILID id);
+        UInt32 DeleteThumbnail(WTS_THUMBNAILID id);
 
     }
 
@@ -519,7 +519,7 @@ partial class Test
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
     public static extern void SHCreateItemFromParsingName(
-        [In][MarshalAs(UnmanagedType.LPWStr)] string pszPath,
+        [In][MarshalAs(UnmanagedType.LPWStr)] String pszPath,
         [In] IntPtr pbc,
         [In][MarshalAs(UnmanagedType.LPStruct)] Guid riid,
         [Out][MarshalAs(UnmanagedType.Interface, IidParameterIndex = 2)] out IShellItem ppv
@@ -530,9 +530,9 @@ partial class Test
     [Guid("F676C15D-596A-4ce2-8234-33996F445DB1")]
     public interface IThumbnailCache
     {
-        uint GetThumbnail(
+        UInt32 GetThumbnail(
             [In] IShellItem pShellItem,
-            [In] uint cxyRequestedThumbSize,
+            [In] UInt32 cxyRequestedThumbSize,
             [In] WTS_FLAGS flags /*default:  WTS_FLAGS.WTS_EXTRACT*/,
             [Out][MarshalAs(UnmanagedType.Interface)] out ISharedBitmap ppvThumb,
             [Out] out WTS_CACHEFLAGS pOutFlags,
@@ -541,7 +541,7 @@ partial class Test
 
         void GetThumbnailByID(
             [In, MarshalAs(UnmanagedType.Struct)] WTS_THUMBNAILID thumbnailID,
-            [In] uint cxyRequestedThumbSize,
+            [In] UInt32 cxyRequestedThumbSize,
             [Out][MarshalAs(UnmanagedType.Interface)] out ISharedBitmap ppvThumb,
             [Out] out WTS_CACHEFLAGS pOutFlags
         );
@@ -561,12 +561,12 @@ partial class Test
 
         void GetDisplayName(SIGDN sigdnName, out IntPtr ppszName);
 
-        void GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
+        void GetAttributes(UInt32 sfgaoMask, out UInt32 psfgaoAttribs);
 
-        void Compare(IShellItem psi, uint hint, out int piOrder);
+        void Compare(IShellItem psi, UInt32 hint, out Int32 piOrder);
     };
 
-    public enum SIGDN : uint
+    public enum SIGDN : UInt32
     {
         NORMALDISPLAY = 0,
         PARENTRELATIVEPARSING = 0x80018001,
@@ -587,7 +587,7 @@ partial class Test
     }
 
     [Flags]
-    public enum WTS_FLAGS : uint
+    public enum WTS_FLAGS : UInt32
     {
         WTS_EXTRACT = 0x00000000,
         WTS_INCACHEONLY = 0x00000001,
@@ -601,7 +601,7 @@ partial class Test
     }
 
     [Flags]
-    public enum WTS_CACHEFLAGS : uint
+    public enum WTS_CACHEFLAGS : UInt32
     {
         WTS_DEFAULT = 0x00000000,
         WTS_LOWQUALITY = 0x00000001,
@@ -612,7 +612,7 @@ partial class Test
     public readonly struct WTS_THUMBNAILID
     {
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
-        readonly byte[] rgbKey;
+        readonly Byte[] rgbKey;
     }
 
     [ComImport()]
@@ -621,37 +621,37 @@ partial class Test
     public interface ISharedBitmap
     {
 
-        uint GetSharedBitmap(
+        UInt32 GetSharedBitmap(
             [Out] out IntPtr phbm
         );
 
-        uint GetSize(
+        UInt32 GetSize(
             [Out, MarshalAs(UnmanagedType.Struct)] out SIZE pSize
         );
 
-        uint GetFormat(
+        UInt32 GetFormat(
             [Out] out WTS_ALPHATYPE pat
         );
 
-        uint InitializeBitmap(
+        UInt32 InitializeBitmap(
             [In] IntPtr hbm,
             [In] WTS_ALPHATYPE wtsAT
         );
 
-        uint Detach(
+        UInt32 Detach(
             [Out] out IntPtr phbm
         );
 
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct SIZE(int cx, int cy)
+    public struct SIZE(Int32 cx, Int32 cy)
     {
-        public int cx = cx;
-        public int cy = cy;
+        public Int32 cx = cx;
+        public Int32 cy = cy;
     }
 
-    public enum WTS_ALPHATYPE : uint
+    public enum WTS_ALPHATYPE : UInt32
     {
         WTSAT_UNKNOWN = 0,
         WTSAT_RGB = 1,

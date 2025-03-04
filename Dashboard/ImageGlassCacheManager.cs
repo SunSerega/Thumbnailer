@@ -10,7 +10,7 @@ namespace Dashboard;
 public static class ImageGlassCacheManager
 {
 
-    private static readonly DelayedMultiUpdater<string> ig_resetter = new(fname =>
+    private static readonly DelayedMultiUpdater<String> ig_resetter = new(fname =>
     {
         var cache_dir = @"C:\Users\SunSerega\AppData\Local\ImageGlass\ThumbnailsCache";
         var fi = new FileInfo(fname);
@@ -38,6 +38,6 @@ public static class ImageGlassCacheManager
             File.Delete(cache_file_path);
 
     }, "", is_background: false);
-    public static void ResetFor(string fname) => ig_resetter.TriggerNow(fname);
+    public static void ResetFor(String fname) => ig_resetter.TriggerNow(fname);
 
 }

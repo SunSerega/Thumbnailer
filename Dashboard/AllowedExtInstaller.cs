@@ -17,7 +17,7 @@ public static class AllowedExtInstaller
     private static ThumbGenerator? thumb_gen = null;
     public static void SetThumbGen(ThumbGenerator tg) => thumb_gen = tg;
 
-    private record struct ExtChangeInfo(string Ext, ExtRegenType GenType);
+    private record struct ExtChangeInfo(String Ext, ExtRegenType GenType);
 
     private static readonly ConcurrentBag<ExtChangeInfo> waiting_add = [];
     private static readonly ConcurrentBag<ExtChangeInfo> waiting_rem = [];
@@ -28,7 +28,7 @@ public static class AllowedExtInstaller
 
         static ExtChangeInfo[] collect_from_bag(ConcurrentBag<ExtChangeInfo> bag)
         {
-            var res = new Dictionary<string, ExtRegenType>();
+            var res = new Dictionary<String, ExtRegenType>();
             while (bag.TryTake(out var info))
             {
                 if (res.TryAdd(info.Ext, info.GenType))
@@ -42,7 +42,7 @@ public static class AllowedExtInstaller
         var add = collect_from_bag(waiting_add);
         var rem = collect_from_bag(waiting_rem);
 
-        var reg_ext_args = new List<string>();
+        var reg_ext_args = new List<String>();
         if (rem.Length!=0) reg_ext_args.Add("rem:"+rem.Select(info => info.Ext).JoinToString(';'));
         if (add.Length!=0) reg_ext_args.Add("add:"+add.Select(info => info.Ext).JoinToString(';'));
         if (reg_ext_args.Count == 0)
@@ -62,8 +62,8 @@ public static class AllowedExtInstaller
         COMManip.NotifyRegExtChange();
         Console.Beep();
 
-        var reset_exts = new List<string>();
-        var regen_exts = new List<string>();
+        var reset_exts = new List<String>();
+        var regen_exts = new List<String>();
 
         foreach (var info in add)
             switch (info.GenType)
@@ -92,7 +92,7 @@ public static class AllowedExtInstaller
                     throw new NotImplementedException();
             }
 
-        static IEnumerable<string> QueryExts(List<string> exts) =>
+        static IEnumerable<String> QueryExts(List<String> exts) =>
             exts.Count == 0 ? [] : new ESQuary("ext:"+exts.JoinToString(';'));
 
         foreach (var fname in QueryExts(reset_exts))
@@ -104,13 +104,13 @@ public static class AllowedExtInstaller
         thumb_gen.MassGenerate(QueryExts(regen_exts).Select(fname=>(fname, force_regen: true)));
     }, $"{nameof(AllowedExtInstaller)}: Install/uninstall of extension handlers in registry", is_background: false);
 
-    public static void Install(string ext, ExtRegenType gen_type, bool trigger = true)
+    public static void Install(String ext, ExtRegenType gen_type, Boolean trigger = true)
     {
         waiting_add.Add(new(ext, gen_type));
         if (trigger) Trigger();
     }
 
-    public static void Uninstall(string ext, ExtRegenType gen_type, bool trigger = true)
+    public static void Uninstall(String ext, ExtRegenType gen_type, Boolean trigger = true)
     {
         waiting_rem.Add(new(ext, gen_type));
         if (trigger) Trigger();

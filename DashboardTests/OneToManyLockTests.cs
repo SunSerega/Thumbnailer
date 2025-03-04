@@ -32,7 +32,7 @@ public class OneToManyLockTests
         var one_rep_c = 10;
         var many_rep_c = 1000;
 
-        var counter_lock = new object();
+        var counter_lock = new Object();
         var one_counter = 0;
         var many_counter = 0;
 
@@ -45,7 +45,7 @@ public class OneToManyLockTests
             threads.Add(new Thread(() => Err.Handle(() =>
             {
                 Thread.Sleep(1000);
-                for (int i = 0; i<one_rep_c; ++i)
+                for (Int32 i = 0; i<one_rep_c; ++i)
                 {
                     l.OneLocked(() =>
                     {
@@ -67,7 +67,7 @@ public class OneToManyLockTests
             threads.Add(new Thread(() => Err.Handle(() =>
             {
                 Thread.Sleep(1000);
-                for (int i = 0; i<many_rep_c; ++i)
+                for (Int32 i = 0; i<many_rep_c; ++i)
                 {
                     l.ManyLocked(() =>
                     {
@@ -90,7 +90,7 @@ public class OneToManyLockTests
 
         var win_thr = new Thread(() => Err.Handle(() =>
         {
-            static UIElement make_otp_line(string name, out TextBlock tb) => new Viewbox
+            static UIElement make_otp_line(String name, out TextBlock tb) => new Viewbox
             {
                 Child = new StackPanel
                 {

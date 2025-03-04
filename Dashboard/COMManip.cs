@@ -15,12 +15,12 @@ public partial class COMManip
         (IThumbnailCache)Activator.CreateInstance(Type.GetTypeFromCLSID(new("50EF4544-AC9F-4A8E-B21B-8A26180DB13F"), true)!)!;
     private static IThumbnailCachePrivate MakePrivateTC() => (IThumbnailCachePrivate)MakeLocalTC();
 
-    public sealed class ThumbnailMissingException(string message) : Exception(message) { }
+    public sealed class ThumbnailMissingException(String message) : Exception(message) { }
 
     private static BitmapSource? ConvertHBitmap(IntPtr bmp) => bmp == default ? null :
         System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(bmp, 0, default, BitmapSizeOptions.FromEmptyOptions());
 
-    private static IShellItem? GetShellItem(string name)
+    private static IShellItem? GetShellItem(String name)
     {
         if (!System.IO.File.Exists(name) && !System.IO.Directory.Exists(name))
             return null;
@@ -36,7 +36,7 @@ public partial class COMManip
         }
     }
 
-    public static BitmapSource? GetExistingThumbFor(string fname)
+    public static BitmapSource? GetExistingThumbFor(String fname)
     {
         var item = GetShellItem(fname);
         if (item is null) return default;
@@ -44,7 +44,7 @@ public partial class COMManip
         ISharedBitmap shared_bmp;
         try
         {
-            if (0!=MakeLocalTC().GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out shared_bmp, out _, out _))
+            if (0!=MakeLocalTC().GetThumbnail(item, Int32.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out shared_bmp, out _, out _))
                 throw new Win32Exception();
         }
         catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
@@ -59,7 +59,7 @@ public partial class COMManip
         return ConvertHBitmap(bmp);
     }
     
-    private static bool DeleteThumbFor(string path)
+    private static Boolean DeleteThumbFor(String path)
     {
         var item = GetShellItem(path);
         if (item is null) return false;
@@ -67,7 +67,7 @@ public partial class COMManip
         WTS_THUMBNAILID id;
         try
         {
-            if (0!=MakeLocalTC().GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out _, out _, out id))
+            if (0!=MakeLocalTC().GetThumbnail(item, Int32.MaxValue, WTS_FLAGS.WTS_INCACHEONLY, out _, out _, out id))
                 throw new Win32Exception();
         }
         catch (System.IO.FileNotFoundException)
@@ -101,10 +101,10 @@ public partial class COMManip
         return true;
     }
 
-    private static readonly DelayedMultiUpdater<string> delayed_thumb_reseter = new(
+    private static readonly DelayedMultiUpdater<String> delayed_thumb_reseter = new(
         path=>DeleteThumbFor(path), "Thumb reset", is_background: false
     );
-    public static void ResetThumbFor(string? path, TimeSpan delay)
+    public static void ResetThumbFor(String? path, TimeSpan delay)
     {
         if (path is null) return;
         if (System.IO.Path.GetPathRoot(path) == path) throw new NotImplementedException();
@@ -118,7 +118,7 @@ public partial class COMManip
         delayed_thumb_reseter.TriggerPostpone(path, delay+TimeSpan.FromSeconds(0.1));
     }
 
-    public static BitmapSource? GetOrTryMakeThumbFor(string fname)
+    public static BitmapSource? GetOrTryMakeThumbFor(String fname)
     {
         var item = GetShellItem(fname);
         if (item is null) return default;
@@ -126,7 +126,7 @@ public partial class COMManip
         ISharedBitmap shared_bmp;
         try
         {
-            if (0!=MakeLocalTC().GetThumbnail(item, int.MaxValue, WTS_FLAGS.WTS_EXTRACT, out shared_bmp, out _, out _))
+            if (0!=MakeLocalTC().GetThumbnail(item, Int32.MaxValue, WTS_FLAGS.WTS_EXTRACT, out shared_bmp, out _, out _))
                 throw new Win32Exception();
         }
         catch (COMException e) when (e.HResult == STG_E_FILENOTFOUND)
@@ -148,13 +148,13 @@ public partial class COMManip
     public static void NotifyRegExtChange() =>
         SHChangeNotify(HChangeNotifyEventID.SHCNE_ASSOCCHANGED, HChangeNotifyFlags.SHCNF_IDLIST, default, default);
 
-    private const int STG_E_FILENOTFOUND            = unchecked((int)0x80030002);
-    private const int WTS_E_FAILEDEXTRACTION        = unchecked((int)0x8004B200);
-    private const int CoreHostIncompatibleConfig    = unchecked((int)0x800080a5);
+    private const Int32 STG_E_FILENOTFOUND            = unchecked((Int32)0x80030002);
+    private const Int32 WTS_E_FAILEDEXTRACTION        = unchecked((Int32)0x8004B200);
+    private const Int32 CoreHostIncompatibleConfig    = unchecked((Int32)0x800080a5);
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
     private static extern void SHCreateItemFromParsingName(
-        [In][MarshalAs(UnmanagedType.LPWStr)] string pszPath,
+        [In][MarshalAs(UnmanagedType.LPWStr)] String pszPath,
         [In] IntPtr pbc,
         [In][MarshalAs(UnmanagedType.LPStruct)] Guid riid,
         [Out][MarshalAs(UnmanagedType.Interface, IidParameterIndex = 2)] out IShellItem ppv
@@ -173,9 +173,9 @@ public partial class COMManip
     [Guid("F676C15D-596A-4ce2-8234-33996F445DB1")]
     private interface IThumbnailCache
     {
-        uint GetThumbnail(
+        UInt32 GetThumbnail(
             [In] IShellItem pShellItem,
-            [In] uint cxyRequestedThumbSize,
+            [In] UInt32 cxyRequestedThumbSize,
             [In] WTS_FLAGS flags /*default:  WTS_FLAGS.WTS_EXTRACT*/,
             [Out][MarshalAs(UnmanagedType.Interface)] out ISharedBitmap ppvThumb,
             [Out] out WTS_CACHEFLAGS pOutFlags,
@@ -184,7 +184,7 @@ public partial class COMManip
 
         void GetThumbnailByID(
             [In, MarshalAs(UnmanagedType.Struct)] WTS_THUMBNAILID thumbnailID,
-            [In] uint cxyRequestedThumbSize,
+            [In] UInt32 cxyRequestedThumbSize,
             [Out][MarshalAs(UnmanagedType.Interface)] out ISharedBitmap ppvThumb,
             [Out] out WTS_CACHEFLAGS pOutFlags
         );
@@ -202,7 +202,7 @@ public partial class COMManip
         void MethodDummy4();
         void MethodDummy5();
 
-        uint DeleteThumbnail(WTS_THUMBNAILID id);
+        UInt32 DeleteThumbnail(WTS_THUMBNAILID id);
 
     }
 
@@ -220,9 +220,9 @@ public partial class COMManip
 
         void GetDisplayName(SIGDN sigdnName, out IntPtr ppszName);
 
-        void GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
+        void GetAttributes(UInt32 sfgaoMask, out UInt32 psfgaoAttribs);
 
-        void Compare(IShellItem psi, uint hint, out int piOrder);
+        void Compare(IShellItem psi, UInt32 hint, out Int32 piOrder);
     };
 
     [ComImport()]
@@ -231,24 +231,24 @@ public partial class COMManip
     private interface ISharedBitmap
     {
 
-        uint GetSharedBitmap(
+        UInt32 GetSharedBitmap(
             [Out] out IntPtr phbm
         );
 
-        uint GetSize(
+        UInt32 GetSize(
             [Out, MarshalAs(UnmanagedType.Struct)] out SIZE pSize
         );
 
-        uint GetFormat(
+        UInt32 GetFormat(
             [Out] out WTS_ALPHATYPE pat
         );
 
-        uint InitializeBitmap(
+        UInt32 InitializeBitmap(
             [In] IntPtr hbm,
             [In] WTS_ALPHATYPE wtsAT
         );
 
-        uint Detach(
+        UInt32 Detach(
             [Out] out IntPtr phbm
         );
 
@@ -512,7 +512,7 @@ public partial class COMManip
     }
 
     [Flags]
-    private enum WTS_FLAGS : uint
+    private enum WTS_FLAGS : UInt32
     {
         WTS_EXTRACT = 0x00000000,
         WTS_INCACHEONLY = 0x00000001,
@@ -525,7 +525,7 @@ public partial class COMManip
         WTS_EXTRACTINPROC = 0x00000100
     }
 
-    private enum SIGDN : uint
+    private enum SIGDN : UInt32
     {
         NORMALDISPLAY = 0,
         PARENTRELATIVEPARSING = 0x80018001,
@@ -546,13 +546,13 @@ public partial class COMManip
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct SIZE(int cx, int cy)
+    private struct SIZE(Int32 cx, Int32 cy)
     {
-        public int cx = cx;
-        public int cy = cy;
+        public Int32 cx = cx;
+        public Int32 cy = cy;
     }
 
-    private enum WTS_ALPHATYPE : uint
+    private enum WTS_ALPHATYPE : UInt32
     {
         WTSAT_UNKNOWN = 0,
         WTSAT_RGB = 1,
@@ -560,7 +560,7 @@ public partial class COMManip
     }
 
     [Flags]
-    private enum WTS_CACHEFLAGS : uint
+    private enum WTS_CACHEFLAGS : UInt32
     {
         WTS_DEFAULT = 0x00000000,
         WTS_LOWQUALITY = 0x00000001,
@@ -571,7 +571,7 @@ public partial class COMManip
     public readonly struct WTS_THUMBNAILID
     {
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
-        public readonly byte[] rgbKey = new byte[16];
+        public readonly Byte[] rgbKey = new Byte[16];
 
         public WTS_THUMBNAILID() { }
 

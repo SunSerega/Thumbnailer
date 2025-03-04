@@ -32,10 +32,10 @@ public enum WTS_ALPHATYPE
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 public interface IThumbnailProvider
 {
-    void GetThumbnail(int cx, out IntPtr hBitmap, out WTS_ALPHATYPE bitmapType);
+    void GetThumbnail(Int32 cx, out IntPtr hBitmap, out WTS_ALPHATYPE bitmapType);
 }
 
-public enum SIGDN : uint
+public enum SIGDN : UInt32
 {
     NORMALDISPLAY = 0,
     PARENTRELATIVEPARSING = 0x80018001,
@@ -69,9 +69,9 @@ public interface IShellItem
 
     void GetDisplayName(SIGDN sigdnName, out IntPtr ppszName);
 
-    void GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
+    void GetAttributes(UInt32 sfgaoMask, out UInt32 psfgaoAttribs);
 
-    void Compare(IShellItem psi, uint hint, out int piOrder);
+    void Compare(IShellItem psi, UInt32 hint, out Int32 piOrder);
 };
 
 [ComVisible(true)]
@@ -79,7 +79,7 @@ public interface IShellItem
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 public interface IInitializeWithItem
 {
-    void Initialize(IShellItem psi, int grfMode);
+    void Initialize(IShellItem psi, Int32 grfMode);
 }
 
 [ComVisible(true), ClassInterface(ClassInterfaceType.None)]
@@ -91,7 +91,7 @@ public class ThumbnailProvider : IThumbnailProvider, IInitializeWithItem
     {
         try
         {
-            var lns = new System.Collections.Generic.List<string>
+            var lns = new System.Collections.Generic.List<String>
             {
                 $"Error making thumb for: {curr_file_name??"<null>"}"
             };
@@ -105,13 +105,13 @@ public class ThumbnailProvider : IThumbnailProvider, IInitializeWithItem
         }
     }
 
-    private string? curr_file_name = null;
-    public void SetFile(string fname)
+    private String? curr_file_name = null;
+    public void SetFile(String fname)
     {
         curr_file_name = fname;
     }
 
-    public void Initialize(IShellItem psi, int grfMode)
+    public void Initialize(IShellItem psi, Int32 grfMode)
     {
         try
         {
@@ -128,13 +128,13 @@ public class ThumbnailProvider : IThumbnailProvider, IInitializeWithItem
         }
     }
 
-    private static Bitmap LoadBitmap(string filename)
+    private static Bitmap LoadBitmap(String filename)
     {
         using var str = File.OpenRead(filename);
         return new Bitmap(str);
     }
 
-    public void GetThumbnail(int cx, out IntPtr hBitmap, out WTS_ALPHATYPE bitmapType)
+    public void GetThumbnail(Int32 cx, out IntPtr hBitmap, out WTS_ALPHATYPE bitmapType)
     {
         //var sw = System.Diagnostics.Stopwatch.StartNew();
         //File.AppendAllLines(@"C:\Users\SunSerega\Desktop\Thumbnailer.info.log", [$"{DateTime.Now} | Starter: {curr_file_name}"], Common.Encoding);
