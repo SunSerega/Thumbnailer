@@ -2,6 +2,15 @@
 	
 	
 	
+	$current_principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+	$is_admin = $current_principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+	if (-not $is_admin) {
+		Write-Host "No rights to clear explorer cache"
+		return
+	}
+	
+	
+	
 	$explorer_paths = @()
 	foreach ($w in (New-Object -ComObject Shell.Application).Windows()) {
 		$explorer_paths += $w.Document.Folder.Self.Path

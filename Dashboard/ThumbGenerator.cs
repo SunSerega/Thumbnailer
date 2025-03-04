@@ -1319,18 +1319,23 @@ public class ThumbGenerator
             if (is_erased)
                 throw new InvalidOperationException();
             is_erased = true;
-            Shutdown();
+
+            Shutdown(erase: true);
             DeleteDir(settings.GetSettingsDir());
             COMManip.ResetThumbFor(InpPath, TimeSpan.Zero);
         }
 
-        // Shutdown without erasing (when exiting)
+        // Shutdown without erasing is when exiting
         private Boolean has_shut_down = false;
-        public void Shutdown()
+        public void Shutdown(Boolean erase)
         {
             using var this_locker = new ObjectLocker(this);
-            if (has_shut_down) throw new InvalidOperationException();
+            if (has_shut_down)
+                throw new InvalidOperationException();
             has_shut_down = true;
+
+            if (erase)
+                settings.Shutdown();
         }
 
         #endregion
@@ -1508,7 +1513,7 @@ public class ThumbGenerator
     public void Shutdown()
     {
         foreach (var cfi in files.Values)
-            cfi.Shutdown();
+            cfi.Shutdown(erase: false);
         lock_file.Close();
         File.Delete(Path.Combine(cache_dir.FullName, ".lock"));
     }
