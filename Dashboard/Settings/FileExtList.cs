@@ -52,7 +52,7 @@ public readonly struct FileExtList : ICollection<String>, IEquatable<FileExtList
         var ext = System.IO.Path.GetExtension(fname);
         if (ext is null) return false;
         if (!ext.StartsWith('.')) return false;
-        return Contains(ext.Remove(0, 1));
+        return Contains(ext[1..]);
     }
 
     public void CopyTo(String[] array, Int32 arrayIndex) => l.CopyTo(array, arrayIndex);

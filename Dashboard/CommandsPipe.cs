@@ -112,7 +112,7 @@ public class CommandsPipe
             }
 
             need_old_proc_kill_command = false;
-            //CustomMessageBox.ShowOK(sw.Elapsed.ToString());
+            //Prompt.Notify(sw.Elapsed.ToString());
         }
     }
 

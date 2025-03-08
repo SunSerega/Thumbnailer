@@ -9,8 +9,8 @@ try
         var ind = arg.IndexOf(':');
         if (ind == -1) throw new FormatException(arg);
 
-        var command = arg.Remove(ind);
-        var exts = arg.Remove(0, ind+1).Split(';');
+        var command = arg[..ind];
+        var exts = arg[(ind+1)..].Split(';');
 
         switch (command)
         {

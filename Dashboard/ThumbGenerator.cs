@@ -17,7 +17,6 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 using SunSharpUtils;
-using SunSharpUtils.WPF;
 using SunSharpUtils.Settings;
 using SunSharpUtils.Threading;
 
@@ -25,6 +24,7 @@ using Dashboard.Settings;
 
 namespace Dashboard;
 
+//TODO Split all this nesting
 public class ThumbGenerator
 {
     private readonly CustomThreadPool thr_pool;
@@ -142,17 +142,18 @@ public class ThumbGenerator
 
             header("Purge all the deviants?");
 
-            if (CustomMessageBox.ShowYesNo("Settings load failed",
-                lns.JoinToString(Environment.NewLine)
-            ))
-                // File deletion can be suspended by the system,
-                // while explorer is waiting for thumb
-                before_cleanup_loop += () => Err.Handle(() =>
-                {
-                    foreach (var purge_act in purge_acts) purge_act();
-                });
-            else
+            if (!Prompt.AskYesNo("Settings load had issues", lns.JoinToString(Environment.NewLine)))
+            {
                 Common.Shutdown(-1);
+                return;
+            }
+
+            // File deletion can be suspended by the system,
+            // while explorer is waiting for thumb
+            before_cleanup_loop += () => Err.Handle(() =>
+            {
+                foreach (var purge_act in purge_acts) purge_act();
+            });
 
             change_subjob(null);
         }
@@ -390,7 +391,7 @@ public class ThumbGenerator
 
             var base_path = settings.GetSettingsDir() + @"\";
             if (res.StartsWith(base_path))
-                res = res.Remove(0, base_path.Length);
+                res = res[base_path.Length..];
 
             settings.CurrentThumb = res;
             COMManip.ResetThumbFor(InpPath, on_pre_extract_progress is null ? TimeSpan.Zero : TimeSpan.FromSeconds(0.1));
@@ -472,9 +473,6 @@ public class ThumbGenerator
             public void Dispose()
             {
                 if (on_unload is null) return;
-                //TODO still broken sometimes
-                // - Reworked generation since then
-                //on_unload(path);
                 for (Int32 i = 1; ; ++i)
                     try
                     {
@@ -484,7 +482,7 @@ public class ThumbGenerator
                     catch (Exception e)
                     {
                         if (i%100 == 0)
-                            CustomMessageBox.ShowOK($"Struggling to delete [{path}]", e.ToString());
+                            Prompt.Notify($"Struggling to delete [{path}]", e.ToString());
                         Thread.Sleep(10);
                     }
             }
@@ -935,8 +933,8 @@ public class ThumbGenerator
                         if (metadata_xml.Descendants("streams").SingleOrDefault() is XElement streams_xml)
                             foreach (var stream_xml in streams_xml.Descendants("stream"))
                             {
-                                var ind = Int32.Parse(stream_xml.Attribute("index")!.Value);
-                                change_subjob($"checking stream#{ind}");
+                                var stream_ind = Int32.Parse(stream_xml.Attribute("index")!.Value);
+                                change_subjob($"checking stream#{stream_ind}");
 
                                 var codec_type_s = stream_xml.Attribute("codec_type")!.Value;
 
@@ -990,17 +988,17 @@ public class ThumbGenerator
                                 TimeSpan l_dur;
                                 if (stream_is_image)
                                 {
-                                    source_name = $"Image:{ind}";
+                                    source_name = $"Image:{stream_ind}";
                                     l_dur = TimeSpan.Zero;
                                 }
                                 else if (l_dur_s1 != null)
                                 {
-                                    source_name = $"FStream:{ind}";
+                                    source_name = $"FStream:{stream_ind}";
                                     l_dur = TimeSpan.FromSeconds(Double.Parse(l_dur_s1));
                                 }
                                 else if (l_dur_s2 != null)
                                 {
-                                    source_name = $"TStream:{ind}";
+                                    source_name = $"TStream:{stream_ind}";
                                     if (!l_dur_s2.Contains('.'))
                                         throw new FormatException();
                                     l_dur_s2 = l_dur_s2.TrimEnd('0').TrimEnd('.'); // Otherwise TimeSpan.Parse breaks
@@ -1008,7 +1006,7 @@ public class ThumbGenerator
                                 }
                                 else
                                 {
-                                    source_name = $"?:{ind}";
+                                    source_name = $"?:{stream_ind}";
                                     l_dur = TimeSpan.Zero;
                                 }
 
@@ -1045,7 +1043,7 @@ public class ThumbGenerator
                                             pre_extracted_strong_ref = new Byte[]?[frame_count];
                                             pre_extracted_weak_ref.SetTarget(pre_extracted_strong_ref);
 
-                                            gen.thr_pool.AddJob($"pre extract [{ind}] for [{inp_fname}]", change_subjob =>
+                                            gen.thr_pool.AddJob($"pre extract [{stream_ind}] for [{inp_fname}]", change_subjob =>
                                             {
                                                 var res = pre_extracted_strong_ref;
                                                 pre_extracted_strong_ref = null;
@@ -1070,7 +1068,7 @@ public class ThumbGenerator
                                                 }
 
                                                 var frame_str = default(Stream);
-                                                FFmpeg.Invoke($"-nostdin -i \"{inp_fname}\" -map 0:{ind} -vf scale=256:256:force_original_aspect_ratio=decrease -c mjpeg -q:v 1 -f image2pipe -", () => true,
+                                                FFmpeg.Invoke($"-nostdin -i \"{inp_fname}\" -map 0:{stream_ind} -vf scale=256:256:force_original_aspect_ratio=decrease -c mjpeg -q:v 1 -f image2pipe -", () => true,
                                                     handle_otp: sr =>
                                                     {
                                                         frame_str = sr.BaseStream;
@@ -1136,7 +1134,7 @@ public class ThumbGenerator
                                                 if (l_dur != TimeSpan.Zero)
                                                     throw new NotImplementedException();
 
-                                                FFmpeg.Invoke($"-dump_attachment:{ind} pipe:1 -i \"{inp_fname}\" -nostdin", () => true,
+                                                FFmpeg.Invoke($"-dump_attachment:{stream_ind} pipe:1 -i \"{inp_fname}\" -nostdin", () => true,
                                                     handle_otp: sr =>
                                                     {
                                                         handle_inp = sw => sr.BaseStream.CopyToAsync(sw.BaseStream);
@@ -1151,7 +1149,7 @@ public class ThumbGenerator
                                             {
                                                 ffmpeg_path = Path.GetDirectoryName(inp_fname)!;
                                                 args.Add($"-i \"{Path.GetFileName(inp_fname)}\"");
-                                                args.Add($"-map 0:{ind}");
+                                                args.Add($"-map 0:{stream_ind}");
                                                 args.Add($"-vframes 1");
                                             }
 

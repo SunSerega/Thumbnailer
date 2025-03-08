@@ -39,8 +39,8 @@ public static class CLArgs
         foreach (var arg in Environment.GetCommandLineArgs().Skip(1))
         {
             var ind = arg.IndexOf('=');
-            var command = ind==-1 ? arg : arg.Remove(ind);
-            var data = ind==-1 ? null : arg.Remove(0, ind+1);
+            var command = ind==-1 ? arg : arg[..ind];
+            var data = ind==-1 ? null : arg[(ind+1)..];
 
             if (!arg_handlers.TryGetValue(command, out var arg_handler))
                 throw new InvalidOperationException($"Unknown command [{command}]");

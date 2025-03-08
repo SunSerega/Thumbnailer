@@ -11,7 +11,6 @@ using System.Windows.Input;
 
 using SunSharpUtils;
 using SunSharpUtils.WPF;
-using SunSharpUtils.Settings;
 using SunSharpUtils.Threading;
 
 using Dashboard.Settings;

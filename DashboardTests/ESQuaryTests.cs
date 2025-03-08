@@ -18,7 +18,7 @@ public class ESQuaryTests
         var fls = new ESQuary(dir, "ext:dll").Select(fname => {
             if (!fname.StartsWith(dir))
                 throw new FormatException(fname);
-            return fname.Remove(0, dir.Length);
+            return fname[dir.Length..];
         }).ToDictionary(f => f, f => 0).Keys.ToHashSet();
         Assert.IsTrue(fls.IsSupersetOf([
             "DashboardTests.dll",

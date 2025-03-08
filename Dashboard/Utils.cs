@@ -14,7 +14,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-using SunSharpUtils.WPF;
+using SunSharpUtils;
 using SunSharpUtils.Settings;
 using SunSharpUtils.Threading;
 
@@ -157,6 +157,7 @@ public sealed class OneToManyLock
         // - Need another bool, to separate want_one and actually doing_one
         // - The optimistically Interlocked.Increment
         // - And if it turns out it was wrong - then actually wait and lock
+        //TODO I have improvements in a separate branch
         Monitor.Enter(sync_lock);
         var need_exit = true;
         try
@@ -245,7 +246,7 @@ public static class FFmpeg
             been_killed = true;
             p.Kill();
             var (otp, err) = t.Result;
-            CustomMessageBox.ShowOK(
+            Prompt.Notify(
                 $"[{p.StartInfo.FileName} {p.StartInfo.Arguments}] hanged. Output:",
                 otp + "\n\n===================\n\n" + err
             );

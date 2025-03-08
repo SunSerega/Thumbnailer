@@ -170,11 +170,7 @@ public partial class AllowedExtList : UserControl
     {
         if (exts.Length == 0)
             return ExtRegenType.Skip;
-        return CustomMessageBox.Show(
-            title,
-            exts.JoinToString(';') + "\n\nPress Escape to cancel",
-            options
-        );
+        return Prompt.AskAny(title, exts.JoinToString() + "\n\nPress Escape to cancel", options);
     }
 
     public void CommitAll()
