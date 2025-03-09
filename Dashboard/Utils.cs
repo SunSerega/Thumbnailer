@@ -2,14 +2,11 @@
 
 using System.IO;
 
-using System.Threading;
 using System.Threading.Tasks;
 
 using System.Linq;
 using System.Collections;
 using System.Collections.Generic;
-
-using System.Runtime.CompilerServices;
 
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -100,96 +97,6 @@ public readonly struct ByteCount(Int64 in_bytes) : IEquatable<ByteCount>, ISetti
 
     static String ISettingsSaveable<ByteCount>.SerializeSetting(ByteCount setting) => setting.ToString();
     static ByteCount ISettingsSaveable<ByteCount>.DeserializeSetting(String setting) => Parse(setting);
-
-}
-
-public sealed class OneToManyLock
-{
-    private readonly Object sync_lock = new();
-    private readonly ManualResetEventSlim one_wh = new(true);
-    private readonly ManualResetEventSlim many_wh = new(true);
-    private volatile Int32 doing_one = 0;
-    private volatile Int32 doing_many = 0;
-
-    public OneToManyLock() { }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public T OneLocked<T>(Func<T> act, Boolean with_priority)
-    {
-        one_wh.Reset();
-        var need_dec = false;
-        if (with_priority)
-        {
-            Interlocked.Increment(ref doing_one);
-            need_dec = true;
-        }
-        Monitor.Enter(sync_lock);
-        try
-        {
-            while (doing_many != 0)
-            {
-                Monitor.Exit(sync_lock);
-                many_wh.Wait();
-                Monitor.Enter(sync_lock);
-            }
-            if (!with_priority)
-            {
-                Interlocked.Increment(ref doing_one);
-                need_dec = true;
-            }
-            return act();
-        }
-        finally
-        {
-            if (need_dec)
-                Interlocked.Decrement(ref doing_one);
-            one_wh.Set();
-            Monitor.Exit(sync_lock);
-        }
-    }
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void OneLocked(Action act, Boolean with_priority) => OneLocked(() => { act(); return 0; }, with_priority);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public T ManyLocked<T>(Func<T> act)
-    {
-        //TODO can possibly avoid locking in most cases
-        // - Need another bool, to separate want_one and actually doing_one
-        // - The optimistically Interlocked.Increment
-        // - And if it turns out it was wrong - then actually wait and lock
-        //TODO I have improvements in a separate branch
-        Monitor.Enter(sync_lock);
-        var need_exit = true;
-        try
-        {
-            while (doing_one != 0)
-            {
-                Monitor.Exit(sync_lock);
-                one_wh.Wait();
-                Monitor.Enter(sync_lock);
-            }
-            many_wh.Reset();
-            Interlocked.Increment(ref doing_many);
-            Monitor.Exit(sync_lock);
-            need_exit = false;
-            try
-            {
-                return act();
-            }
-            finally
-            {
-                if (0==Interlocked.Decrement(ref doing_many))
-                    many_wh.Set();
-            }
-        }
-        finally
-        {
-            if (need_exit)
-                Monitor.Exit(sync_lock);
-        }
-    }
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void ManyLocked(Action act) => ManyLocked(() => { act(); return 0; });
 
 }
 
