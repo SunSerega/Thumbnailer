@@ -86,8 +86,8 @@ public class ThumbGenerator
                 }
                 if (!files.TryAdd(path, cfi))
                     throw new InvalidOperationException();
-                // skip if thumb was already fully generated
-                // even if it got deleted later, to save space
+                // Skip if thumb was already fully generated
+                // Even if it got deleted later, to save space
                 if (!cfi.CurrentThumbIsFinal)
                     cfi.GenerateThumb("Init check", null, null, false, false);
                 purge_act = null;
@@ -272,6 +272,7 @@ public class ThumbGenerator
         public CacheUse BeginUse(String cause, Func<Boolean> is_freed_check);
         public void EndUse(CacheUse use, Action? finish_while_locked);
 
+        public void WaitThumbFinal();
     }
 
     private sealed class IdentityCFI(String fname) : ICachedFileInfo
@@ -287,6 +288,8 @@ public class ThumbGenerator
 
         public ICachedFileInfo.CacheUse BeginUse(String cause, Func<Boolean> is_freed_check) => new(this, cause, is_freed_check);
         public void EndUse(ICachedFileInfo.CacheUse use, Action? finish_while_locked) => finish_while_locked?.Invoke();
+
+        public void WaitThumbFinal() { }
 
     }
 
@@ -1304,6 +1307,12 @@ public class ThumbGenerator
                 gen.thr_pool.BumpJob(gen_job_obj);
 
             return make_cache_use();
+        }
+
+        public void WaitThumbFinal()
+        {
+            while (!settings.CurrentThumbIsFinal)
+                ;
         }
 
         #endregion

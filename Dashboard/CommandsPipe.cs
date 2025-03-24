@@ -39,8 +39,15 @@ public class CommandsPipe
 
             var fname = br.ReadString();
             using var cfi_use = thumb_gen.Generate(fname, nameof(ECommand.GimmiThumb), () => false, null, false);
-            if (cfi_use != null) bw.Write(cfi_use.CFI.CurrentThumbPath);
+            if (cfi_use is null) return;
 
+            // Some system icons are deleted right after the thumb is generated
+            // Teturning a temp thumb causes them to break
+            // But speed doesn't matter, because they are never generated in large quantities
+            if (fname.StartsWith(@"C:\Program Files\"))
+                cfi_use.CFI.WaitThumbFinal();
+
+            bw.Write(cfi_use.CFI.CurrentThumbPath);
         });
     public void AddRefreshAndCompareHandler(Action<Boolean, String[]> handler) =>
         command_handlers.Add(ECommand.RefreshAndCompare, str =>
