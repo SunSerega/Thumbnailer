@@ -1150,8 +1150,21 @@ public class ThumbGenerator
                                             }
                                             else
                                             {
-                                                ffmpeg_path = Path.GetDirectoryName(inp_fname)!;
-                                                args.Add($"-i \"{Path.GetFileName(inp_fname)}\"");
+                                                // ffmpeg wants Execute/Traverse + Synchronize access, which some WindowsApps icons will not allow
+                                                if (inp_fname.StartsWith(@"C:\Program Files\WindowsApps\"))
+                                                {
+                                                    handle_inp = async sw =>
+                                                    {
+                                                        using var inp = File.OpenRead(inp_fname);
+                                                        await inp.CopyToAsync(sw.BaseStream);
+                                                    };
+                                                    args.Add($"-i -");
+                                                }
+                                                else
+                                                {
+                                                    ffmpeg_path = Path.GetDirectoryName(inp_fname)!;
+                                                    args.Add($"-i \"{Path.GetFileName(inp_fname)}\"");
+                                                }
                                                 args.Add($"-map 0:{stream_ind}");
                                                 args.Add($"-vframes 1");
                                             }
