@@ -2,7 +2,7 @@
 
 using System.Linq;
 
-using SunSharpUtils;
+using SunSharpUtils.Ext.Linq;
 using SunSharpUtils.Settings;
 
 namespace Dashboard.Settings;

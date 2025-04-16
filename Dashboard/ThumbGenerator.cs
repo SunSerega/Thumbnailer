@@ -17,6 +17,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
 using SunSharpUtils;
+using SunSharpUtils.Ext.Linq;
 using SunSharpUtils.Settings;
 using SunSharpUtils.Threading;
 

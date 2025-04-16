@@ -11,6 +11,7 @@ using System.Windows.Controls;
 using System.Windows.Media.Animation;
 
 using SunSharpUtils;
+using SunSharpUtils.Ext.Linq;
 
 namespace Dashboard;
 

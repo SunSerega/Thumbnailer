@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Collections.Concurrent;
 
 using SunSharpUtils;
+using SunSharpUtils.Ext.Linq;
 using SunSharpUtils.Threading;
 
 namespace Dashboard;
@@ -204,7 +205,7 @@ public sealed class CustomThreadPool
         ~ThreadPoolObserverImpl()
         {
             if (disposed) return;
-            Err.Handle(new MessageException("ThreadPoolObserver wasn't properly disposed off"));
+            Err.Handle("ThreadPoolObserver wasn't properly disposed off");
         }
 
     }

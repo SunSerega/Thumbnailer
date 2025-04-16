@@ -4,7 +4,8 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 
-using SunSharpUtils;
+using SunSharpUtils.Ext.Linq;
+
 using SunSharpUtils.Threading;
 
 using static Dashboard.AllowedExtList;
@@ -54,10 +55,12 @@ public static class AllowedExtInstaller
             WorkingDirectory = Environment.CurrentDirectory,
             CreateNoWindow = true,
         };
-        var p = System.Diagnostics.Process.Start(psi)!;
-        p.WaitForExit();
-        if (p.ExitCode != 0)
-            throw new Exception($"ExitCode={p.ExitCode}");
+        using (var p = System.Diagnostics.Process.Start(psi)!)
+        {
+            p.WaitForExit();
+            if (p.ExitCode != 0)
+                throw new Exception($"Failed to run {psi.FileName}: ExitCode={p.ExitCode}");
+        }
 
         COMManip.NotifyRegExtChange();
         Console.Beep();

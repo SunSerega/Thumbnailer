@@ -188,36 +188,45 @@ public static class FFmpeg
                 CreateNoWindow = true,
             }
         };
+        try
+        {
+            if (execute_in != null)
+                p.StartInfo.WorkingDirectory = execute_in;
 
-        if (execute_in != null)
-            p.StartInfo.WorkingDirectory = execute_in;
+            p.Start();
 
-        p.Start();
-
-        handle_inp ??= sw => Task.CompletedTask;
+            handle_inp ??= sw => Task.CompletedTask;
 #pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
-        handle_otp ??= sr => sr.ReadToEndAsync();
-        handle_err ??= sr => sr.ReadToEndAsync();
+            handle_otp ??= sr => sr.ReadToEndAsync();
+            handle_err ??= sr => sr.ReadToEndAsync();
 #pragma warning restore CS8619 // Nullability of reference types in value doesn't match target type.
 
-        var t_inp = handle_inp(p.StandardInput);
-        var t_otp = handle_otp(p.StandardOutput);
-        var t_err = handle_err(p.StandardError);
+            var t_inp = handle_inp(p.StandardInput);
+            var t_otp = handle_otp(p.StandardOutput);
+            var t_err = handle_err(p.StandardError);
 
-        var t = Task.Run(async ()=>
-        {
-            await t_inp;
-            p.StandardInput.Close();
-            await p.WaitForExitAsync();
-            var res = (otp: await t_otp, err: await t_err);
-            if (!verify_res())
-                throw new InvalidOperationException($"{execute_in}> [{p.StartInfo.FileName} {p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
+            var t_p = p;
+            var t = Task.Run(async () =>
+            {
+                await t_inp;
+                t_p.StandardInput.Close();
+                await t_p.WaitForExitAsync();
+                var res = (otp: await t_otp, err: await t_err);
+                if (!verify_res())
+                    throw new InvalidOperationException($"{execute_in}> [{t_p.StartInfo.FileName} {t_p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
+                t_p.Dispose();
+                return res;
+            });
+
+            var res = new InvokeState(p, t);
+            delayed_kill_switch.TriggerUrgent(res, TimeSpan.FromSeconds(600));
+            p = null;
             return res;
-        });
-
-        var res = new InvokeState(p, t);
-        delayed_kill_switch.TriggerUrgent(res, TimeSpan.FromSeconds(600));
-        return res;
+        }
+        finally
+        {
+            p?.Dispose();
+        }
     }
 
 }
@@ -271,7 +280,8 @@ public sealed class ESQuary : IEnumerable<String>
 
         public void Dispose()
         {
-            p?.Kill();
+            p.Kill();
+            p.Dispose();
             GC.SuppressFinalize(this);
         }
 
@@ -312,7 +322,7 @@ public static class Log
         FileName = log_fname,
         UseShellExecute = true,
         Verb = "open",
-    });
+    })?.Dispose();
 
 }
 

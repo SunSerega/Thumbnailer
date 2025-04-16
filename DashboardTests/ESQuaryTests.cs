@@ -7,11 +7,11 @@ using System.Linq;
 namespace Dashboard.Tests;
 
 
-[TestClass()]
+[TestClass]
 public class ESQuaryTests
 {
 
-    [TestMethod()]
+    [TestMethod]
     public void ESQuaryTest()
     {
         var dir = Environment.CurrentDirectory+@"\";
@@ -28,7 +28,7 @@ public class ESQuaryTests
         ]));
     }
 
-    [TestMethod()]
+    [TestMethod]
     public void ESQuaryStressTest()
     {
         using var enmr = new ESQuary("ext:avi;flac;gif;m4a;mkv;mov;mp3;mp4;ogg;webm;webp;psd;png;jpg").GetEnumerator();

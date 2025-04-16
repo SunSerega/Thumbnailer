@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Controls;
 
 using SunSharpUtils;
+using SunSharpUtils.Ext.Linq;
 using SunSharpUtils.WPF;
 
 using Dashboard.Settings;

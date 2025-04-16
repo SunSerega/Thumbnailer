@@ -94,7 +94,7 @@ public class ShortcutManager
             }
             catch (COMException e)
             {
-                Err.Handle(new MessageException($"Failed to update shortcut {lnk}\n\n{e}"));
+                Err.Handle($"Failed to update shortcut {lnk}\n\n{e}");
                 throw;
             }
             lnk_target_cache[lnk] = (lnk_target, get_lnk_change_time(lnk));

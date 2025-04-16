@@ -10,6 +10,7 @@ using System.Windows;
 using System.Windows.Input;
 
 using SunSharpUtils;
+using SunSharpUtils.Ext.Linq;
 using SunSharpUtils.WPF;
 using SunSharpUtils.Threading;
 
