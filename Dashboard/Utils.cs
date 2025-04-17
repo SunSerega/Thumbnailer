@@ -144,13 +144,15 @@ public static class FFmpeg
     public sealed class InvokeState(
         System.Diagnostics.Process p,
         Task<(String? otp, String? err)> t
-    ) {
-        private Boolean been_killed = false;
+    )
+    {
 
         public void Kill()
         {
+            if (!Dispose(expect_kill: true))
+                return;
             if (p.HasExited) return;
-            been_killed = true;
+            BeenKilled = true;
             p.Kill();
             var (otp, err) = t.Result;
             Prompt.Notify(
@@ -159,11 +161,27 @@ public static class FFmpeg
             );
         }
 
+        private Int32 disposed = 0;
+        public Boolean Dispose(Boolean? expect_kill)
+        {
+            if (System.Threading.Interlocked.Exchange(ref disposed, 1) == 1)
+                return false;
+
+            var kill = !p.HasExited;
+            if (expect_kill == !kill)
+                Err.Handle($"Expected to kill ffmpeg: {expect_kill}");
+            if (kill)
+                p.Kill();
+
+            p.Dispose();
+            return true;
+        }
+
         public void Wait() => t.Wait();
 
         public String? Output => t.Result.otp;
 
-        public Boolean BeenKilled => been_killed;
+        public Boolean BeenKilled { get; private set; }
 
     }
 
@@ -205,23 +223,37 @@ public static class FFmpeg
             var t_otp = handle_otp(p.StandardOutput);
             var t_err = handle_err(p.StandardError);
 
+            InvokeState? state = null;
             var t_p = p;
             var t = Task.Run(async () =>
             {
-                await t_inp;
-                t_p.StandardInput.Close();
-                await t_p.WaitForExitAsync();
-                var res = (otp: await t_otp, err: await t_err);
-                if (!verify_res())
-                    throw new InvalidOperationException($"{execute_in}> [{t_p.StartInfo.FileName} {t_p.StartInfo.Arguments}]\notp=[{res.otp}]\nerr=[{res.err}]");
-                t_p.Dispose();
-                return res;
+                try
+                {
+                    await t_inp;
+                    t_p.StandardInput.Close();
+                    await t_p.WaitForExitAsync();
+                    var res = (otp: await t_otp, err: await t_err);
+                    if (!verify_res())
+                    {
+                        throw new InvalidOperationException($"""
+                            {execute_in}> [{t_p.StartInfo.FileName} {t_p.StartInfo.Arguments}]
+                            otp=[{res.otp}]
+                            err=[{res.err}]
+                        """);
+                    }
+                    return res;
+                }
+                finally
+                {
+                    while (state is null) ;
+                    state.Dispose(expect_kill: false);
+                }
             });
-
-            var res = new InvokeState(p, t);
-            delayed_kill_switch.TriggerUrgent(res, TimeSpan.FromSeconds(600));
+            state = new InvokeState(p, t);
             p = null;
-            return res;
+
+            delayed_kill_switch.TriggerUrgent(state, TimeSpan.FromSeconds(600));
+            return state;
         }
         finally
         {
